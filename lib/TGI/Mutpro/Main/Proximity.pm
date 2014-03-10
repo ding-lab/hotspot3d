@@ -19,7 +19,6 @@ use FileHandle;
 sub new {
     my $class = shift;
     my $this = {};
-
     $this->{_MAF} = undef;
     $this->{_SKIP_SILENT} = undef;
     $this->{_MISSSENSE_ONLY} = undef;
@@ -29,10 +28,8 @@ sub new {
     $this->{_3D_CUTOFF} = 10;
     $this->{_1D_CUTOFF} = 20;
     $this->{_STAT} = undef;
-
     bless $this, $class;
     $this->process();
-
     return $this;
 }
 
@@ -79,8 +76,6 @@ sub process {
     my $transToUniprot = $this->getTransMaptoUniprot( $uniprot_file );
     $this->{_STAT}{'num_trans_with_uniprot'} = keys %$transToUniprot;
     my $mafHashRef = $this->parseMaf( $this->{_MAF}, $transToUniprot );
-
-
     $this->{_STAT}{'num_uniprot_involved'} = keys %$mafHashRef;
     my ($pairoutref, $cosmicref, $roiref) = $this->proximitySearching( $mafHashRef, $prior_dir );
     print STDERR "searching done...\n";
@@ -90,17 +85,10 @@ sub process {
         my @t = split /\t/;
         my $geneOne = join("\t", @t[0..8]);
         my $geneTwo = join("\t", @t[9..17]);
-
-
         print $geneOne."\t".$geneTwo."\n";
-
-        if ( defined $filterHash{$geneOne}{$geneTwo} ) {
-            $filterHash{$geneOne}{$geneTwo} .= $t[19]; 
-        } elsif ( defined $filterHash{$geneTwo}{$geneOne} ) {
-            $filterHash{$geneTwo}{$geneOne} .= $t[19];
-        } else {
-            $filterHash{$geneOne}{$geneTwo} .= $t[18] . "\t" . $t[19];
-        }
+        if ( defined $filterHash{$geneOne}{$geneTwo} ) { $filterHash{$geneOne}{$geneTwo} .= $t[19]; 
+        } elsif ( defined $filterHash{$geneTwo}{$geneOne} ) { $filterHash{$geneTwo}{$geneOne} .= $t[19];
+        } else { $filterHash{$geneOne}{$geneTwo} .= $t[18] . "\t" . $t[19]; }
     }
     # pour out proximity pairs
     my %sortedHash;
@@ -111,17 +99,10 @@ sub process {
             my %ss = map{ ($_, 1) } split /\|/, $t[1];
             my ( %dd, $miniP, $pvaluePart );
             $pvaluePart = "";
-            foreach my $d (keys %ss) {
-                my @t0 = split / /, $d;
-                $dd{$t0[2]}{$d} = 1;
-            }
+            foreach my $d (keys %ss) { my @t0 = split / /, $d; $dd{$t0[2]}{$d} = 1; }
             my @t1 = sort {$a<=>$b} keys %dd;
             $miniP = $t1[0];
-            foreach my $c ( @t1 ) {
-                foreach my $g ( keys %{$dd{$c}} ) {
-                    $pvaluePart .= $g . "|";
-                }
-            }
+            foreach my $c ( @t1 ) { foreach my $g ( keys %{$dd{$c}} ) { $pvaluePart .= $g . "|"; } }
             $sortedHash{$miniP}{"$e\t$f\t$lDistance\t$pvaluePart"} = 1;
         }
     }
@@ -136,20 +117,13 @@ sub process {
     }
     $fh->close();
     # pour out mutations close to cosmic
-    #
     die "Could not create cosmic close output file\n"  unless($fh->open(">$this->{_OUTPUT_PREFIX}.cosmic"));
-    foreach (@$cosmicref) {
-        print $fh $_, "\n";
-    }
+    foreach (@$cosmicref) { print $fh $_, "\n"; }
     $fh->close();
     # pour out mutations close to ROI
-    #
     die "Could not create Region of Interest(ROI) close output file\n"  unless($fh->open(">$this->{_OUTPUT_PREFIX}.roi"));
-    foreach (@$roiref) {
-        print $fh $_, "\n";
-    }
+    foreach (@$roiref) { print $fh $_, "\n"; }
     $fh->close();
-    
     print STDERR "total mutations: ".$this->{_STAT}{'num_muts'}."\n";
     print STDERR "expected mutations: ".$this->{_STAT}{'num_expect_format'}."\n";
     print STDERR "unexpected format mutations: ".$this->{_STAT}{'num_unexpect_format'}."\n";
@@ -157,11 +131,9 @@ sub process {
     print STDERR "total transcripts with valid uniprot sequences : ".$this->{_STAT}{'num_trans_with_uniprot'}."\n";
     print STDERR "total transcripts in maf : ".$this->{_STAT}{'num_trans'}."\n";
     print STDERR "\n\n##################################################\n";
-    #print STDERR "total mutations to be analyzed:  ".$stats{'3D'}{'tmswithUniprot'}."\n";
     print STDERR "total mutations to be analyzed:  ".$this->{_STAT}{'num_trans_with_uniprot'}."\n";
     print STDERR "total uniprots involved: ".$this->{_STAT}{'num_uniprot_involved'}."\n";
     print STDERR "\n\n##################################################\n";
-    
 }
 # parse maf file 
 sub parseMaf {
@@ -218,10 +190,8 @@ sub parseMaf {
         next unless( (defined $position) and ($position =~ /^\d+$/) );
         $this->{_STAT}{'num_expect_format'}++;
         next unless( defined $tuHashref->{$trans} );
-
         my $tmp_uniprot_id = $tuHashref->{$trans}->{'UNIPROT'};
         my $tmp_hit_bool = 0; my $tmp_uniprot_position;
-
         foreach my $tmp_pos ( keys %{$tuHashref->{$trans}->{'POSITION'}} ){
             if ( ($position >= $tmp_pos) and ($position <= $tuHashref->{$trans}->{'POSITION'}->{$tmp_pos}->{'TEND'}) ) {
                 $tmp_uniprot_position = $position - $tmp_pos + $tuHashref->{$trans}->{'POSITION'}->{$tmp_pos}->{'UBEGIN'};
@@ -235,10 +205,8 @@ sub parseMaf {
     }
     $this->{_STAT}{'num_trans'} = keys %transHash;
     $fh->close();
-
     return \%mafHash;
 }
-
 # get mapping information 
 # of transcript id to uniprot id
 sub getTransMaptoUniprot {
@@ -261,7 +229,6 @@ sub getTransMaptoUniprot {
             } split /\:/, $2;
         } split /,/, $transcripts;
     }
-
     $fh->close();
     return \%transHash;
 }
@@ -287,7 +254,6 @@ sub proximitySearching {
             if ( $uid1 eq $uid2 ) { 
                 $lineardis = abs($uniprotcor1 - $uniprotcor2)
             } else { $lineardis = "N\/A"; }
-
             #print $a."\t".$uid2."\t".$uniprotcor1."\t".$uniprotcor2."\t".$lineardis."\n";
             if ( defined $mafHashref->{$a}->{$uniprotcor1} ) {
                 if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
@@ -316,7 +282,6 @@ sub proximitySearching {
         }
         $fh->close();
     }
-
     return (\@pairResults, \@cosmicclose, \@roiclose);
 }
 
