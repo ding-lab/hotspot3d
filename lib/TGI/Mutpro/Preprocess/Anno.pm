@@ -129,15 +129,9 @@ sub addAnnotation {
         $uniprotCoorOneEnd = $t[2] + $t[3];
         $uniprotCoorTwoEnd = $t[7] + $t[8];
         #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
-        if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd} ) {
-            $annoOneEnd = $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd};
-            print STDERR $annoOneEnd."\n";
-        }
-        if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd} ) {
-            $annoTwoEnd = $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd};
-            print STDERR $annoTwoEnd."\n";
-        }
-        print STDERR $annoOneEnd."\t".$annoTwoEnd."\n";
+        if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd} ) { $annoOneEnd = $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd}; }
+        if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd} ) { $annoTwoEnd = $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd}; }
+        # print STDERR $annoOneEnd."\t".$annoTwoEnd."\n";
         foreach my $d (0..4) { print $fhout $t[$d]."\t"; }
         print $fhout $annoOneEnd."\t";
         foreach my $d (5..9) { print $fhout $t[$d]."\t"; }

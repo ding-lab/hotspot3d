@@ -245,14 +245,9 @@ sub makePeptides {
     # ATOM   7749  CD1 ILE A 999      51.224  54.016  84.367  1.00 83.16           C
     # ATOM   7750  N   ASN A1000      55.338  57.542  83.643  1.00 80.67           N
 
-    my $self = shift;
-    my ( %peptideObjects, 
-         @entireFile, 
-         $line, 
-         @columns, 
-         $chain, 
-         $aminoAcid, $position, $x, $y, $z);
-    foreach $line (split /\n/, $self->entireRecord()) {
+    my ( $self, $drugport_ref, ) = @_;
+    my ( %peptideObjects, @entireFile, $line, @columns, $chain, $aminoAcid, $position, $x, $y, $z);
+    foreach $line ( split /\n/, $self->entireRecord() ) {
 	chomp $line;
 	$aminoAcid = $position = $x = $y = $z = undef;
         ## Beifang Niu 05.14.2013
@@ -264,16 +259,17 @@ sub makePeptides {
         # ENDMDL 
         # MODEL        2
         #
-        last if ($line =~ /^ENDMDL/);
-	if ($line !~ /^ATOM/) { next; }
+        # Add code for drug information processing in PDB structure
+        # TODO: choose only lines with HET_GROUP
+        #
+        last if ( $line =~ /^ENDMDL/ );
+	if ($line !~ /^ATOM|^HETATM/) { next; }
 	my @columns = split //, $line;
-	# Get chain letter and 
-        # make new Peptide object if necessary
+	# Get chain letter and make new Peptide object if necessary
 	$chain = $columns[21];
-	# If there is no chain, 
-        # then give default value of 'Z'
-	if ($chain eq " ") { $chain = "Z"; }
-	if (!defined $peptideObjects{$chain}) {
+	# If there is no chain, then give default value of 'Z'
+	if ( $chain eq " " ) { $chain = "Z"; }
+	if ( !defined $peptideObjects{$chain} ) {
 	    $peptideObjects{$chain} = new TGI::Mutpro::Preprocess::Peptide;
 	    $peptideObjects{$chain}->name($chain);
 	}
@@ -373,8 +369,9 @@ sub chainSequence {
         # ENDMDL 
         # MODEL        2
         #
-        last if ($line =~ /^ENDMDL/);
-	if ( $line =~ /^ATOM/ ) {
+        last if ( $line =~ /^ENDMDL/ );
+	if ( $line !~ /^ATOM|^HETATM/ ) {
+        #if ( $line =~ /^ATOM/ ) {
 	    $position = "";
             $residue = "";
 	    my @columns = split //, $line;
@@ -388,7 +385,7 @@ sub chainSequence {
 		$position =~ s/\s+//g;
 		if ( $position > 0 ) { $sequence{$position} = $residue; }
 	    } # matches 'if ( $columns[21] eq $chain )'
-	} # matches 'if ( $line =~ /^ATOM/ )'
+	} # matches 'if ( $line =~ /^ATOM|^HETATM/ )'
     } # matches 'foreach $line'
 
     return \%sequence;
@@ -428,8 +425,9 @@ sub convertAA {
 	return $oneToThree{$residue};
     }elsif ( defined $threeToOne{$residue} ) {
 	return $threeToOne{$residue};
+    }elsif ( length( $residue ) <= 3 ) {
+        length( $residue ) == 1 ? return "Z" : return $residue;
     } else { carp "Unrecognized format for amino acid '$residue'"; }
-
 }
 
 sub printStructure {

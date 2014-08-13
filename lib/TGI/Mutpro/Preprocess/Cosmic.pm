@@ -45,7 +45,7 @@ sub process {
     $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
     $annotationsDir = "$proximityDir\/annotations";
     $cosmicDir = "$proximityDir\/cosmicanno";
-    $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/cosmic_65_for_3D_proximity_missense_only.tsv";
+    $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/cosmic_67_for_HotSpot3D_missense_only.tsv";
     unless( -d $annotationsDir ) { warn "You must provide a valid annotations directory ! \n"; die help_text(); }
     unless( -e $cosmicDir ) { mkdir( $cosmicDir ) || die "can not make COSMIC annotated files directory\n"; }
     my $transMaptoUnipro = $this->getTransMaptoUniprot( $hugoUniprotFile );

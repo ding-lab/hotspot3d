@@ -55,7 +55,6 @@ sub process {
     unless( $fhuid->open("<$hugoUniproFile") ) { die "Could not open uniprot id file !\n" };
     @entireFile = <$fhuid>;
     $fhuid->close();
-
     foreach $line (@entireFile) { 
         chomp $line;
         ( undef, $uniprotId, $pdb, ) = split /\s+/, $line;
@@ -63,7 +62,6 @@ sub process {
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
         $allUniprotIds{$uniprotId} = 1; 
     }
-
     foreach $uniprotId ( sort keys %allUniprotIds ) {
         $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
         defined ($uniprotRef) || die "no object for '$uniprotId'";

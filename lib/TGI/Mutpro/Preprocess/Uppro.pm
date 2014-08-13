@@ -30,6 +30,9 @@ sub new {
     $this->{_STAT} = undef;
     ## change to use local pdb file
     $this->{_PDB_FILE_DIR} = undef;
+    ## add drug port database file (08.04.2014)
+    $this->{_DRUGPORT_FILE} = undef;
+
     bless $this, $class;
     $this->process();
     return $this;
@@ -44,6 +47,8 @@ sub process {
         'min-seq-dis=i'  => \$this->{_MIN_SEQ_DIS},
         'output-dir=s'   => \$this->{_OUTPUT_DIR},
         'pdb-file-dir=s' => \$this->{_PDB_FILE_DIR},
+        'drugport-file=s' => \$this->{_DRUGPORT_FILE},
+
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
@@ -52,6 +57,9 @@ sub process {
     unless( -e $this->{_OUTPUT_DIR} ) { warn 'output directory is not exist  ! ', "\n"; die $this->help_text(); }
     unless( $this->{_PDB_FILE_DIR} ) {  warn 'You must provide a PDB file directory ! ', "\n"; die $this->help_text(); }
     unless( -e $this->{_PDB_FILE_DIR} ) { warn 'PDB file directory is not exist  ! ', "\n"; die $this->help_text(); }
+    unless( $this->{_DRUGPORT_FILE} ) {  warn 'You must provide a drugport database file ! ', "\n"; die $this->help_text(); }
+    unless( -e $this->{_DRUGPORT_FILE} ) { warn 'DrugPort databse file is not exist  ! ', "\n"; die $this->help_text(); }
+
     #### processing: update program ####
     my ( $updateProgram, $proDir, $inproDir, $pdbCorDir, $logFile );
     $updateProgram = 'hotspot3d calpro';
@@ -97,9 +105,9 @@ sub process {
         $fh->print( "\t$aliasList\n" );
     }
     $fh->close();
-    map{
+    map {
         system( "touch $inproDir/$_.ProximityFile.csv" );
-        my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>8000] rusage[mem=8000]' -M 8000000 '$updateProgram --output-dir=$this->{_OUTPUT_DIR} --pdb-file-dir=$this->{_PDB_FILE_DIR} --uniprot-id=$_ --max-3d-dis=$this->{_MAX_3D_DIS} --min-seq-dis=$this->{_MIN_SEQ_DIS}'";
+        my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>8000] rusage[mem=8000]' -M 8000000 '$updateProgram --output-dir=$this->{_OUTPUT_DIR} --pdb-file-dir=$this->{_PDB_FILE_DIR} --drugport-file=$this->{_DRUGPORT_FILE} --uniprot-id=$_ --max-3d-dis=$this->{_MAX_3D_DIS} --min-seq-dis=$this->{_MIN_SEQ_DIS}'";
         print STDERR $submit_cmd."\n"; system( "$submit_cmd" );
     } keys %UniprotIdToUpdate;
 
@@ -137,6 +145,8 @@ Usage: hotspot3d uppro [options]
 
 --output-dir		Output directory of proximity files
 --pdb-file-dir          PDB file directory 
+--drugport-file         DrugPort database file    
+
 --max-3d-dis            Maximum 3D distance in angstroms befor two amino acids
                         are considered 'close', default = 10
 --min-seq-dis           Minimum linear distance in primary sequence. If two amino acids are <= 5 positions 
