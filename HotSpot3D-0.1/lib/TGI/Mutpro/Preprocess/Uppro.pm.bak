@@ -32,7 +32,6 @@ sub new {
         'status' => undef,
         'pdb_file_dir' => undef,
         'drugport_file' => undef, 
-        'cmd-list-submit-file' => 'cmd_list_submit_file', 
     );
     map{ $this->{$_} = $sub_cmds{$_} } keys %sub_cmds;
     bless $this, $class;
@@ -50,7 +49,6 @@ sub process {
         'output-dir=s'    => \$this->{'output_dir'},
         'pdb-file-dir=s'  => \$this->{'pdb_file_dir'},
         'drugport-file=s' => \$this->{'drugport_file'},
-        'cmd-list-submit-file=s' => \$this->{'cmd_list_submit_file'},
         'help' => \$help,
     );
     if ($help) { print STDERR help_text(); exit 0; }
@@ -91,15 +89,12 @@ sub process {
         $fh->print( "\t$alias_list\n" );
     }
     $fh->close();
-    open ( my $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} );
     map {
         system("touch $inpro_dir/$_.ProximityFile.csv");
         my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>8000] rusage[mem=8000]' -M 8000000 '$update_program --output-dir=$this->{'output_dir'} --pdb-file-dir=$this->{'pdb_file_dir'} --drugport-file=$this->{'drugport_file'} --uniprot-id=$_ --max-3d-dis=$this->{'max_3d_dis'} --min-seq-dis=$this->{'min_seq_dis'}'";
         print STDERR $submit_cmd."\n"; 
-        $cmd_list_submit_file_fh->print($submit_cmd."\n");
         system("$submit_cmd");
     } keys %uniprotid_toupdate;
-    $cmd_list_submit_file_fh->close();
 
     return 1;
 }

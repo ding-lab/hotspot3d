@@ -45,25 +45,24 @@ sub process {
     $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
     $annotationsDir = "$proximityDir\/annotations";
     $cosmicDir = "$proximityDir\/cosmicanno";
-    $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/cosmic_65_for_3D_proximity_missense_only.tsv";
+    $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/cosmic_67_for_HotSpot3D_missense_only.tsv";
     unless( -d $annotationsDir ) { warn "You must provide a valid annotations directory ! \n"; die help_text(); }
     unless( -e $cosmicDir ) { mkdir( $cosmicDir ) || die "can not make COSMIC annotated files directory\n"; }
     my $transMaptoUnipro = $this->getTransMaptoUniprot( $hugoUniprotFile );
     my $cosmicHashRef = $this->getCosmicInfor( $transMaptoUnipro, $cosmicAnno );
+
     my $fh = new FileHandle;
     unless( $fh->open("<$hugoUniprotFile") ) { die "Could not open hugo uniprot file !\n" };
     my $u = 0;
     while ( my $line = <$fh> ) {
         chomp $line;
         my ( undef, $uniprotId, ) = split /\t/, $line;
-        #print STDERR uniprotId."\n";
         # Only use Uniprot IDs with PDB structures
         next if ( $uniprotId !~ /\w+/ );
         # proximity file
         my $annotationFile = "$annotationsDir\/$uniprotId\.ProximityFile\.csv";
         next unless( -e $annotationFile );
         my $outputFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
-        #print STDERR $outputFile."\n";
         print STDERR $uniprotId."\n";
         # add annotation infor
         $this->addCosmic( $annotationFile, $cosmicHashRef, $outputFile, $uniprotId );
@@ -129,46 +128,49 @@ sub getTransMaptoUniprot {
         chomp( $a );
         my ( undef, $uniprotId, undef, undef, $transcripts, ) = split /\t/, $a;
         next if $transcripts =~ (/N\/A/);
-
-
-
-        my @transIds = map{ @_ = split /\s+/; $_[0] } split /,/, $transcripts;
-        map{ $transHash{$_} = $uniprotId; } @transIds;
-
-
-
-
-
+        map{ 
+            /(\w+)\[(.*?)]/;
+            my $tmp_transcript_id = $1;
+            $transHash{$tmp_transcript_id}{'UNIPROT'} = $uniprotId;
+            map{  /(\d+)\|(\d+)-(\d+)\|(\d+)/; 
+                $transHash{$tmp_transcript_id}{'POSITION'}{$2}{'TEND'} = $4; 
+                $transHash{$tmp_transcript_id}{'POSITION'}{$2}{'UBEGIN'} = $1;
+                $transHash{$tmp_transcript_id}{'POSITION'}{$2}{'UEND'} = $3;
+            } split /\:/, $2;
+        } split /,/, $transcripts;
     }
     $fhunipro->close();
-
     return \%transHash;
 }
-
-
-
-
-
 
 # get COSMIC annotation
 sub getCosmicInfor {
     my ( $this, $uniprotRef, $cosmicf, ) = @_;
     my %cosmicHash;
     my $fhcosmic = new FileHandle;
-    unless( $fhcosmic->open("<$cosmicf") ) { die "Could not open COSMIC annotation file !\n" };
-    while ( my $a = <$fhcosmic> ) {
-        chomp($a);
+    unless( $fhcosmic->open( "<$cosmicf" ) ) { die "Could not open COSMIC annotation file !\n" };
+    while ( my $a = $fhcosmic->getline ) {
+        chomp( $a );
+        next if ( $a =~ /^gene_name/ ); 
         my ( $gene, $transcript, $type, $aac, $domain, $tissue, ) = split /\t/, $a;
         next unless ( defined $uniprotRef->{$transcript} );
         next unless ( $aac =~ /p\.\D(\d+)\D/ );
-        my $uniprot = $uniprotRef->{$transcript};
-        next if (defined $cosmicHash{$uniprot}{$1}{$aac."|".$tissue});
-        $cosmicHash{$uniprot}{$1}{$aac."|".$tissue} = 1;
+        my $uniprot = $uniprotRef->{$transcript}->{'UNIPROT'};
+        my $tmp_hit_bool = 0; my $tmp_uniprot_position;
+        foreach my $tmp_pos ( keys %{$uniprotRef->{$transcript}->{'POSITION'}} ){
+            if ( ($1 >= $tmp_pos) and ($1 <= $uniprotRef->{$transcript}->{'POSITION'}->{$tmp_pos}->{'TEND'}) ) {
+                $tmp_uniprot_position = $1 - $tmp_pos + $uniprotRef->{$transcript}->{'POSITION'}->{$tmp_pos}->{'UBEGIN'};
+                $tmp_hit_bool = 1; 
+                last;
+            } 
+        }
+        next if ( $tmp_hit_bool == 0 );
+        next if (defined $cosmicHash{$uniprot}{$tmp_uniprot_position}{$aac."|".$tissue});
+        $cosmicHash{$uniprot}{$tmp_uniprot_position}{$aac."|".$tissue} = 1;
         #print STDERR $aac."\t".$1."\t".$tissue."\t".$uniprot."\n";
         #print STDERR $aac."\t".$1."\t".$uniprot."\n";
     }
     $fhcosmic->close();
-
     return \%cosmicHash;
 }
 

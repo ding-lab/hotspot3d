@@ -53,7 +53,6 @@ sub process {
     unless( $this->{_DATA_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die help_text(); }
     unless( -d $this->{_DATA_DIR} ) { warn 'You must provide a valid data directory ! ', "\n"; die help_text(); }
     my $uniprot_file = "$this->{_DATA_DIR}\/hugo.uniprot.pdb.transcript.csv";
-    my $drugport_file = "$this->{_DATA_DIR}\/drugport/drugs_pdbs_parsing_list_HotSpot3D_only_pdb_parse_final_results";
     my $prior_dir = "$this->{_DATA_DIR}\/prioritization";
     unless( -d $prior_dir ) { die "the directory $prior_dir is not exist ! \n"; };
     my @t = qw( num_muts
@@ -76,11 +75,9 @@ sub process {
     map{ $this->{_STAT}{$_} = 0; } @t;
     my $transToUniprot = $this->getTransMaptoUniprot( $uniprot_file );
     $this->{_STAT}{'num_trans_with_uniprot'} = keys %$transToUniprot;
-    # parse drugport resuls file
-    my $drugport_hash_ref = $this->getDrugportInfo( $drugport_file );
     my $mafHashRef = $this->parseMaf( $this->{_MAF}, $transToUniprot );
     $this->{_STAT}{'num_uniprot_involved'} = keys %$mafHashRef;
-    my ($pairoutref, $cosmicref, $roiref, $drugport_results_ref, $drugport_nonresults_ref ) = $this->proximitySearching( $mafHashRef, $prior_dir, $drugport_hash_ref );
+    my ($pairoutref, $cosmicref, $roiref) = $this->proximitySearching( $mafHashRef, $prior_dir );
     print STDERR "searching done...\n";
     my %filterHash;
     foreach ( @$pairoutref ) {
@@ -127,15 +124,6 @@ sub process {
     die "Could not create Region of Interest(ROI) close output file\n"  unless($fh->open(">$this->{_OUTPUT_PREFIX}.roi"));
     foreach (@$roiref) { print $fh $_, "\n"; }
     $fh->close();
-    # pour out mutations close to drugs from drugport 
-    die "Could not create drugport compound close output file\n"  unless($fh->open(">$this->{_OUTPUT_PREFIX}.drugs.target"));
-    foreach (@$drugport_results_ref) { print $fh $_, "\n"; }
-    $fh->close();
-    # pour out mutations close to drugs from drugport (nontarget) 
-    die "Could not create drugport compound close output file (nontarget)\n"  unless($fh->open(">$this->{_OUTPUT_PREFIX}.drugs.nontarget"));
-    foreach (@$drugport_nonresults_ref) { print $fh $_, "\n"; }
-    $fh->close();
-
     print STDERR "total mutations: ".$this->{_STAT}{'num_muts'}."\n";
     print STDERR "expected mutations: ".$this->{_STAT}{'num_expect_format'}."\n";
     print STDERR "unexpected format mutations: ".$this->{_STAT}{'num_unexpect_format'}."\n";
@@ -245,46 +233,10 @@ sub getTransMaptoUniprot {
     return \%transHash;
 }
 
-# get drugport database information
-#
-sub getDrugportInfo {
-    my ( $this, $drugport_f ) = @_;
-    my $fh = new FileHandle;
-    unless( $fh->open( $drugport_f ) ) { die "Could not open drugport parsing results file\n" };
-    my %drugport_hash;
-    while ( my $a = $fh->getline ) {
-        chomp($a);
-        my ( $target_pdb, $not_target_include_compound ) = (split /\t/, $a)[4,8];
-        unless ( $target_pdb =~ /NULL/ ) { 
-            map{ 
-                my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
-                $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-
-                unless ( $pdb and $chain and $loc ) { print $a."\n"; }
-
-                $drugport_hash{'TARGET'}{uc($pdb)}{$chain}{$loc} = 1;
-            } split /,/,$target_pdb; 
-        }
-
-        unless ( $not_target_include_compound =~ /NULL/ ) { 
-            map{ 
-                my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-
-                unless ( $pdb and $chain and $loc ) { print $a."\n"; }
-
-                $drugport_hash{'NONTARGET'}{uc($pdb)}{$chain}{$loc} = 1;
-
-            } split /,/, $not_target_include_compound; 
-        }
-    }
-    $fh->close();
-    return \%drugport_hash;
-}
-
 # proximity searching 
 sub proximitySearching {
-    my ( $this, $mafHashref, $proximityOutPrefix, $drugportref ) = @_;
-    my ( @pairResults, @cosmicclose, @roiclose, @drugport_target_results, @drugport_nontarget_results, );
+    my ( $this, $mafHashref, $proximityOutPrefix ) = @_;
+    my ( @pairResults, @cosmicclose, @roiclose );
     my $fh = new FileHandle;
     foreach my $a ( keys %$mafHashref ) {
         my $uniprotf = "$proximityOutPrefix\/$a.ProximityFile.csv";
@@ -299,7 +251,9 @@ sub proximitySearching {
             my $uniprotcor1 = $pdbcor1 + $offset1;
             my $uniprotcor2 = $pdbcor2 + $offset2;
             my $lineardis = undef;
-            if ( $uid1 eq $uid2 ) { $lineardis = abs($uniprotcor1 - $uniprotcor2) } else { $lineardis = "N\/A"; }
+            if ( $uid1 eq $uid2 ) { 
+                $lineardis = abs($uniprotcor1 - $uniprotcor2)
+            } else { $lineardis = "N\/A"; }
             #print $a."\t".$uid2."\t".$uniprotcor1."\t".$uniprotcor2."\t".$lineardis."\n";
             if ( defined $mafHashref->{$a}->{$uniprotcor1} ) {
                 if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
@@ -325,45 +279,11 @@ sub proximitySearching {
                     }
                 }
             }
-            # drugport searching
-            my %pdbs_hash = map{ my @t0 = split / /, $_; ($t0[1], 1) } split /\|/, $proximityinfor;
-            my ( $real_chain1 ) = $chain1 =~ /\[(\w)\]/;
-            my ( $real_chain2 ) = $chain2 =~ /\[(\w)\]/;
-            my ( $e, $iter );
-            map { $iter = $_;
-                if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
-                    if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
-                        foreach $e ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
-                            push( @drugport_target_results, join("\t", $iter, $chain1, $pdbcor1, $e, @ta[8,9,12,13], $lineardis, $proximityinfor) );
-                        }
-                    }
-                }
-                if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
-                    if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
-                        foreach $e ( keys %{$mafHashref->{$uid1}->{$uniprotcor1}} ) {
-                            push( @drugport_target_results, join("\t", $iter, $chain2, $pdbcor2, $e, @ta[1,2,5,6], $lineardis, $proximityinfor) );
-                        }
-                    }
-                }
-                if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
-                    if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
-                        foreach $e ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
-                            push( @drugport_nontarget_results, join("\t", $iter, $chain1, $pdbcor1, $e, @ta[8,9,12,13], $lineardis, $proximityinfor) );
-                        }
-                    }
-                }
-                if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
-                    if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
-                        foreach $e ( keys %{$mafHashref->{$uid1}->{$uniprotcor1}} ) {
-                            push( @drugport_nontarget_results, join("\t", $iter, $chain2, $pdbcor2, $e, @ta[1,2,5,6], $lineardis, $proximityinfor) );
-                        }
-                    }
-                }
-            } keys %pdbs_hash;
         }
         $fh->close();
     }
-    return ( \@pairResults, \@cosmicclose, \@roiclose, \@drugport_target_results, \@drugport_nontarget_results );
+    return (\@pairResults, \@cosmicclose, \@roiclose);
+
 }
 
 sub help_text{
