@@ -2,9 +2,9 @@ use strict;
 use warnings;
 
 use Test::Most;
-use TGI::Mutpro::Complicated;
+use TGI::Mutpro::Preprocess::Complicated;
 
-TGI::Mutpro::Complicated::print_stuff();
+TGI::Mutpro::Preprocess::Complicated::print_stuff();
 ok(1, '1 is definitely okay');
 
 done_testing;

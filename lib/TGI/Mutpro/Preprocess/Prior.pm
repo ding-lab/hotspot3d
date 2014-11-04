@@ -136,8 +136,8 @@ Usage: hotspot3d prior [options]
 
 --output-dir		Output directory
 --p-value               p_value cutoff(<=), default is 0.05
---3d-dis                3D distance cutoff (<=), default is 10
---linear-dis            linear distance cutoff (>=), default is 50
+--3d-dis                3D distance cutoff (<=), default is 20
+--linear-dis            linear distance cutoff (>=), default is 1
 
 --help			this message
 
