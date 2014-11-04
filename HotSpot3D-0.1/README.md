@@ -14,29 +14,52 @@ Usage
 
 Key commands:
 
-        search  ---   3D proximity searching
-        visual  ---   Visulization of 3D proximity
+        search    --  3D mutation proximity searching
+        visual    --  Visulization of 3D proximity
+        cluster   --  Determine mutation clusters from HotSpot3D inter, intra, and druggable data 
 
-        uppro   ---   Update proximity files
-        calpro  ---   Calculate proximity file for one UniProt ID
-        calroi  ---   Generate region of interest (ROI) information
-        statis  ---   Calculate p_values for pairs of mutations
-        anno    ---   Add region of interest (ROI) annotation
-        trans   ---   Add transcript annotation 
-        cosmic  ---   Add COSMIC annotation to proximity file
-        prior   ---   Prioritization
-        help    ---   this message
-
+        drugport  --  Parse drugport database 
+        uppro     --  Update proximity files
+        calpro    --  Calculate proximity file for one UniProt ID
+        calroi    --  Generate region of interest (ROI) information
+        statis    --  Calculate p_values for pairs of mutations
+        anno      --  Add region of interest (ROI) annotation
+        trans     --  Add transcript annotation 
+        homo      --  Add homology PDB structures 
+        cosmic    --  Add COSMIC annotation to proximity file
+        prior     --  Prioritization
+        help      --  this message
 
 SUPPORT
-
 For user support please mail bniu@genome.wustl.edu
 
 
-Install
+Install (Ubuntu 14.04.01)
 -------
 
-        Just run: cpanm HotSpot3D-0.1.tar.gz
+Prerequisites:
 
-xxx
+In order to install HotSpot3D package, we need CPANM program
+(cpanm - get, unpack build and install modules from CPANM)
+
+
+        sudo apt-get install cpanminus
+
+Intall LWP::Simple module
+
+        sudo apt-get install libwww-perl
+
+Install HotSpot3D package: 
+        
+        git clone https://github.com/ding-lab/hotspot3d
+        cd hotspot3d
+        cpanm --force HotSpot3D-0.1.tar.gz
+
+
+example
+-------
+
+
+
+
 

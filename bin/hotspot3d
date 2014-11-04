@@ -66,7 +66,7 @@ search    --  3D mutation proximity searching
 visual    --  Visulization of 3D proximity
 cluster   --  Determine mutation clusters from HotSpot3D inter, intra, and druggable data 
 
-drugport  --  Update proximity files
+drugport  --  Parse drugport database 
 uppro     --  Update proximity files
 calpro    --  Calculate proximity file for one UniProt ID
 calroi    --  Generate region of interest (ROI) information
