@@ -21,8 +21,8 @@ sub new {
     my $this = {};
     $this->{_OUTPUT_DIR} = undef;
     $this->{_PVALUE_CUTOFF} = 0.05;
-    $this->{_3D_CUTOFF} = 10;
-    $this->{_1D_CUTOFF} = 50;
+    $this->{_3D_CUTOFF} = 20;
+    $this->{_1D_CUTOFF} = 1;
     $this->{_STAT} = undef;
     bless $this, $class;
     $this->process();

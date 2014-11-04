@@ -8,7 +8,6 @@ bin/hotspot3d
 dist.ini
 lib/TGI/Mutpro/Main/Cluster.pm
 lib/TGI/Mutpro/Main/Proximity.pm
-lib/TGI/Mutpro/Main/Proximity.pm.bak
 lib/TGI/Mutpro/Main/Visual.pm
 lib/TGI/Mutpro/Preprocess/AminoAcid.pm
 lib/TGI/Mutpro/Preprocess/Anno.pm
@@ -29,6 +28,4 @@ lib/TGI/Mutpro/Preprocess/Statis.pm
 lib/TGI/Mutpro/Preprocess/Trans.pm
 lib/TGI/Mutpro/Preprocess/Uniprot.pm
 lib/TGI/Mutpro/Preprocess/Uppro.pm
-lib/TGI/Mutpro/Preprocess/Uppro.pm.bak
-lib/TGI/Mutpro/Preprocess/Uppro.pm.bak.bak
 t/foo.t

@@ -259,21 +259,15 @@ sub getDrugportInfo {
             map{ 
                 my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
                 $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-
                 unless ( $pdb and $chain and $loc ) { print $a."\n"; }
-
                 $drugport_hash{'TARGET'}{uc($pdb)}{$chain}{$loc} = 1;
             } split /,/,$target_pdb; 
         }
-
         unless ( $not_target_include_compound =~ /NULL/ ) { 
             map{ 
                 my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-
                 unless ( $pdb and $chain and $loc ) { print $a."\n"; }
-
                 $drugport_hash{'NONTARGET'}{uc($pdb)}{$chain}{$loc} = 1;
-
             } split /,/, $not_target_include_compound; 
         }
     }
