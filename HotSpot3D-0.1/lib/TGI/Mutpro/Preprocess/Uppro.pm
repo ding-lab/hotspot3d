@@ -145,6 +145,7 @@ Usage: hotspot3d uppro [options]
                         are considered 'close', default = 100
 --min-seq-dis           Minimum linear distance in primary sequence. If two amino acids are < 1 positions 
                         apart in the primary sequence, don't record them, default =  1
+--cmd-list-submit-file  Submits batch jobs to run 3D proximity calculation in parallel 
 
 --help			this message
 

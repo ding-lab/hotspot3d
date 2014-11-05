@@ -49,6 +49,11 @@ Intall LWP::Simple module
 
         sudo apt-get install libwww-perl
 
+Intall Test::Most module
+        
+        wget http://search.cpan.org/CPAN/authors/id/O/OV/OVID/Test-Most-0.34.tar.gz
+        cpanm Test-Most-0.34.tar.gz
+
 Install HotSpot3D package: 
         
         git clone https://github.com/ding-lab/hotspot3d
@@ -59,8 +64,59 @@ Install HotSpot3D package:
 example
 -------
 
+Preprocessing procedure
 
 
+1. Run drugport module to parse Drugport data to generate a drugport parsing results flat file :
 
+        hotspot3d drugport --pdb-file-dir=pdb_files_dir --output-file=drugport_parsing_results_file
+
+
+2. Run 3D proximity calculation ( this step need one output directory to store all of the data from pre-processing procedure
+and one directory which contains pdb files downloaded from PDB website. This step will automatically download PDB files if
+there is no needed PDB files in pdb files directory) :
+
+        hotspot3d uppro --output-dir=preprocessing_output --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file --max-3d-dis=100 1>hotspot3d.preprocessing.t.err 2>hotspot3d.preprocessing.t.out
+
+3. Calculate protein domain information for each Uniprot ID : 
+
+        hotspot3d calroi --output-dir=preprocessing_output
+
+4. Significance determination calculation :  
+
+        hotspot3d statis --output-dir=preprocessing_output
+
+5. Add protein domain annotation information to 3D proximity information :
+
+        hotspot3d anno --output-dir=preprocessing_output
+
+6. Choose transcripts based on the alignment between Uniprot sequence and human peptides sequences :
+
+        hotspot3d trans --output-dir=preprocessing_output
+
+7. Add cosmic v67 information to 3D proximity results :
+
+        mkdir preprocessing_output/cosmic
+        cp cosmic_67_for_HotSpot3D_missense_only.tsv ./preprocessing_output/cosmic/
+        hotspot3d cosmic --output-dir=preprocessing_output
+
+8. Prioritization :
+
+        hotspot3d prior --output-dir=preprocessing_output --p-value=0.1 --3d-dis=20 --linear-dis=0.5
+
+
+3D proximity searching based on prioritization results and visualization
+
+1. Proximity searching :
+
+        hotspot3d search --maf-file=pancan19_input.maf --data-dir=preprocessing_output --output-prefix=pancan19 --skip-silent 1>pancan19.t.out 2>pancan19.t.err
+
+2. Visualization :
+
+        hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
+
+3. 3D proximity results clustering : 
+
+        hotspot3d cluster --inter-intra-proximity-file=interactions_file --data-location-file=location_data --output-file=clustering.out --target-nontarget-file=drug_data_file
 
 
