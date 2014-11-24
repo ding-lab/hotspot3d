@@ -42,8 +42,11 @@ Prerequisites:
 In order to install HotSpot3D package, we need CPANM program
 (cpanm - get, unpack build and install modules from CPANM)
 
-
         sudo apt-get install cpanminus
+
+Intall Perl5 local lib
+
+        cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
 
 Intall LWP::Simple module
 
@@ -58,7 +61,7 @@ Install HotSpot3D package:
         
         git clone https://github.com/ding-lab/hotspot3d
         cd hotspot3d
-        cpanm --force HotSpot3D-0.1.tar.gz
+        cpanm HotSpot3D-0.1.tar.gz
 
 
 example
