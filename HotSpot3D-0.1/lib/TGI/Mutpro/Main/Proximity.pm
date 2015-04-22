@@ -248,20 +248,20 @@ sub getDrugportInfo {
     my %drugport_hash;
     while ( my $a = $fh->getline ) {
         chomp($a);
-        my ( $target_pdb, $not_target_include_compound ) = (split /\t/, $a)[4,8];
+        my ( $het, $target_pdb, $not_target_include_compound ) = (split /\t/, $a)[2,4,8];
         unless ( $target_pdb =~ /NULL/ ) { 
             map{ 
                 my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
                 $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
                 unless ( $pdb and $chain and $loc ) { print $a."\n"; }
-                $drugport_hash{'TARGET'}{uc($pdb)}{$chain}{$loc} = 1;
+                $drugport_hash{'TARGET'}{uc($pdb)}{$chain}{$loc} = $het;
             } split /,/,$target_pdb; 
         }
         unless ( $not_target_include_compound =~ /NULL/ ) { 
             map{ 
                 my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
                 unless ( $pdb and $chain and $loc ) { print $a."\n"; }
-                $drugport_hash{'NONTARGET'}{uc($pdb)}{$chain}{$loc} = 1;
+                $drugport_hash{'NONTARGET'}{uc($pdb)}{$chain}{$loc} = $het;
             } split /,/, $not_target_include_compound; 
         }
     }
@@ -340,7 +340,7 @@ sub proximitySearching {
                     if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
                         map { 
                             if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
-                                push( @drugport_target_results, join("\t", $iter, $chain1, $pdbcor1, $_, @ta[8,9,12,13], $lineardis, $proximityinfor) );
+                                push( @drugport_target_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) );
                             }
                         } keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
                     }
@@ -349,7 +349,7 @@ sub proximitySearching {
                     if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
                         map { 
                             if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
-                                push( @drugport_target_results, join("\t", $iter, $chain2, $pdbcor2, $_, @ta[1,2,5,6], $lineardis, $proximityinfor) );
+                                push( @drugport_target_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
                             } 
                         } keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
                     }
@@ -358,7 +358,7 @@ sub proximitySearching {
                     if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
                         map {
                             if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
-                                push( @drugport_nontarget_results, join("\t", $iter, $chain1, $pdbcor1, $_, @ta[8,9,12,13], $lineardis, $proximityinfor) ); 
+                                push( @drugport_nontarget_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) ); 
                             }
                         } keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
                     }
@@ -367,7 +367,7 @@ sub proximitySearching {
                     if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
                         map {
                             if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
-                                push( @drugport_nontarget_results, join("\t", $iter, $chain2, $pdbcor2, $_, @ta[1,2,5,6], $lineardis, $proximityinfor) );
+                                push( @drugport_nontarget_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
                             }
                         } keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
                     }

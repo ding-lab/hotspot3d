@@ -1,7 +1,7 @@
 HotSpot3D
 ===========
 
-This 3D proximity tool can be used to identify the mutation hotspots in the linear 1D sequence and correlates these hotspots with known or potential interacting domains based on both known intermolecular interactions and calculated proximity for potential intramolecular interactions.
+This 3D proximity tool can be used to identify mutation hotspots from the linear protein sequence and correlates the hotspots with known or potentially interacting domains and mutations. 
 
 Usage
 -----
@@ -39,7 +39,7 @@ Install (Ubuntu 14.04.01)
 
 Prerequisites:
 
-In order to install HotSpot3D package, we need CPANM program
+In order to install HotSpot3D package, first install CPANM
 (cpanm - get, unpack build and install modules from CPANM)
 
         sudo apt-get install cpanminus
@@ -69,19 +69,17 @@ example
 
 Preprocessing procedure
 
-
-1. Run drugport module to parse Drugport data to generate a drugport parsing results flat file :
+1. Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
 
         hotspot3d drugport --pdb-file-dir=pdb_files_dir --output-file=drugport_parsing_results_file
 
-
-2. Run 3D proximity calculation ( this step need one output directory to store all of the data from pre-processing procedure
-and one directory which contains pdb files downloaded from PDB website. This step will automatically download PDB files if
-there is no needed PDB files in pdb files directory) :
+2. Run 3D proximity calculation ( this step needs one output directory to store all of the data from the pre-processing procedure
+and one directory which contains pdb files downloaded from the PDB website. This step will automatically download PDB files if
+the necessary PDB file is not yet in the pdb files directory) :
 
         hotspot3d uppro --output-dir=preprocessing_output --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file --max-3d-dis=100 1>hotspot3d.preprocessing.t.err 2>hotspot3d.preprocessing.t.out
 
-3. Calculate protein domain information for each Uniprot ID : 
+3. Calculate protein domain information for each UniProt ID : 
 
         hotspot3d calroi --output-dir=preprocessing_output
 
@@ -110,7 +108,7 @@ there is no needed PDB files in pdb files directory) :
 
 3D proximity searching based on prioritization results and visualization
 
-1. Proximity searching :
+1. Proximity searching (acquire proximity information for input mutations):
 
         hotspot3d search --maf-file=pancan19_input.maf --data-dir=preprocessing_output --output-prefix=pancan19 --skip-silent 1>pancan19.t.out 2>pancan19.t.err
 
@@ -121,5 +119,4 @@ there is no needed PDB files in pdb files directory) :
 3. 3D proximity results clustering : 
 
         hotspot3d cluster --inter-intra-proximity-file=interactions_file --data-location-file=location_data --output-file=clustering.out --target-nontarget-file=drug_data_file
-
 

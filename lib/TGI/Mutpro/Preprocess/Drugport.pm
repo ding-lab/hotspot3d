@@ -145,7 +145,7 @@ sub process {
                         $t_het =~ s/ //g; 
                         $t_loc =~ s/ //g; 
                         if ( ($t_chain eq $chain) and ( $t_het eq $het ) and ( $t_loc !~ /-/ ) ) { 
-                            my $t_con = join("\|", $pdb, $chain, $t_loc); 
+                            my $t_con = join("\|", $pdb, $chain, $t_loc, $t_het); 
                             push ( @buf1, $t_con ); last 
                         } 
                     }
