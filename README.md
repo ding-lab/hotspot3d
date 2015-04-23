@@ -44,6 +44,11 @@ In order to install HotSpot3D package, first install CPANM
 
         sudo apt-get install cpanminus
 
+Another way to install cpanminus is to just download it, as per the installer
+        
+        curl -LO http://xrl.us/cpanm
+        chmod +x cpanm
+
 Intall Perl5 local lib
 
         cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
