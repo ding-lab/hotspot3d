@@ -71,7 +71,7 @@ sub new {
     $this->{'stat'} = undef;
     $this->{'pdb_file_dir'} = undef;
     ## add drug port database file (08.04.2014)
-    $this->{'drugport_file'} = undef;
+    #$this->{'drugport_file'} = undef;
     bless $this, $class;
     $this->process();
     return $this;
@@ -87,7 +87,7 @@ sub process {
         'output-dir=s'    => \$this->{'output_dir'},
         'uniprot-id=s'    => \$this->{'uniprot_id'},
         'pdb-file-dir=s'  => \$this->{'pdb_file_dir'},
-        'drugport-file=s' => \$this->{'drugport_file'},
+        #'drugport-file=s' => \$this->{'drugport_file'},
 
         'help' => \$help,
     );
@@ -96,7 +96,7 @@ sub process {
     unless(defined $this->{'uniprot_id'}) { warn 'You must provide a Uniprot ID !', "\n"; die $this->help_text(); }
     unless( $this->{'output_dir'} and (-e $this->{'output_dir'} ) ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); }
     unless( $this->{'pdb_file_dir'} and (-e $this->{'pdb_file_dir'}) ) { warn 'You must provide a PDB file directory ! ', "\n"; die $this->help_text(); }
-    unless( $this->{'drugport_file'} and (-e $this->{'drugport_file'}) ) { warn 'You must provide a drugport database file ! ', "\n"; die $this->help_text(); }
+    #unless( $this->{'drugport_file'} and (-e $this->{'drugport_file'}) ) { warn 'You must provide a drugport database file ! ', "\n"; die $this->help_text(); }
     #### processing ####
     # This can be used if only want to write out pairs when one is in a Uniprot-annotated domain
     # Default is to write out every pair that is within $MaxDistance 
@@ -104,7 +104,7 @@ sub process {
     # amino acids away in the primary sequence)
 
     ## processing drugport database file ( 08-05-2014 )
-    my $drugport_infor_hash_ref = $this->get_drugport_database_info( $this->{'drugport_file'} );
+    #my $drugport_infor_hash_ref = $this->get_drugport_database_info( $this->{'drugport_file'} );
     $this->{'uniprot_ref'} = TGI::Mutpro::Preprocess::Uniprot->new( $this->{'uniprot_id'} );
     my $Dir = "$this->{'output_dir'}/proximityFiles";
     my $ProximityFile = "$Dir/inProgress/$this->{'uniprot_id'}.ProximityFile.csv";
@@ -115,8 +115,8 @@ sub process {
     my $linkage = $this->getLinkageInfo( $hugoUniprot );
     # Make proximity file to a temporary directory so current 
     # file can be used until this is finished 
-    #$this->writeProximityFile( $ProximityFile, $linkage );
-    $this->writeProximityFile( $ProximityFile, $linkage, $drugport_infor_hash_ref, );
+    $this->writeProximityFile( $ProximityFile, $linkage );
+    #$this->writeProximityFile( $ProximityFile, $linkage, $drugport_infor_hash_ref, );
     # Write a file that says if the amino acid sequence in Uniprot
     # is consistent with the sequence in the PDB structure(s)
     my $PdbCoordinateFile = "$Dir/pdbCoordinateFiles/$this->{'uniprot_id'}.coord";
@@ -129,23 +129,23 @@ sub process {
 }
 
 ## Parse drugport database file 
-sub get_drugport_database_info{
-    my ( $this, $drugportf, ) = @_;
-    my $drugportfh = new FileHandle;
-    unless( $drugportfh->open( $drugportf ) ) { die "Could not open drugport database file !\n" };
-    my ( %drugport_hash );
-    foreach ( $drugportfh->getlines ) {
-        chomp; 
-        my ( $drug, $related_uniprot, $pdb_het_group, $pdb1, $pdb2, $pdb3 ) = split /\t/;
-        $drugport_hash{'DRUG'} = $drug;
-        $drugport_hash{'UNIPROT'} = $related_uniprot;
-        $drugport_hash{'PDBHET'} = $pdb_het_group;
-        unless( $pdb1 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb1; };
-        unless( $pdb2 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb2; };
-        unless( $pdb3 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb3; };
-    }
-    return \%drugport_hash;
-}
+#sub get_drugport_database_info{
+#    my ( $this, $drugportf, ) = @_;
+#    my $drugportfh = new FileHandle;
+#    unless( $drugportfh->open( $drugportf ) ) { die "Could not open drugport database file !\n" };
+#    my ( %drugport_hash );
+#    foreach ( $drugportfh->getlines ) {
+#        chomp; 
+#        my ( $drug, $related_uniprot, $pdb_het_group, $pdb1, $pdb2, $pdb3 ) = split /\t/;
+#        $drugport_hash{'DRUG'} = $drug;
+#        $drugport_hash{'UNIPROT'} = $related_uniprot;
+#        $drugport_hash{'PDBHET'} = $pdb_het_group;
+#        unless( $pdb1 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb1; };
+#        unless( $pdb2 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb2; };
+#        unless( $pdb3 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb3; };
+#    }
+#    return \%drugport_hash;
+#}
 
 ## Get proteins involved multiple uniprots ##
 sub getLinkageInfo {
@@ -163,8 +163,8 @@ sub getLinkageInfo {
 }
 
 sub writeProximityFile {
-    #my ( $this, $file, $ulink, ) = @_;
-    my ( $this, $file, $ulink, $drugport_ref, ) = @_;
+    my ( $this, $file, $ulink, ) = @_;
+    #my ( $this, $file, $ulink, $drugport_ref, ) = @_;
     # $ulink linkage infor of unirpot IDs
     my $fh = new FileHandle;
     unless( $fh->open( ">$file" ) ) { die "Could not open proximity file to write !\n" };
@@ -214,7 +214,8 @@ sub writeProximityFile {
         ## don't need this part when only one model be picked up
         # abandon the pdb files with too many NUMMDL >10 
 	# Get Peptide objects to describe crystal structure
-	$peptideRef = $structureRef->makePeptides( $drugport_ref );
+        #$peptideRef = $structureRef->makePeptides( $drugport_ref );
+	$peptideRef = $structureRef->makePeptides();
 	# Get chain representing given Uniprot ID.
         # Choose the chain that is the longest.
 	$chainToUniprotIdRef = $structureRef->chainToUniprotId();
@@ -548,7 +549,6 @@ Usage: hotspot3d calpro [options]
 
 --output-dir		Output directory of proximity files
 --pdb-file-dir          PDB file directory 
---drugport-file         DrugPort database file
 --uniprot-id            Uniprot ID
 
 --max-3d-dis            Maximum 3D distance in angstroms befor two amino acids

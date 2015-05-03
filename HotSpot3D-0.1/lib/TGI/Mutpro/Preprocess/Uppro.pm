@@ -31,7 +31,7 @@ sub new {
         'min_seq_dis' => 1,
         'status' => undef,
         'pdb_file_dir' => undef,
-        'drugport_file' => undef, 
+        #'drugport_file' => undef, 
         'cmd-list-submit-file' => 'cmd_list_submit_file', 
     );
     map{ $this->{$_} = $sub_cmds{$_} } keys %sub_cmds;
@@ -49,13 +49,14 @@ sub process {
         'min-seq-dis=i'   => \$this->{'min_seq_dis'},
         'output-dir=s'    => \$this->{'output_dir'},
         'pdb-file-dir=s'  => \$this->{'pdb_file_dir'},
-        'drugport-file=s' => \$this->{'drugport_file'},
+        #'drugport-file=s' => \$this->{'drugport_file'},
         'cmd-list-submit-file=s' => \$this->{'cmd_list_submit_file'},
         'help' => \$help,
     );
     if ($help) { print STDERR help_text(); exit 0; }
     unless ($options) { die $this->help_text(); }
-    map{ unless($this->{$_} and (-e $this->{$_})) { warn " $_ is not exist ! \n"; die $this->help_text(); } } qw( output_dir pdb_file_dir drugport_file );
+    #map{ unless($this->{$_} and (-e $this->{$_})) { warn " $_ is not exist ! \n"; die $this->help_text(); } } qw( output_dir pdb_file_dir drugport_file );
+    map{ unless($this->{$_} and (-e $this->{$_})) { warn " $_ is not exist ! \n"; die $this->help_text(); } } qw( output_dir pdb_file_dir );
     my $update_program = 'hotspot3d calpro';
     my $pro_dir = "$this->{'output_dir'}\/proximityFiles";
     my $inpro_dir = "$pro_dir\/inProgress";
@@ -94,10 +95,11 @@ sub process {
     open ( my $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} );
     map {
         system("touch $inpro_dir/$_.ProximityFile.csv");
-        my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>8000] rusage[mem=8000]' -M 8000000 '$update_program --output-dir=$this->{'output_dir'} --pdb-file-dir=$this->{'pdb_file_dir'} --drugport-file=$this->{'drugport_file'} --uniprot-id=$_ --max-3d-dis=$this->{'max_3d_dis'} --min-seq-dis=$this->{'min_seq_dis'}'";
+        #my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>8000] rusage[mem=8000]' -M 8000000 '$update_program --output-dir=$this->{'output_dir'} --pdb-file-dir=$this->{'pdb_file_dir'} --drugport-file=$this->{'drugport_file'} --uniprot-id=$_ --max-3d-dis=$this->{'max_3d_dis'} --min-seq-dis=$this->{'min_seq_dis'}'";
+        my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 '$update_program --output-dir=$this->{'output_dir'} --pdb-file-dir=$this->{'pdb_file_dir'} --uniprot-id=$_ --max-3d-dis=$this->{'max_3d_dis'} --min-seq-dis=$this->{'min_seq_dis'}'";
         print STDERR $submit_cmd."\n"; 
         $cmd_list_submit_file_fh->print($submit_cmd."\n");
-        system("$submit_cmd");
+        #system("$submit_cmd");
     } keys %uniprotid_toupdate;
     $cmd_list_submit_file_fh->close();
 
@@ -139,7 +141,6 @@ Usage: hotspot3d uppro [options]
 
 --output-dir		Output directory of proximity files
 --pdb-file-dir          PDB file directory 
---drugport-file         DrugPort database file    
 
 --max-3d-dis            Maximum 3D distance in angstroms befor two amino acids
                         are considered 'close', default = 100
