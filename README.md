@@ -103,7 +103,9 @@ the necessary PDB file is not yet in the pdb files directory) :
 7. Add cosmic v67 information to 3D proximity results :
 
         mkdir preprocessing_output/cosmic
-        cp cosmic_67_for_HotSpot3D_missense_only.tsv ./preprocessing_output/cosmic/
+        cp COSMIc/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_output/cosmic/
+        cd ./preprocessing_output/cosmic/ 
+        bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
         hotspot3d cosmic --output-dir=preprocessing_output
 
 8. Prioritization :
