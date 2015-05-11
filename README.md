@@ -41,6 +41,7 @@ Prerequisites:
 
 In order to install HotSpot3D package, first install CPANM
 (cpanm - get, unpack build and install modules from CPANM)
+NOTE: Some steps may require adding --force to install successfully.
 
         sudo apt-get install cpanminus
 
@@ -68,6 +69,10 @@ Install HotSpot3D package:
         cd hotspot3d
         cpanm HotSpot3D-0.1.tar.gz
 
+(Installations under some organizations may use an internal perl version.
+To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
+from: #!/org/bin/perl
+to: #!/usr/bin/perl)
 
 example
 -------
