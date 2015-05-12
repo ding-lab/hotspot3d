@@ -30,6 +30,7 @@ sub new {
     $this->{'p_value_cutoff'} = 0.05;
     $this->{'linear_cutoff'} = 20;
     $this->{'pairwise_file'} = undef;
+    $this->{'maf_file'} = undef;
 	$this->{'vertex_type'} = 'recurrence';
 	$this->{'max_radius'} = 10;
     $this->{'output_file'} = 'HotSpot3D_results.clusters';
@@ -47,6 +48,7 @@ sub process {
         'inter-intra-proximity-file=s' => \$this->{'inter_intra_proximity_file'},
         'target-nontarget-file=s' => \$this->{'target_nontarget_file'},
         'pairwise-file=s' => \$this->{'pairwise_file'},
+        'maf-file=s' => \$this->{'maf_file'},
         'p-value-cutoff=f' => \$this->{'p_value_cutoff'},
         'linear-cutoff=f' => \$this->{'linear_cutoff'},
         'vertex-type=s' => \$this->{'vertex_type'},
@@ -56,12 +58,15 @@ sub process {
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
-    unless( $this->{'inter_intra_proximity_file'} ) { warn 'You must provide a conbined proximity file ! ', "\n"; die $this->help_text(); }
-    unless( -e $this->{'inter_intra_proximity_file'} ) { warn ' combined proximity file is not exist  ! ', "\n"; die $this->help_text(); }
+    unless( $this->{'inter_intra_proximity_file'} ) { warn 'You must provide a collapsed pairwise file ! ', "\n"; die $this->help_text(); }
+    unless( -e $this->{'inter_intra_proximity_file'} ) { warn ' collapsed pairwise file is not exist  ! ', "\n"; die $this->help_text(); }
     unless( $this->{'pairwise_file'} ) { warn 'You must provide location data file ! ', "\n"; die $this->help_text(); }
-    unless( -e $this->{'pairwise_file'} ) { warn ' location data file is not exist  ! ', "\n"; die $this->help_text(); }
+    unless( -e $this->{'pairwise_file'} ) { warn ' location data file does not exist  ! ', "\n"; die $this->help_text(); }
+    unless( $this->{'maf_file'} and $this->{'vertex_type'} ne 'residue' ) { warn 'You must provide MAF file if not using residue vertex type ! ', "\n"; die $this->help_text(); }
+    unless( -e $this->{'maf_file'} and $this->{'vertex_type'} ne 'residue' ) { warn ' MAF file does not exist  ! ', "\n"; die $this->help_text(); }
     ## processing procedure
-	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, @master, %mut_chrpos );
+	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, @master, %mut_chrpos , %locations , %Variants );
+	my $type = 1; #1 = recurrence, 0 = residue
 #####
 #	drug-mutation pairs
 #####
@@ -177,7 +182,7 @@ sub process {
     unless( $fh->open( $this->{'inter_intra_proximity_file'} , "r" ) ) { die "Could not open collapsed file $! \n" };
     map {
         chomp;
-        my ( $gene1, $m1, $gene2, $m2, $dist, $pdb, $pval ) = ( split /\t/ )[0,1,5,6,12,13,14];
+        my ( $gene1, $m1, $gene2, $m2, $lindists , $dist, $pdb, $pval ) = ( split /\t/ )[0,1,5,6,11,12,13,14];
         my @mus1 = split /,/, $m1;
         my @mus2 = split /,/, $m2;
         my @gm1 = (); my @gm2 = ();
@@ -188,7 +193,14 @@ sub process {
                 my $first = $gene1.":".$mut1;
                 my $second = $gene2.":".$mut2;
 				if ( $pval < $this->{'p_value_cutoff'} ) {
-					if ( $lin_dist < $this->{'lin_dis_cutoff'} or $lin_dist eq "N/A" ) {
+					my @lindists = split /\,/ , $lindists;
+					my $lin_dist = $lindists[0];
+					if ( $lin_dist eq "N/A" ) {
+						push @gm1 , ( $first ); #unique mutation
+						push @gm2 , ( $second ); #unique mutation
+						$distance_matrix{$first}{$second} = $dist;
+						$distance_matrix{$second}{$first} = $dist;
+					} elsif ( $lin_dist < $this->{'linear_cutoff'} ) {
 						push @gm1 , ( $first ); #unique mutation
 						push @gm2 , ( $second ); #unique mutation
 						$distance_matrix{$first}{$second} = $dist;
@@ -226,12 +238,13 @@ sub process {
     foreach ( keys %distance_matrix ) {
         $degree_connectivity{$_} = scalar keys %{$distance_matrix{$_}};
     }
-	if ( $this->{'vertex_type'} eq 'proximity' ) {
-	} else {
-		if ( $this->{'vertex_type'} ne 'recurrence' ) {
-			print STDERR "vertex_type option not recognized as \'recurrence\' or \'proximity\'\n";
-			print STDERR "Using default vertex_type = \'recurrence\'\n";
-		}
+	if ( $this->{'vertex_type'} ne 'recurrence' and $this->{'vertex_type'} ne 'residue' ) {
+		print STDERR "vertex_type option not recognized as \'recurrence\' or \'residue\'\n";
+		print STDERR "Using default vertex_type = \'recurrence\'\n";
+	} elsif ( $this->{'vertex_type'} eq 'residue' ) {
+		$type = 0;
+	}
+	if ( $type == 1 ) {
 		my %variants_from_pairs;
 		foreach my $id ( keys %clusterings ) {
 			foreach my $gene_mut ( @{$clusterings{$id}} ) {
@@ -253,7 +266,7 @@ sub process {
 			if ( /missense/ or /in_frame/ ) {
 				my ( $gene , $chr , $start , $stop , $barID , $aachange ) = @{$_}[0,4,5,6,15,47];
 				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
-				if ( exists $variants_From_pairs{$variant} ) {
+				if ( exists $variants_from_pairs{$variant} ) {
 					my $gene_aachange = $gene.":".$aachange;
 					if ( exists $Variants{$gene_aachange} ) {
 						if ( not exists $mutations{$variant}{$barID} ) {
@@ -302,7 +315,7 @@ sub process {
 		foreach my $current ( keys %dist ) {
 			my $C = 0;
 			foreach my $other ( keys %{$dist{$current}} ) {
-				my $weight = 1; #stays as 1 if vertex_type eq 'proximity'
+				my $weight = 1; #stays as 1 if vertex_type eq 'residue'
 				if ( $type ==1 ) {
 					if ( exists $Variants{$other} ) {
 						$weight = $Variants{$other};
@@ -310,14 +323,14 @@ sub process {
 				}
 				if ( $current ne $other ) {
 					my $geodesic = $dist{$current}{$other};
-					if ( $geodesic <= $thresh ) {
+					if ( $geodesic <= $this->{'linear_cutoff'} ) {
 						$C += $weight/( 2**$geodesic );
 					}
 				} else {
 					$C += $weight -1;
 				}
 			}
-			$centrality{$clus_num}{$curren} = $C;
+			$centrality{$clus_num}{$current} = $C;
 			if ( $C > $max ) {
 				$max = $C;
 				$centroid = $current;
@@ -326,22 +339,22 @@ sub process {
 		print STDOUT "$clus_num\t$centroid\n";
 		if ( exists $dist{$centroid} ) {
 			foreach my $other ( keys %{$dist{$centroid}} ) {
-				my $geodesic  $dist{$centroid}{$other};
+				my $geodesic = $dist{$centroid}{$other};
+				my $degrees = $degree_connectivity{$other};
+				my $closenesscentrality = $centrality{$clus_num}{$other};
 				if ( $geodesic <= $this->{'max_radius'} ) {
 					my ( $gene , $mutation ) = split /\:/ , $other;
+					my $weight = 1;
 					if ( $this->{'vertex_type'} == 1 ) {
-						my $weight;
 						if ( exists $Variants{$other} ) {
 							$weight = $Variants{$other};
-						} else {
-							$weight = 1;
 						}
-						$fh->print( join( "\t" , ( $clus_num , $gene , $mutation , $degree_connectivity{$other} , $centrality{$clus_num}{$other} , $geodesic , $weight )."\n" );
 					}
+					$fh->print( join( "\t" , ( $clus_num , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
 				}
 			} #foreach other vertex in network
         } #if dist for centroid
-    }
+    } #foreach cluster
     my $numclusters = scalar keys %clusterings;
     print STDOUT "Found $numclusters clusters\n";
 
@@ -355,12 +368,12 @@ sub AHC {
     my ( $this, $pval , $pthreshold , $clusterings , $mutations ) = @_;
     if ( $pval < $pthreshold ) { #meets desired significance
         my ( @temp, @found, @combine ); 
-        foreach my $c ( keys %{$clusterings} ) { #each cluster
+        my ( @uniq, $c );
+        foreach $c ( keys %{$clusterings} ) { #each cluster
             my @mus_in_cluster = @{$clusterings->{$c}};
             foreach my $mu ( @{$mutations} ) { foreach ( @mus_in_cluster ) { if ( $mu eq $_ ) { push @combine , $c; } } }
         }
         my @uniqcombo = uniq @combine; #cluster types
-        my ( @uniq, $c );
         if ( scalar @uniqcombo > 0 ) { #collapse clusters into one
             my $collapse_to = min @uniqcombo; #cluster type
             my $j = 0; #iterator type
@@ -430,7 +443,7 @@ sub floydwarshall {
 				my $dist_ij = $dist->{$mu_i}->{$mu_j};
 				my $dist_kj = $dist->{$mu_k}->{$mu_j};
 				if ( $dist_ij > $dist_ik + $dist_kj ) {
-					$dist->{$mut_i}->{$mu_j} = $dist_ik + $dist_kj;
+					$dist->{$mu_i}->{$mu_j} = $dist_ik + $dist_kj;
 				}
 			}
 		}
@@ -449,8 +462,9 @@ Usage: hotspot3d cluter [options]
 --target-nontarget-file          Both target & nontarget drug data file (optional)
 --p-value-cutoff                 P_value cutoff, default <0.05
 --linear-cutoff                  Linear distance cutoff, default >20 residues
---vertex-type                    Graph vertex type (recurrence or single), default recurrence
 --max-radius                     Maximum cluster radius (max network geodesic from centroid), default <=10 Angstroms
+--vertex-type                    Graph vertex type (recurrence or residue), default recurrence
+--maf-file                       MAF file used in proximity search step (used if vertex-type = recurrence)
 
 --help                           this message
 
