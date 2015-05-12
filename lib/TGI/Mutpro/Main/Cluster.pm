@@ -61,20 +61,28 @@ sub process {
 		warn 'You must provide a collapsed pairs file or drug pairs file! ', "\n";
 		die $this->help_text();
 	}
-	if ( ( not -e $this->{'collapsed_pairs_file'} ) and ( not defined $this->{'drug_pairs_file'} ) ) {
-		warn "The input collapsed pairs file (".$this->{'collapsed_pairs_file'}.") does not exist! ", "\n";
-		die $this->help_text();
-	} elsif ( ( not -e $this->{'drug_pairs_file'} ) and ( not defined $this->{'collapsed_pairs_file'} ) ) {
-		warn "The input drug pairs file (".$this->{'drug_pairs_file'}.") does not exist! ", "\n";
-		die $this->help_text();
+	if ( not defined $this->{'drug_pairs_file'} ) {
+		if ( not -e $this->{'collapsed_pairs_file'} ) { 
+			warn "The input collapsed pairs file (".$this->{'collapsed_pairs_file'}.") does not exist! ", "\n";
+			die $this->help_text();
+		}
+	} elsif ( not defined $this->{'collapsed_pairs_file'} ) {
+		if ( not -e $this->{'drug_pairs_file'} ) { 
+			warn "The input drug pairs file (".$this->{'drug_pairs_file'}.") does not exist! ", "\n";
+			die $this->help_text();
+		}
 	}
     unless( $this->{'pairwise_file'} ) { warn 'You must provide pairwise file! ', "\n"; die $this->help_text(); }
     unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwsie_file'}.") does not exist! ", "\n"; die $this->help_text(); }
-    unless( ( $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'residue' ) ) { warn 'You must provide MAF file if not using residue vertex type! ', "\n"; die $this->help_text(); }
-    unless( ( -e $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'residue' ) ) { warn "The input MAF file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+	if ( $this->{'vertex_type'} ne 'recurrence' and $this->{'vertex_type'} ne 'unique' ) {
+		warn "vertex_type option not recognized as \'recurrence\' or \'unique\'\n";
+		warn "Using default vertex_type = \'recurrence\'\n";
+		$this->{'vertex_type'} = 'recurrence';
+	}
+    unless( ( $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'unique' ) ) { warn 'You must provide MAF file if not using unique vertex type! ', "\n"; die $this->help_text(); }
+    unless( ( -e $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'unique' ) ) { warn "The input MAF file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
     ## processing procedure
 	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, %master, %mut_chrpos , %locations , %Variants );
-	my $type = 1; #1 = recurrence, 0 = residue
 #####
 #	drug-mutation pairs
 #####
@@ -99,7 +107,7 @@ sub process {
 			}
 		} $fh->getlines; 
 		$fh->close();
-		#Pick longest transcript representation of residue
+		#Pick longest transcript representation of unique
 		foreach my $gene ( keys %aa_map ) {
 			foreach my $aa ( @{$aa_map{$gene}} ) {
 				if ( $aa ne 'NA' ) {
@@ -136,7 +144,7 @@ sub process {
 				if ( grep{ $_ eq $m2 } @{$aa_map{$gene2}} ) { 
 					my @mutations = ();
 					push @mutations , $first;
-					if ( $this->{'vertex_type'} eq 'residue' ) { $m2 =~ s/\D+(\d+)\D+/$1/g; }
+					if ( $this->{'vertex_type'} eq 'unique' ) { $m2 =~ s/\D+(\d+)\D+/$1/g; }
 					$second = $gene2.":".$m2;
 					push @mutations , $second; #@mus2;
 					my ( $dist , $pval ) = split ":" , $master{$first}{$second};
@@ -159,11 +167,11 @@ sub process {
 		my ( $gene1 , $chr1 , $start1 , $stop1 , $aa_1 , $loc_1 , $gene2 , $chr2 , $start2 , $stop2 , $aa_2 , $loc_2 ) = (split /\t/)[0,1,2,3,4,6,9,10,11,12,13,15];
 		$mut_chrpos{$gene1.":".$aa_1}{$chr1."_".$start1."_".$stop1} = 1;
 		$mut_chrpos{$gene2.":".$aa_2}{$chr2."_".$start2."_".$stop2} = 1;
-		$this->redundant(\%pdb_loc, \%aa_map, $gene1, $aa_1, $loc_1);
-		$this->redundant(\%pdb_loc, \%aa_map, $gene2, $aa_2, $loc_2);		
+		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene1, $aa_1, $loc_1);
+		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene2, $aa_2, $loc_2);		
 	} $fh->getlines;
 	$fh->close();
-	#Pick longest transcript representation of residue
+	#Pick longest transcript representation of unique
 	foreach my $gene ( keys %aa_map ) {
 		foreach my $aa ( @{$aa_map{$gene}} ) {
 			if ( $aa ne 'NA' ) {
@@ -258,21 +266,15 @@ sub process {
     foreach ( keys %distance_matrix ) {
         $degree_connectivity{$_} = scalar keys %{$distance_matrix{$_}};
     }
-	if ( $this->{'vertex_type'} ne 'recurrence' and $this->{'vertex_type'} ne 'residue' ) {
-		warn "vertex_type option not recognized as \'recurrence\' or \'residue\'\n";
-		warn "Using default vertex_type = \'recurrence\'\n";
-	} elsif ( $this->{'vertex_type'} eq 'residue' ) {
-		$type = 0;
-	}
-	if ( $type == 1 ) {
+	if ( $this->{'vertex_type'} ne 'unique' ) {
+		print STDOUT "\nPreparing to get recurrence ...\n";
 		my %variants_from_pairs;
 		foreach my $id ( keys %clusterings ) {
 			foreach my $gene_mut ( @{$clusterings{$id}} ) {
 				my ( $gene , $mutation ) = split /\:/ , $gene_mut;
 				if ( exists $mut_chrpos{$gene_mut} ) {
-					foreach my $css ( keys %{$mut_chrpos{$gene_mut}} ) {
-						my @vinfo = split( "_" , $css ); #chr_start_stop
-						my $variant = join( "_" , ( $gene , $mutation , @vinfo ) );
+					foreach my $chr_start_stop ( keys %{$mut_chrpos{$gene_mut}} ) {
+						my $variant = join( "_" , ( $gene , $mutation , $chr_start_stop ) );
 						$variants_from_pairs{$variant} = 1;
 					}
 				}
@@ -281,10 +283,12 @@ sub process {
 		##Mutation recurrence from MAF
 		my %mutations;
 		die "Could not open MAF file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
+		print STDOUT "\nReading in MAF ...\n";
 		map {
 			chomp;
-			if ( /missense/ or /in_frame/ ) {
-				my ( $gene , $chr , $start , $stop , $barID , $aachange ) = @{$_}[0,4,5,6,15,47];
+			my @line = split /\t/;
+			if ( $#line > 47 ) {
+				my ( $gene , $chr , $start , $stop , $barID , $aachange ) = @line[0,4,5,6,15,47];
 				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
 				if ( exists $variants_from_pairs{$variant} ) {
 					my $gene_aachange = $gene.":".$aachange;
@@ -299,7 +303,7 @@ sub process {
 					}
 				}
 			}
-		} $fh->getline;
+		} $fh->getlines;
 		$fh->close();
 	} #if vertex_type
 #####
@@ -335,14 +339,16 @@ sub process {
 		foreach my $current ( keys %dist ) {
 			my $C = 0;
 			foreach my $other ( keys %{$dist{$current}} ) {
-				my $weight = 1; #stays as 1 if vertex_type eq 'residue'
-				if ( $type ==1 ) {
+				my $weight = 1; #stays as 1 if vertex_type eq 'unique'
+				if ( $this->{'vertex_type'} ne 'unique' ) {
 					if ( exists $Variants{$other} ) {
 						$weight = $Variants{$other};
 					}
 				}
 				if ( $current ne $other ) {
-					$C += $weight/( 2**$dist{$current}{$other} );
+					if ( $dist{$current}{$other} <= $this->{'max_radius'} ) {
+						$C += $weight/( 2**$dist{$current}{$other} );
+					}
 				} else {
 					$C += $weight -1;
 				}
@@ -362,10 +368,8 @@ sub process {
 				if ( $geodesic <= $this->{'max_radius'} ) {
 					my ( $gene , $mutation ) = split /\:/ , $other;
 					my $weight = 1;
-					if ( $type == 1 ) {
-						if ( exists $Variants{$other} ) {
-							$weight = $Variants{$other};
-						}
+					if ( exists $Variants{$other} ) {
+						$weight = $Variants{$other};
 					}
 					$fh->print( join( "\t" , ( $clus_num , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
 				}
@@ -417,8 +421,11 @@ sub AHC {
 }
 
 sub redundant {
-    my ( $this, $pdb_loc, $aa_map, $gene, $aa, $loc ) = @_;
+    my ( $this, $pdb_loc, $aa_map, $locations , $gene, $aa, $loc ) = @_;
     my $aa_orig = $aa;
+	if ( not grep{ $_ eq $loc} @{$locations->{$gene}->{$aa}} ) {
+		push @{$locations->{$gene}->{$aa}} , $loc;
+	}
     if ( exists $pdb_loc->{$gene} ) { #if pdb_loc has gene
         if ( grep{$_ eq $loc} @{$pdb_loc->{$gene}} ) { #if primary location list has this mapping location
             my @array = @{$pdb_loc->{$gene}}; #each gene has list of mutations
@@ -478,9 +485,9 @@ Usage: hotspot3d cluter [options]
 --output-file                    Output file
 --drug-pairs-file                Both target & nontarget drug data file
 --p-value-cutoff                 P_value cutoff, default <0.05
---linear-cutoff                  Linear distance cutoff, default >20 residues
+--linear-cutoff                  Linear distance cutoff, default >20 uniques
 --max-radius                     Maximum cluster radius (max network geodesic from centroid), default <=10 Angstroms
---vertex-type                    Graph vertex type (recurrence or residue), default recurrence
+--vertex-type                    Graph vertex type (recurrence or unique), default recurrence
 --maf-file                       MAF file used in proximity search step (used if vertex-type = recurrence)
 
 --help                           this message
