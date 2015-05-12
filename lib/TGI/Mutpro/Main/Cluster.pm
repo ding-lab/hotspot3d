@@ -468,6 +468,8 @@ Usage: hotspot3d cluter [options]
 
 --help                           this message
 
+NOTE: At least one of two pair files are needed from inter-intra-proximity-file/target-nontarget-file.
+
 HELP
 
 }
