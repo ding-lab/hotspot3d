@@ -8,6 +8,7 @@ README.md
 bin/hotspot3d
 dist.ini
 lib/TGI/Mutpro/Main/Cluster.pm
+lib/TGI/Mutpro/Main/Post.pm
 lib/TGI/Mutpro/Main/Proximity.pm
 lib/TGI/Mutpro/Main/Visual.pm
 lib/TGI/Mutpro/Preprocess/AminoAcid.pm

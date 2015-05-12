@@ -18,6 +18,7 @@ use Getopt::Long;
 use TGI::Mutpro::Main::Proximity;
 use TGI::Mutpro::Main::Visual;
 use TGI::Mutpro::Main::Cluster;
+use TGI::Mutpro::Main::Post;
 use TGI::Mutpro::Preprocess::Drugport;
 use TGI::Mutpro::Preprocess::Uppro;
 use TGI::Mutpro::Preprocess::Calpro;
@@ -30,7 +31,7 @@ use TGI::Mutpro::Preprocess::Prior;
 use TGI::Mutpro::Preprocess::Homolog;
 
 my $subCmd = shift;
-my %cmds = map{ ($_, 1) } qw( search visual cluster drugport uppro calpro calroi statis anno trans homo cosmic prior help );
+my %cmds = map{ ($_, 1) } qw( search post visual cluster drugport uppro calpro calroi statis anno trans homo cosmic prior help );
 unless (defined $subCmd) { die help_text(); };
 unless (exists $cmds{$subCmd}) {
     warn ' Please give valid sub command ! ', "\n";
@@ -38,8 +39,9 @@ unless (exists $cmds{$subCmd}) {
 }
 SWITCH:{
     $subCmd eq 'search'   && do { TGI::Mutpro::Main::Proximity->new();      last SWITCH; };
+    $subCmd eq 'post'     && do { TGI::Mutpro::Main::Post->new();           last SWITCH; };
     $subCmd eq 'visual'   && do { TGI::Mutpro::Main::Visual->new();         last SWITCH; };
-    $subCmd eq 'cluster'  && do { TGI::Mutpro::Main::Cluster->new();         last SWITCH; };
+    $subCmd eq 'cluster'  && do { TGI::Mutpro::Main::Cluster->new();        last SWITCH; };
     $subCmd eq 'drugport' && do { TGI::Mutpro::Preprocess::Drugport->new(); last SWITCH; };
     $subCmd eq 'uppro'    && do { TGI::Mutpro::Preprocess::Uppro->new();    last SWITCH; };
     $subCmd eq 'calpro'   && do { TGI::Mutpro::Preprocess::Calpro->new();   last SWITCH; };
@@ -63,6 +65,7 @@ Usage:   hotspot3d <command> [options]
 Key commands:
 
 search    --  3D mutation proximity searching
+post      --  Post-processing of 3D proximity searching output 
 visual    --  Visulization of 3D proximity
 cluster   --  Determine mutation clusters from HotSpot3D inter, intra, and druggable data 
 
