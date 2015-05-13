@@ -442,7 +442,7 @@ sub redundant {
                 }
                 push(@{$pdb_loc->{$gene}}, $loc);
                 push(@{$aa_map->{$gene}}, $aa_orig);
-            } elsif ( abs($prev_aa-$loc)==abs($aa-$loc) && !(grep(/^$aa_orig/,@{$aa_map->{$gene}})) ) {
+            } elsif ( abs($prev_aa-$loc)==abs($aa-$loc) && !(grep(/^\Q$aa_orig\E/,@{$aa_map->{$gene}})) ) {
                 push(@{$pdb_loc->{$gene}}, $loc);
                 push(@{$aa_map->{$gene}}, $aa_orig);
             }
