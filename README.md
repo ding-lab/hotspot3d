@@ -15,8 +15,9 @@ Usage
 Key commands:
 
         search    --  3D mutation proximity searching
-        visual    --  Visulization of 3D proximity
+		post      --  Post-processing on pairwise data (needed for cluster step)
         cluster   --  Determine mutation clusters from HotSpot3D inter, intra, and druggable data 
+        visual    --  Visulization of 3D proximity
 
         drugport  --  Parse drugport database 
         uppro     --  Update proximity files
@@ -124,11 +125,15 @@ the necessary PDB file is not yet in the pdb files directory) :
 
         hotspot3d search --maf-file=pancan19_input.maf --data-dir=preprocessing_output --output-prefix=pancan19 --skip-silent 1>pancan19.t.out 2>pancan19.t.err
 
-2. Visualization :
+2. Post-processing of pairwise data (required for cluster step):
 
-        hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
+		hotspot3d post --maf-file=pancan19_input.maf --input-prefix=pancan19
 
 3. 3D proximity results clustering : 
 
         hotspot3d cluster --inter-intra-proximity-file=interactions_file --data-location-file=location_data --output-file=clustering.out --target-nontarget-file=drug_data_file
+
+4. Visualization :
+
+        hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
 
