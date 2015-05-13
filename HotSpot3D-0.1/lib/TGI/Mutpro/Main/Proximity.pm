@@ -128,6 +128,8 @@ sub process {
     # pour out mutations close to drugs from drugport (nontarget) 
     die "Could not create drugport compound close output file (nontarget)\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.nontarget" ) );
     map { $fh->print( $_."\n" )  } @$drugport_nonresults_ref; $fh->close();
+    # post processing like collapsed clean results
+    $this->drug_proximity_postprocessing( $this->{'output_prefix'}, $this->{'drugport_file'} );
     print STDERR "\n\n##################################################\n";
     print STDERR "total mutations: " . $this->{'stat'}{'num_muts'} . "\n";
     print STDERR "expected mutations: " . $this->{'stat'}{'num_expect_format'} . "\n";
@@ -378,6 +380,64 @@ sub proximitySearching {
     }
 
     return ( \@pairResults, \@cosmicclose, \@roiclose, \@drugport_target_results, \@drugport_nontarget_results );
+}
+
+# post processing of drug results
+sub drug_proximity_postprocessing {
+    my ( $this, $output_prefix, $drugport_parsing_results ) = @_;
+    my $sub_fh_target = new FileHandle; my $sub_fh_drugport_parsing = new FileHandle; my $sub_fh_nontarget = new FileHandle; 
+    die "Could not open drug target output file\n" unless( $sub_fh_target->open( "$output_prefix.drugs.target" ) );
+    die "Could not open drugprot parsing output file\n" unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) );
+    my $sub_fh_output = new FileHandle;
+    die "Could not create clean drug output file\n" unless( $sub_fh_output->open( ">$output_prefix.drugs.target.clean" ) );
+    $sub_fh_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotaiton", "Cosmic_Annotation", "Linear_Distance_Betweeen_Drug_and_Mutation", "3D_Distance_Information\n" ) );
+    my %ss; map { 
+        chomp; my @t = split /\t/; unless( $t[4] =~ /NULL/ ) { 
+            map { 
+                my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
+                $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g; 
+                $ss{uc($pdb)}{$chain}{$loc}{'DRUG'}{$t[0]} = 1; 
+                $ss{uc($pdb)}{$chain}{$loc}{'DRUGID'}{$t[1]} = 1; 
+            } split /,/,$t[4]; 
+        } 
+    } <$sub_fh_drugport_parsing>; 
+    map { 
+        chomp; my @t = split /\t/, $_; my ($chain) = $t[1] =~ /\[(\w+)\]/; my $d3info = "";
+        map { 
+            my @m = split / /, $_; if ( $t[0] eq $m[1] ) { $d3info = $_; } 
+        } split /\|/, $t[15]; 
+        my $drug = join( "\|", keys %{$ss{$t[0]}{$chain}{$t[2]}{'DRUG'}} ); 
+        my $drugid = join( "\|", keys %{$ss{$t[0]}{$chain}{$t[2]}{'DRUGID'}} );
+        $sub_fh_output->print( join( "\t", $drug, $drugid, @t[0..14], $d3info )."\n" ); 
+    } <$sub_fh_target>;
+    $sub_fh_output->close;
+    $sub_fh_target->close;
+    $sub_fh_drugport_parsing->close;
+    die "Could not open drug nontarget output file\n" unless( $sub_fh_nontarget->open( "$output_prefix.drugs.nontarget" ) );
+    die "Could not open drugprot parsing output file\n" unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) );
+    my $sub_fh_nontarget_output = new FileHandle;
+    die "Could not create clean nontarget drug output file\n" unless( $sub_fh_nontarget_output->open( ">$output_prefix.drugs.nontarget.clean" ) );
+    $sub_fh_nontarget_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotaiton", "Cosmic_Annotation", "Linear_Distance_Betweeen_Drug_and_Mutation", "3D_Distance_Information\n" ) );
+    undef %ss; map { 
+        chomp; my @t = split /\t/; unless ( $t[8] =~ /NULL/ ) {
+            map { 
+                my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g; $ss{uc($pdb)}{$chain}{$loc}{'DRUG'}{$t[0]} = 1; $ss{uc($pdb)}{$chain}{$loc}{'DRUGID'}{$t[1]} = 1; 
+            } split /,/,$t[8];} 
+    } <$sub_fh_drugport_parsing>;
+    map { 
+        chomp; my @t = split /\t/, $_; my ($chain) = $t[1] =~ /\[(\w+)\]/; my $d3info = "";  
+        map {  
+            my @m = split / /, $_; if ( $t[0] eq $m[1] ) { $d3info = $_; } 
+        } split /\|/, $t[15]; 
+        my $drug = join( "\|", keys %{$ss{$t[0]}{$chain}{$t[2]}{'DRUG'}} ); 
+        my $drugid = join( "\|", keys %{$ss{$t[0]}{$chain}{$t[2]}{'DRUGID'}} );
+        $sub_fh_nontarget_output->print( join( "\t", $drug, $drugid, @t[0..14], $d3info )."\n" );
+    } <$sub_fh_nontarget>;
+    $sub_fh_nontarget_output->close;
+    $sub_fh_nontarget->close;
+    $sub_fh_drugport_parsing->close;
+
+    return 1;
 }
 
 # get drugport database information

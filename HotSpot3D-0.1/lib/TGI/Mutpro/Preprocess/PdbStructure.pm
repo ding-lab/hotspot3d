@@ -232,7 +232,8 @@ sub makePeptides {
     # ATOM   7749  CD1 ILE A 999      51.224  54.016  84.367  1.00 83.16           C
     # ATOM   7750  N   ASN A1000      55.338  57.542  83.643  1.00 80.67           N
 
-    my ( $self, $drugport_ref, ) = @_;
+    #my ( $self, $drugport_ref, ) = @_;
+    my ( $self ) = @_;
     my ( %peptideObjects, @entireFile, $line, @columns, $chain, $aminoAcid, $position, $x, $y, $z);
     foreach $line ( split /\n/, $self->entireRecord() ) {
 	chomp $line;
