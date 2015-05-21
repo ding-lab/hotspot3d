@@ -227,7 +227,7 @@ sub process {
 							push @gm2 , ( $second ); #unique mutation
 							$distance_matrix{$first}{$second} = $dist;
 							$distance_matrix{$second}{$first} = $dist;
-						} elsif ( $lin_dist < $this->{'linear_cutoff'} ) {
+						} elsif ( $lin_dist > $this->{'linear_cutoff'} ) {
 							push @gm1 , ( $first ); #unique mutation
 							push @gm2 , ( $second ); #unique mutation
 							$distance_matrix{$first}{$second} = $dist;
