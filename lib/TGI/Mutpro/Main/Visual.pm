@@ -55,7 +55,7 @@ sub process {
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
 		'clusters-file=s' => \$this->{_CLUSTERS_FILE},
-        'proximity-file=s' => \$this->{_PAIRWISE_FILE},
+        'pairwise-file=s' => \$this->{_PAIRWISE_FILE},
         'drug-pairs-file=s' => \$this->{_DRUG_PAIRS_FILE},
         'output-dir=s' => \$this->{_OUTPUT_DIR},
         'output-file=s' => \$this->{_OUTPUT_FILE},
@@ -347,13 +347,12 @@ Usage: hotspot3d visual [options]
 --pairwise-file        Pairwise file
 --drug-pairs-file      Drug pairs file (target/nontarget/hs3dd)
 --clusters-file        Clusters file
+--pdb                  PDB ID on which to view clusters
 --output-file          Output filename for single PyMol script, default: hotspot3d.visual.pml
 
 --pymol                PyMoL program location, default: /usr/bin/pymol
 --output-dir           Output directory for multiple PyMol scripts, current working directory
 --pdb-dir              PDB file directory, default: current working directory
-
---pdb                  PDB ID
 
 --bg-color             background color, default: white
 --mut-color            mutation color, default: red

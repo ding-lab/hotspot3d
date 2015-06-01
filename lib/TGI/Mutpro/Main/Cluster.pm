@@ -99,7 +99,7 @@ sub process {
 				my ( $dist, $pdb2, $pval ) = split / /, $infor_3d;
 				$mut_chrpos{$gene2.":".$m2}{$chr."_".$start."_".$stop} = 1;
 				$pval =~ s/"//g;
-				my $first = $drug.":".$pdb;
+				my $first = $drug.":".$gene2;
 				my $second = $gene2.":".$m2;
 				my $info = $dist.":".$pval;
 				$master{$first}{$second} = $info; #store necessary pair info
@@ -310,7 +310,7 @@ sub process {
 #	write cluster output
 #####
     die "Could not create clustering output file\n" unless( $fh->open( $this->{'output_file'} , "w" ) );
-    $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tFrequency\n" );
+    $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );
 	my %centrality = ();
 	print STDOUT "Cluster ID & Centroid\n";
     foreach my $clus_num ( keys %clusterings ) {
