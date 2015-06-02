@@ -29,6 +29,8 @@ sub new {
     $this->{'3d_cufoff'} = 10;
     $this->{'1d_cutoff'} = 20;
     $this->{'stat'} = undef;
+    $this->{'amino_acid_header'} = "amino_acid_change";
+    $this->{'transcript_id_header'} = "transcript_name";
     bless $this, $class;
     $this->process();
     return $this;
@@ -48,6 +50,8 @@ sub process {
         'p-value=f' => \$this->{'pvalue_cutoff'},
         '3d-dis=i' => \$this->{'3d_cufoff'},
         'linear-dis=i' => \$this->{'1d_cutoff'},
+        'amino-acid-header=s' => \$this->{'amino_acid_header'},
+        'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
@@ -163,8 +167,8 @@ sub parseMaf {
             and defined($fth{"Tumor_Seq_Allele1"}) 
             and defined($fth{"Tumor_Seq_Allele2"}) 
             and defined($fth{"Variant_Classification"}) 
-            and defined($fth{"transcript_name"}) 
-            and defined($fth{"amino_acid_change"}) ) {
+            and defined($fth{$this->{"transcript_id_header"}})
+            and defined($fth{$this->{"amino_acid_header"}}) ) {
         die "not a valid MAF annotation file with transcript and amino acid change !\n";
     }
     my @cols = ( $fth{"Hugo_Symbol"}, 
@@ -175,8 +179,8 @@ sub parseMaf {
                  $fth{"Tumor_Seq_Allele1"},                        
                  $fth{"Tumor_Seq_Allele2"}, 
                  $fth{"Variant_Classification"}, 
-                 $fth{"transcript_name"}, 
-                 $fth{"amino_acid_change"} );
+                 $fth{$this->{"transcript_id_header"}}, 
+                 $fth{$this->{"amino_acid_header"}} );
     my ( %mafHash, %transHash );
     # reading file content
     while ( my $ll = $fh->getline ) {
@@ -473,6 +477,8 @@ Usage: hotspot3d search [options]
 --p-value               p_value cutoff(<=), default: 0.05
 --3d-dis                3D distance cutoff (<=), default: 10
 --linear-dis            linear distance cutoff (>=), default: 20 
+--transcript-id-header  column header for transcript id's, default: transcript_name
+--amino-acid-header     column header for amino acid changes, default: amino_acid_change 
 
 --help			this message
 

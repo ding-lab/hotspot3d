@@ -107,7 +107,25 @@ sub process {
     %ss = (); 
     my $fh1   = new FileHandle;
     die "Could not open maf file !\n" unless( $fh1->open( $this->{'maf'} ) );
-    map { unless( /^Hugo_Symbol/ ) { chomp; my @t = split /\t/, $_; my ($sample) = $t[15] =~ /(TCGA-\w\w-\w\w\w\w)/; if ( $t[0] and $t[47] and $sample ) { $ss{$t[0]}{$t[47]}{$sample}++; } } } <$fh1>;
+	my $mafi = 0;
+	my $mafhead = $fh1->getline(); chomp( $mafhead );
+	my %mafcols = map {($_, $mafi++)} split( /\t/, $mafhead );
+	unless (    defined($mafcols{"Hugo_Symbol"})
+			and defined($mafcols{"Tumor_Sample_Barcode"})
+			and defined($mafcols{$this->{"amino_acid_header"}}) ) {
+		die "not a valid MAF annotation file with transcript and amino acid change !\n";
+	}
+	my @mafcols = (	$mafcols{"Hugo_Symbol"},
+					$mafcols{"Tumor_Sample_Barcode"},
+					$mafcols{$this->{"amino_acid_header"}} );
+    map {
+		chomp;
+		my @t = split /\t/, $_;
+		my ($sample) = $t[$mafcols[1]] =~ /(TCGA-\w\w-\w\w\w\w)/;
+		if ( $t[$mafcols[0]] and $t[$mafcols[2]] and $sample ) {
+			$ss{$t[$mafcols[0]]}{$t[$mafcols[2]]}{$sample}++;
+		}
+	} $fh1->getline;
     $fh1->close;
     @complex_tmp1 = ();
     map { 
@@ -221,7 +239,14 @@ sub process {
     %ss = (); 
     $fh1 = new FileHandle;
     die "Could not open maf file !\n" unless( $fh1->open( $this->{'maf'} ) );
-    map { unless( /^Hugo_Symbol/ ) { chomp; my @t = split /\t/, $_; my ($sample) = $t[15] =~ /(TCGA-\w\w-\w\w\w\w)/; if ( $t[0] and $t[47] and $sample ) { $ss{$t[0]}{$t[47]}{$sample}++; } } } <$fh1>;
+    map {
+		chomp;
+		my @t = split /\t/, $_;
+		my ($sample) = $t[$mafcols[1]] =~ /(TCGA-\w\w-\w\w\w\w)/;
+		if ( $t[$mafcols[0]] and $t[$mafcols[2]] and $sample ) {
+			$ss{$t[$mafcols[0]]}{$t[$mafcols[2]]}{$sample}++;
+		}
+	} <$fh1>;
     $fh1->close;
     @complex_tmp1 = ();
     map { 
@@ -279,12 +304,9 @@ sub help_text{
 Usage: hotspot3d post [options]
 
 
---maf-file              Input MAF file
-                        In addition to the standard version 2.3 MAF headers, there needs to be 3 columns appended.
-                        These column headers in the MAF must have these names in the header in order for the tool to
-                        find them: 
-                                transcript_name - the transcript name, such as NM_000028 
-                                amino_acid_change - the amino acid change, such as p.R290H
+--maf-file              Input MAF file (2.3 standard + columns for transcript id & amino acid change)
+--transcript-id-header  column header for transcript id's, default: transcript_name
+--amino-acid-header     column header for amino acid changes, default: amino_acid_change					
 --input-prefix          The prefix of proximity searching output files
 
 --help                  this message

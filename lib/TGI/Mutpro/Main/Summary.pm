@@ -2,7 +2,7 @@ package TGI::Mutpro::Main::Summary;
 #
 #----------------------------------
 # $Authors: Adam Scott
-# $Date: 2015-05-21 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
+# $Date: 2015-05-21
 # $Revision:  $
 # $URL: $
 # $Doc: $ summarize clusters
@@ -80,7 +80,7 @@ sub process {
 				and defined( $cols{"Closeness_Centrality"} )
 				and defined( $cols{"Geodesic_From_Centroid"} )
 				and defined( $cols{"Frequency"} ) ) {
-				die "Not a vlid clusters file!\n";
+				die "Not a valid clusters file!\n";
 			}
 			@cols = ( 	$cols{"Cluster"} , 
 						$cols{"Gene/Drug"} , 
@@ -109,7 +109,7 @@ sub process {
 				#	$DMKBs->{$id}->{$genedrug.":".$aagene} = 1;
 				#}
 			} else {
-				if ( $geodesic == 0 ) { $centroids->{$id} = $genedrug; }
+				if ( $geodesic == 0 ) { $this->{centroids}->{$id} = $genedrug; }
 				$this->sum( 'drugmass' , $id , 1 );
 				#if ( $classes_DrugBank ) { &sumlist( $DrugBank , $id , $classes_DrugBank , $recurrence ); }
 				#if ( $classes_NIH ) { &sumlist( $NIH , $id , $classes_NIH , $recurrence ); }
@@ -129,7 +129,12 @@ sub process {
 	$fh->print( "\n" );
 	foreach my $id ( sort { $a <=> $b } keys %{$this->{mutationmass}} ) {
 		$fh->print( $id."\t" ); #Cluster_ID
-		$fh->print( $this->{centroids}->{$id}."\t" ); #Centroid
+		if ( exists $this->{centroids}->{$id} ) {
+            $fh->print( $this->{centroids}->{$id}."\t" ); #Centroid
+        } else {
+            print $id." has no centroid\n";
+			$fh->print( "NULL\t" );
+        }
 		$fh->printf( $fill , $this->avg( 'degrees' , $id , 'mutationmass' ) ); #AVG_Degree (pairs)
 		$fh->printf( $fill , $this->{centralities}->{$id} ); #Centrality (cluster closeness)
 		$fh->printf( $fill , $this->avg( 'geodesics' , $id , 'mutationmass' ) ); #Avg_Geodesic (average geodesic from centroid)

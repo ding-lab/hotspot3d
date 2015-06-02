@@ -34,6 +34,8 @@ sub new {
 	$this->{'max_radius'} = 10;
 	$this->{'vertex_type'} = 'recurrence';
     $this->{'maf_file'} = undef;
+    $this->{'amino_acid_header'} = "amino_acid_change";
+    $this->{'transcript_id_header'} = "transcript_name";
     bless $this, $class;
     $this->process();
     return $this;
@@ -53,6 +55,8 @@ sub process {
         'max-radius=f' => \$this->{'max_radius'},
         'vertex-type=s' => \$this->{'vertex_type'},
         'maf-file=s' => \$this->{'maf_file'},
+        'amino-acid-header=s' => \$this->{'amino_acid_header'},
+        'transcript-id-header=s' => \$this->{'transcript_id_header'},		
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
@@ -284,11 +288,34 @@ sub process {
 		my %mutations;
 		die "Could not open MAF file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
 		print STDOUT "\nReading in MAF ...\n";
+		my $mafi = 0;
+		my $headline = $fh->getline(); chomp( $headline );
+		my %mafcols = map{ ( $_ , $mafi++ ) } split( /\t/ , $headline );
+		unless(		defined( $mafcols{"Hugo_Symbol"} )
+				and defined( $mafcols{"Chromosome"} )
+				and defined( $mafcols{"Start_Position"} )
+				and defined( $mafcols{"End_Position"} )
+				and defined( $mafcols{"Reference_Allele"} )
+				and defined( $mafcols{"Tumor_Seq_Allele2"} )
+				and defined( $mafcols{"Tumor_Sample_Barcode"} )
+				and defined( $mafcols{$this->{"transcript_id_header"}} )
+				and defined( $mafcols{$this->{"amino_acid_header"}} ) ) {
+			die "not a valid MAF file! Check transcript and amino acid change headers.\n";
+		}
+		my @mafcols = ( $mafcols{"Hugo_Symbol"},
+						$mafcols{"Chromosome"},
+						$mafcols{"Start_Position"},
+						$mafcols{"End_Position"},
+						$mafcols{"Reference_Allele"},
+						$mafcols{"Tumor_Seq_Allele2"},
+						$mafcols{"Tumor_Sample_Barcode"},
+						$mafcols{$this->{"transcript_id_header"}},
+						$mafcols{$this->{"amino_acid_header"}} );
 		map {
 			chomp;
 			my @line = split /\t/;
-			if ( $#line > 47 ) {
-				my ( $gene , $chr , $start , $stop , $barID , $aachange ) = @line[0,4,5,6,15,47];
+			if ( $#line > $mafcols[-1] && $#line > $mafcols[-2] ) {
+				my ( $gene , $chr , $start , $stop , $barID , $aachange ) = @mafcols;
 				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
 				if ( exists $variants_from_pairs{$variant} ) {
 					my $gene_aachange = $gene.":".$aachange;
@@ -478,7 +505,7 @@ sub help_text{
     my $this = shift;
         return <<HELP
 
-Usage: hotspot3d cluter [options]
+Usage: hotspot3d cluster [options]
 
 --collapsed-pairs-file           Both inter & intra molecular 3D proximity interactions
 --pairwise-file                  Location data file
@@ -489,6 +516,8 @@ Usage: hotspot3d cluter [options]
 --max-radius                     Maximum cluster radius (max network geodesic from centroid), default <=10 Angstroms
 --vertex-type                    Graph vertex type (recurrence or unique), default recurrence
 --maf-file                       MAF file used in proximity search step (used if vertex-type = recurrence)
+--transcript-id-header           column header for transcript id's, default: transcript_name
+--amino-acid-header              column header for amino acid changes, default: amino_acid_change 
 
 --help                           this message
 
