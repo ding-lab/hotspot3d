@@ -23,6 +23,8 @@ sub new {
     my $this = {};
     $this->{'maf'} = undef;
     $this->{'input_prefix'} = '3D_Proximity';
+	$this->{'transcript_id_header'} = "transcript_name";
+	$this->{'amino_acid_header'} = "amino_acid_change";
     bless $this, $class;
     $this->process();
     return $this;
@@ -35,6 +37,8 @@ sub process {
     $options = GetOptions (
         'maf-file=s' => \$this->{'maf'},
         'input-prefix=s' => \$this->{'input_prefix'},
+        'transcript-id-header=s' => \$this->{'transcript_id_header'},
+        'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
@@ -112,12 +116,12 @@ sub process {
 	my %mafcols = map {($_, $mafi++)} split( /\t/, $mafhead );
 	unless (    defined($mafcols{"Hugo_Symbol"})
 			and defined($mafcols{"Tumor_Sample_Barcode"})
-			and defined($mafcols{$this->{"amino_acid_header"}}) ) {
+			and defined($mafcols{$this->{'amino_acid_header'}}) ) {
 		die "not a valid MAF annotation file with transcript and amino acid change !\n";
 	}
 	my @mafcols = (	$mafcols{"Hugo_Symbol"},
 					$mafcols{"Tumor_Sample_Barcode"},
-					$mafcols{$this->{"amino_acid_header"}} );
+					$mafcols{$this->{'amino_acid_header'}} );
     map {
 		chomp;
 		my @t = split /\t/, $_;
