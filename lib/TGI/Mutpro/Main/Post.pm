@@ -309,8 +309,8 @@ Usage: hotspot3d post [options]
 
 
 --maf-file              Input MAF file (2.3 standard + columns for transcript id & amino acid change)
---transcript-id-header  column header for transcript id's, default: transcript_name
---amino-acid-header     column header for amino acid changes, default: amino_acid_change					
+--transcript-id-header  MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header     MAF file column header for amino acid changes, default: amino_acid_change					
 --input-prefix          The prefix of proximity searching output files
 
 --help                  this message

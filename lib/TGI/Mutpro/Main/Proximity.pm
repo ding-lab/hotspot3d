@@ -463,12 +463,7 @@ sub help_text{
 Usage: hotspot3d search [options]
 
 --maf-file              Input MAF file
-                        In addition to the standard version 2.3 MAF headers, there needs to be 3 columns appended.
-                        These column headers in the MAF must have these names in the header in order for the tool to
-                        find them: 
-                                transcript_name - the transcript name, such as NM_000028 
-                                amino_acid_change - the amino acid change, such as p.R290H 
---data-dir		HotSpot3D preprocessing results directory
+--data-dir              HotSpot3D preprocessing results directory
 
 --drugport-file         Drugport database parsing results file ( optional )
 --output-prefix         Prefix of output files, default: 3D_Proximity 
@@ -477,8 +472,8 @@ Usage: hotspot3d search [options]
 --p-value               p_value cutoff(<=), default: 0.05
 --3d-dis                3D distance cutoff (<=), default: 10
 --linear-dis            linear distance cutoff (>=), default: 20 
---transcript-id-header  column header for transcript id's, default: transcript_name
---amino-acid-header     column header for amino acid changes, default: amino_acid_change 
+--transcript-id-header  MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header     MAF file column header for amino acid changes, default: amino_acid_change 
 
 --help			this message
 

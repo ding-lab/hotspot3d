@@ -516,12 +516,12 @@ Usage: hotspot3d cluster [options]
 --max-radius                     Maximum cluster radius (max network geodesic from centroid), default <=10 Angstroms
 --vertex-type                    Graph vertex type (recurrence or unique), default recurrence
 --maf-file                       MAF file used in proximity search step (used if vertex-type = recurrence)
---transcript-id-header           column header for transcript id's, default: transcript_name
---amino-acid-header              column header for amino acid changes, default: amino_acid_change 
+--transcript-id-header           MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header              MAF file column header for amino acid changes, default: amino_acid_change 
 
 --help                           this message
 
-NOTE: At least one of two pair files are needed from collapsed-pairs-file/drug-pair-file.
+NOTE: At least one of two pair files are needed: collapsed-pairs-file and/or drug-pairs-file.
 
 HELP
 
