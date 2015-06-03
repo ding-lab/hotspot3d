@@ -79,7 +79,7 @@ sub process {
 				and defined( $cols{"Degree_Connectivity"} )
 				and defined( $cols{"Closeness_Centrality"} )
 				and defined( $cols{"Geodesic_From_Centroid"} )
-				and defined( $cols{"Frequency"} ) ) {
+				and defined( $cols{"Recurrence"} ) ) {
 				die "Not a valid clusters file!\n";
 			}
 			@cols = ( 	$cols{"Cluster"} , 
@@ -88,7 +88,7 @@ sub process {
 						$cols{"Degree_Connectivity"} , 
 						$cols{"Closeness_Centrality"} , 
 						$cols{"Geodesic_From_Centroid"} , 
-						$cols{"Frequency"} );
+						$cols{"Recurrence"} );
 		} else {
 			my ( $id , $genedrug , $aagene , $degree , $centrality , $geodesic , $recurrence ) = (split( "\t" , $line ))[0..6];
 			$this->sum( 'degrees' , $id , $degree );
@@ -121,7 +121,7 @@ sub process {
 	$infh->close();
 
 	my $fill = "%.3f"."\t";
-	$fh->print( "Cluster_ID\tCentroid\tAvg_Degree\tCentrality\tAvg_Geodesic\tAvg_Frequency" );
+	$fh->print( "Cluster_ID\tCentroid\tAvg_Degree\tCentrality\tAvg_Geodesic\tAvg_Recurrence" );
 	$fh->print( "\tMutations_(Unique_AAchanges)" );
 	#$fh->print( "\tKnown_Mutations_(Unique_Known)" );
 	$fh->print( "\tTotal_Drugs\tGenes_Drugs" );
