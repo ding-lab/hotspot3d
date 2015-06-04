@@ -25,12 +25,17 @@ use FileHandle;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'inter_intra_proximity_file'} = undef;
-    $this->{'target_nontarget_file'} = undef;
+    $this->{'output_file'} = 'HotSpot3D_results.clusters';
+    $this->{'pairwise_file'} = undef;
+    $this->{'collapsed_pairs_file'} = undef;
+    $this->{'drug_pairs_file'} = undef;
     $this->{'p_value_cutoff'} = 0.05;
-    $this->{'data_location_file'} = undef;
-    $this->{'output_file'} = 'HotSpot3D_results_cluter';
-    $this->{'stat'} = undef;
+    $this->{'linear_cutoff'} = 20;
+	$this->{'max_radius'} = 10;
+	$this->{'vertex_type'} = 'recurrence';
+    $this->{'maf_file'} = undef;
+    $this->{'amino_acid_header'} = "amino_acid_change";
+    $this->{'transcript_id_header'} = "transcript_name";
     bless $this, $class;
     $this->process();
     return $this;
@@ -41,93 +46,213 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
-        'inter-intra-proximity-file=s' => \$this->{'inter_intra_proximity_file'},
-        'target-nontarget-file=s' => \$this->{'target_nontarget_file'},
-        'data-location-file=s' => \$this->{'data_location_file'},
+        'output-file=s' => \$this->{'output_file'},
+        'pairwise-file=s' => \$this->{'pairwise_file'},
+        'collapsed-pairs-file=s' => \$this->{'collapsed_pairs_file'},
+        'drug-pairs-file=s' => \$this->{'drug_pairs_file'},
         'p-value-cutoff=f' => \$this->{'p_value_cutoff'},
-        'output-file=s' =>\$this->{'output_file'},
+        'linear-cutoff=f' => \$this->{'linear_cutoff'},
+        'max-radius=f' => \$this->{'max_radius'},
+        'vertex-type=s' => \$this->{'vertex_type'},
+        'maf-file=s' => \$this->{'maf_file'},
+        'amino-acid-header=s' => \$this->{'amino_acid_header'},
+        'transcript-id-header=s' => \$this->{'transcript_id_header'},		
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
-    unless( $this->{'inter_intra_proximity_file'} ) { warn 'You must provide a conbined proximity file ! ', "\n"; die $this->help_text(); }
-    unless( -e $this->{'inter_intra_proximity_file'} ) { warn ' combined proximity file is not exist  ! ', "\n"; die $this->help_text(); }
-    unless( $this->{'data_location_file'} ) { warn 'You must provide location data file ! ', "\n"; die $this->help_text(); }
-    unless( -e $this->{'data_location_file'} ) { warn ' location data file is not exist  ! ', "\n"; die $this->help_text(); }
+    if ( ( not defined $this->{'collapsed_pairs_file'} ) and ( not defined $this->{'drug_pairs_file'} ) ) {
+		warn 'You must provide a collapsed pairs file or drug pairs file! ', "\n";
+		die $this->help_text();
+	}
+	if ( not defined $this->{'drug_pairs_file'} ) {
+		if ( not -e $this->{'collapsed_pairs_file'} ) { 
+			warn "The input collapsed pairs file (".$this->{'collapsed_pairs_file'}.") does not exist! ", "\n";
+			die $this->help_text();
+		}
+	} elsif ( not defined $this->{'collapsed_pairs_file'} ) {
+		if ( not -e $this->{'drug_pairs_file'} ) { 
+			warn "The input drug pairs file (".$this->{'drug_pairs_file'}.") does not exist! ", "\n";
+			die $this->help_text();
+		}
+	}
+    unless( $this->{'pairwise_file'} ) { warn 'You must provide pairwise file! ', "\n"; die $this->help_text(); }
+    unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwsie_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+	if ( $this->{'vertex_type'} ne 'recurrence' and $this->{'vertex_type'} ne 'unique' ) {
+		warn "vertex_type option not recognized as \'recurrence\' or \'unique\'\n";
+		warn "Using default vertex_type = \'recurrence\'\n";
+		$this->{'vertex_type'} = 'recurrence';
+	}
+    unless( ( $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'unique' ) ) { warn 'You must provide MAF file if not using unique vertex type! ', "\n"; die $this->help_text(); }
+    unless( ( -e $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'unique' ) ) { warn "The input MAF file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
     ## processing procedure
-    my %clusterings = (); my %distance_matrix = ();
-    if ( $this->{'target_nontarget_file'} and -e $this->{'target_nontarget_file'} ) {
-        print STDOUT "\nWorking on HotSpot3D druggable ..... \n";
-        my $fh = new FileHandle;
-        unless( $fh->open( $this->{'target_nontarget_file'} ) ) { die "Could not open drug data file $! \n" };
-        my ( %pdb_loc, %aa_map, @master, ); @master = ();
-        map { 
-            unless( /^"Drugport"/ ) {
-                chomp;
-                my @t = split /\t/; 
-                map{ $_ =~ s/"//g } @t;
-                my ( $drug, $pdb, $gene2, $m2, $loc, $infor_3d, ) = @t[0,2,5,9,11,15];
-                my ( $dist, $pdb2, $pval, ) = split / /, $infor_3d;
-                $pval =~ s/"//g;
-                my @info = ($drug, $pdb, $gene2, $m2, $pdb2, $dist, $pval); #necessary info
-                push @master, \@info; #store info
-                $this->redundant(\%pdb_loc, \%aa_map, $gene2, $m2, $loc); #filter transcripts
-                map {
-                    my ( $drug , $pdb , $gene2 , $m2 , $pdb2 , $dist , $pval ) = @{$_};
-                    if ( grep{$_ eq $m2} @{$aa_map{$gene2}} ) { 
-                        my @mutations = ();
-                        my $first = $drug.":".$pdb;
-                        push @mutations , $first;
-                        my $second = $gene2.":".$m2;
-                        push @mutations , $second; #@mus2;
-                        $this->AHC( $pval , $this->{'p_value_cutoff'} , \%clusterings , \@mutations );
-                        $this->build_distance_matrix( $first , $second , $dist , \%distance_matrix );
-                        $this->build_distance_matrix( $second , $first , $dist , \%distance_matrix );
-                    }	
-                } @master;
-            }
-        } $fh->getlines; 
-        $fh->close();
-    }
-    my ( %pdb_loc, %aa_map, );
-    my $fh = new FileHandle;
-    unless( $fh->open( $this->{'data_location_file'} ) ) { die "Could not open data location file $! \n" };
-    %pdb_loc = (); %aa_map = ();
-    map {
-        my ( $gene1, $aa_1, $loc_1, $gene2, $aa_2, $loc_2, ) = (split /\t/)[0,4,6,9,13,15];
-        $this->redundant(\%pdb_loc, \%aa_map, $gene1, $aa_1, $loc_1);
-        $this->redundant(\%pdb_loc, \%aa_map, $gene2, $aa_2, $loc_2);		
-    } $fh->getlines;
-    $fh->close();
-    print STDOUT "\nWorking on HotSpot3D collapsed ... \n";
-    unless( $fh->open( $this->{'inter_intra_proximity_file'} ) ) { die "Could not open proximity file $! \n" };
-    map {
-        chomp;
-        my ( $gene1, $m1, $gene2, $m2, $dist, $pdb, $pval, ) = ( split /\t/ )[0,1,5,6,12,13,14];
-        my @mus1 = split /,/, $m1;
-        my @mus2 = split /,/, $m2;
-        my @gm1 = (); my @gm2 = ();
-        for ( my $i = 0 ; $i < @mus1 ; $i++ ) { 
-            my $mut1 = $mus1[$i];
-            my $mut2 = $mus2[$i];
-            if ( (grep{$_ eq $mut1} @{$aa_map{$gene1}}) && (grep{$_ eq $mut2} @{$aa_map{$gene2}}) ) {
-                my $first = $gene1.":".$mut1;
-                my $second = $gene2.":".$mut2;
-                push @gm1 , ( $first ); #unique mutation
-                push @gm2 , ( $second ); #unique mutation
-                $this->build_distance_matrix( $first , $second , $dist , \%distance_matrix );
-                $this->build_distance_matrix( $second , $first , $dist , \%distance_matrix );
-            }
-        }
-        my @mutations = @gm1;
-        push @mutations , @gm2;
-        $this->AHC( $pval , $this->{'p_value_cutoff'} , \%clusterings , \@mutations );
-    } $fh->getlines;
-    $fh->close();
-    
+	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, %master, %mut_chrpos , %locations , %Variants );
+#####
+#	drug-mutation pairs
+#####
+    if ( $this->{'drug_pairs_file'} ) { #if drug pairs included
+		print STDOUT "\nWorking on HotSpot3D drug pairs ..... \n";
+		my $fh = new FileHandle;
+		unless( $fh->open( $this->{'drug_pairs_file'} , "r" ) ) { die "Could not open drug pairs data file $! \n" };
+		map { 
+			unless( /Drugport/ ) {
+				chomp;
+				my @t = split /\t/; 
+				map{ $_ =~ s/"//g } @t;
+				my ( $drug, $pdb, $gene2, $chr , $start , $stop , $m2, $loc, $infor_3d ) = @t[0,2,5,6,7,8,9,11,15];
+				my ( $dist, $pdb2, $pval ) = split / /, $infor_3d;
+				$mut_chrpos{$gene2.":".$m2}{$chr."_".$start."_".$stop} = 1;
+				$pval =~ s/"//g;
+				my $first = $drug.":".$gene2;
+				my $second = $gene2.":".$m2;
+				my $info = $dist.":".$pval;
+				$master{$first}{$second} = $info; #store necessary pair info
+				$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene2, $m2, $loc); #filter transcripts
+			}
+		} $fh->getlines; 
+		$fh->close();
+		#Pick longest transcript representation of unique
+		foreach my $gene ( keys %aa_map ) {
+			foreach my $aa ( @{$aa_map{$gene}} ) {
+				if ( $aa ne 'NA' ) {
+					if ( exists $locations{$gene}{$aa} ) {
+						my @locs = @{$locations{$gene}{$aa}};
+						my $orig_loc = $aa;
+						my $orig_letters = $aa;
+						$orig_letters =~ s/[^A-Z]//g;
+						$orig_loc =~ s/\D//g;
+						my @pdb_locations=@{$pdb_loc{$gene}};
+						foreach my $current_loc ( @locs ) {
+							if ( grep{ $_ eq $current_loc } @pdb_locations ) {
+								my @idx = grep{ $pdb_locations[$_] eq $current_loc } 0..$#pdb_locations;
+								foreach my $current_idx ( @idx ) {
+									my $current = $aa_map{$gene}[$current_idx];
+									my $current_int = $current;
+									my $current_letters = $current;
+									$current_int =~ s/\D//g;
+									$current_letters =~ s/[^A-Z]//g;
+									if ( $orig_loc > $current_int && $orig_letters eq $current_letters ) {
+										$aa_map{$gene}[$current_idx] = $aa;
+									} #foreach good AA, keep track
+								}
+							}
+						} #foreach location
+					} #if location exists
+				} #if not na
+			} #foreach aa
+		} #foreach gene
+		#cluster drug-mutation pairs and build distance matrix
+		foreach my $first ( keys %master ) {
+			foreach my $second ( keys %{$master{$first}} ) {
+				my ( $gene2 , $m2 ) = split ":" , $second;
+				if ( grep{ $_ eq $m2 } @{$aa_map{$gene2}} ) { 
+					my @mutations = ();
+					push @mutations , $first;
+					if ( $this->{'vertex_type'} eq 'unique' ) { $m2 =~ s/\D+(\d+)\D+/$1/g; }
+					$second = $gene2.":".$m2;
+					push @mutations , $second; #@mus2;
+					my ( $dist , $pval ) = split ":" , $master{$first}{$second};
+					$this->AHC( $pval , $this->{'p_value_cutoff'} , \%clusterings , \@mutations );
+					if ( $pval < $this->{'p_value_cutoff'} ) {
+						$distance_matrix{$first}{$second} = $dist;
+						$distance_matrix{$second}{$first} = $dist;
+					}
+				}	
+			}
+		} 
+	} #if drug pairs included
+#####
+#	pairwise data
+#####
+	print STDOUT "\nReading in pairwise data ... \n";
+	my $fh = new FileHandle;
+	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
+	map {
+		my ( $gene1 , $chr1 , $start1 , $stop1 , $aa_1 , $loc_1 , $gene2 , $chr2 , $start2 , $stop2 , $aa_2 , $loc_2 ) = (split /\t/)[0,1,2,3,4,6,9,10,11,12,13,15];
+		$mut_chrpos{$gene1.":".$aa_1}{$chr1."_".$start1."_".$stop1} = 1;
+		$mut_chrpos{$gene2.":".$aa_2}{$chr2."_".$start2."_".$stop2} = 1;
+		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene1, $aa_1, $loc_1);
+		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene2, $aa_2, $loc_2);		
+	} $fh->getlines;
+	$fh->close();
+	#Pick longest transcript representation of unique
+	foreach my $gene ( keys %aa_map ) {
+		foreach my $aa ( @{$aa_map{$gene}} ) {
+			if ( $aa ne 'NA' ) {
+				if ( exists $locations{$gene}{$aa} ) {
+					my @locs = @{$locations{$gene}{$aa}};
+					my $orig_loc = $aa;
+					my $orig_letters = $aa;
+					$orig_letters =~ s/[^A-Z]//g;
+					$orig_loc =~ s/\D//g;
+					my @pdb_locations=@{$pdb_loc{$gene}};
+					foreach my $current_loc ( @locs ) {
+						if ( grep{ $_ eq $current_loc } @pdb_locations ) {
+							my @idx = grep{ $pdb_locations[$_] eq $current_loc } 0..$#pdb_locations;
+							foreach my $current_idx ( @idx ) {
+								my $current = $aa_map{$gene}[$current_idx];
+								my $current_int = $current;
+								my $current_letters = $current;
+								$current_int =~ s/\D//g;
+								$current_letters =~ s/[^A-Z]//g;
+								if ( $orig_loc > $current_int && $orig_letters eq $current_letters ) {
+									$aa_map{$gene}[$current_idx] = $aa;
+								} #foreach good AA, keep track
+							}
+						}
+					} #foreach location
+				}
+			} #if not na
+		} #foreach aa
+	} #foreach gene
+#####
+#	collapsed pairwise data
+#####
+    print STDOUT "\nWorking on collapsed data ... \n";
+	if ( $this->{'collapsed_pairs_file'} ) {
+		unless( $fh->open( $this->{'collapsed_pairs_file'} , "r" ) ) { die "Could not open collapsed file $! \n" };
+		map {
+			chomp;
+			my ( $gene1, $m1, $gene2, $m2, $lindists , $dist, $pdb, $pval ) = ( split /\t/ )[0,1,5,6,11,12,13,14];
+			my @mus1 = split /,/, $m1;
+			my @mus2 = split /,/, $m2;
+			my @gm1 = (); my @gm2 = ();
+			for ( my $i = 0 ; $i < @mus1 ; $i++ ) { 
+				my $mut1 = $mus1[$i];
+				my $mut2 = $mus2[$i];
+				if ( ( grep{ $_ eq $mut1 } @{$aa_map{$gene1}} ) && ( grep{ $_ eq $mut2 } @{$aa_map{$gene2}} ) ) {
+					my $first = $gene1.":".$mut1;
+					my $second = $gene2.":".$mut2;
+					if ( $pval < $this->{'p_value_cutoff'} ) {
+						my @lindists = split /\,/ , $lindists;
+						my $lin_dist = $lindists[0];
+						if ( $lin_dist eq "N/A" ) {
+							push @gm1 , ( $first ); #unique mutation
+							push @gm2 , ( $second ); #unique mutation
+							$distance_matrix{$first}{$second} = $dist;
+							$distance_matrix{$second}{$first} = $dist;
+						} elsif ( $lin_dist > $this->{'linear_cutoff'} ) {
+							push @gm1 , ( $first ); #unique mutation
+							push @gm2 , ( $second ); #unique mutation
+							$distance_matrix{$first}{$second} = $dist;
+							$distance_matrix{$second}{$first} = $dist;
+						} #if linear distance okay
+					} #if spatial significance okay
+				} #if okay transcript representations
+			} #foreach transcript representation of mutations
+			my @mutations = @gm1;
+			push @mutations , @gm2;
+			$this->AHC( $pval , $this->{'p_value_cutoff'} , \%clusterings , \@mutations );
+		} $fh->getlines;
+		$fh->close();
+	} #if using collapsed pairs file
+#####
+#	clean up clusters
+#####
     my $i = 0;
-    my @keys = sort { $a <=> $b } keys %clusterings;
     ## REASSIGN CLUSTER IDS BY +1 INCREMENTS (REMOVE GAPS IN ID LIST)
+	foreach ( keys %clusterings ) { if ( scalar @{$clusterings{$_}} == 0 ) { delete $clusterings{$_}; } } #assure empty clusters (if any) are removed
+    my @keys = sort { $a <=> $b } keys %clusterings;
     while ( $i < scalar keys %clusterings ) {
         if ( $keys[$i] != $i ) {
             $clusterings{$i} = $clusterings{$keys[$i]};
@@ -135,43 +260,168 @@ sub process {
         }
         $i++;
     }
-    
     @keys = sort { $a <=> $b } keys %clusterings;
+#####
+#	finalize cluster data
+#####
     ## SHAVE CLUSTERS TO CORE
     #use distance_matrix matrix
     my %degree_connectivity = ();
     foreach ( keys %distance_matrix ) {
         $degree_connectivity{$_} = scalar keys %{$distance_matrix{$_}};
     }
-    ## PREP THE OUTPUT FILENAME
-    ## WRITE THE CLUSTER OUTPUT
-    die "Could not create clustering output file\n" unless( $fh->open(">$this->{'output_file'}") );
-    $fh->print( "Cluster\tGene/Drug\tMutation/PDB\tDegree_Connectivity\n" );
-    foreach my $key ( keys %clusterings ) {
-        foreach ( @{$clusterings{$key}} ) {
-            my ( $gene , $mutation ) = split ( /\:/ , $_ );
-            if ( defined $mutation ) {
-                $fh->print( $key."\t".$gene."\t".$mutation."\t".$degree_connectivity{$_}."\n" );
-            } else { $fh->print( "$key\t$gene\n" ); }
-        }
-    }
+	if ( $this->{'vertex_type'} ne 'unique' ) {
+		print STDOUT "\nPreparing to get recurrence ...\n";
+		my %variants_from_pairs;
+		foreach my $id ( keys %clusterings ) {
+			foreach my $gene_mut ( @{$clusterings{$id}} ) {
+				my ( $gene , $mutation ) = split /\:/ , $gene_mut;
+				if ( exists $mut_chrpos{$gene_mut} ) {
+					foreach my $chr_start_stop ( keys %{$mut_chrpos{$gene_mut}} ) {
+						my $variant = join( "_" , ( $gene , $mutation , $chr_start_stop ) );
+						$variants_from_pairs{$variant} = 1;
+					}
+				}
+			}
+		}
+		##Mutation recurrence from MAF
+		my %mutations;
+		die "Could not open MAF file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
+		print STDOUT "\nReading in MAF ...\n";
+		my $mafi = 0;
+		my $headline = $fh->getline(); chomp( $headline );
+		my %mafcols = map{ ( $_ , $mafi++ ) } split( /\t/ , $headline );
+		unless(		defined( $mafcols{"Hugo_Symbol"} )
+				and defined( $mafcols{"Chromosome"} )
+				and defined( $mafcols{"Start_Position"} )
+				and defined( $mafcols{"End_Position"} )
+				and defined( $mafcols{"Reference_Allele"} )
+				and defined( $mafcols{"Tumor_Seq_Allele2"} )
+				and defined( $mafcols{"Tumor_Sample_Barcode"} )
+				and defined( $mafcols{$this->{"transcript_id_header"}} )
+				and defined( $mafcols{$this->{"amino_acid_header"}} ) ) {
+			die "not a valid MAF file! Check transcript and amino acid change headers.\n";
+		}
+		my @mafcols = ( $mafcols{"Hugo_Symbol"},
+						$mafcols{"Chromosome"},
+						$mafcols{"Start_Position"},
+						$mafcols{"End_Position"},
+						$mafcols{"Reference_Allele"},
+						$mafcols{"Tumor_Seq_Allele2"},
+						$mafcols{"Tumor_Sample_Barcode"},
+						$mafcols{$this->{"transcript_id_header"}},
+						$mafcols{$this->{"amino_acid_header"}} );
+		map {
+			chomp;
+			my @line = split /\t/;
+			if ( $#line > $mafcols[-1] && $#line > $mafcols[-2] ) {
+				my ( $gene , $chr , $start , $stop , $barID , $aachange ) = @mafcols;
+				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
+				if ( exists $variants_from_pairs{$variant} ) {
+					my $gene_aachange = $gene.":".$aachange;
+					if ( exists $Variants{$gene_aachange} ) {
+						if ( not exists $mutations{$variant}{$barID} ) {
+							$Variants{$gene_aachange}++;
+							$mutations{$variant}{$barID}++;
+						}
+					} else {
+						$Variants{$gene_aachange} = 1;
+						$mutations{$variant}{$barID} = 1;
+					}
+				}
+			}
+		} $fh->getlines;
+		$fh->close();
+	} #if vertex_type
+#####
+#	write cluster output
+#####
+    die "Could not create clustering output file\n" unless( $fh->open( $this->{'output_file'} , "w" ) );
+    $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );
+	my %centrality = ();
+	print STDOUT "Cluster ID & Centroid\n";
+    foreach my $clus_num ( keys %clusterings ) {
+		my $max = 0;
+		my $centroid = "";
+		my %dist = ();
+		my @clus_mut = @{$clusterings{$clus_num}};
+		#initialize geodesics
+		foreach my $mut1 ( @clus_mut ) {
+			my @mu1 = split( ":" , $mut1 );
+			foreach my $mut2 ( @clus_mut ) {
+				my @mu2 = split( ":" , $mut2 );
+				if ( $mu1[1] =~ /p\./ ) { $mu1[1] =~ s/\D//g; }
+				if ( $mu2[1] =~ /p\./ ) { $mu2[1] =~ s/\D//g; }
+				if ( exists $distance_matrix{$mut1}{$mut2} ) {
+					$dist{$mut1}{$mut2} = $distance_matrix{$mut1}{$mut2};
+				} elsif ( ( $mu1[0] eq $mu2[0] ) && ( $mu1[1] eq $mu2[1] ) ) {
+					$dist{$mut1}{$mut2} = 0;
+				} else {
+					$dist{$mut1}{$mut2} = 1000000;
+				}
+			}
+		}
+		&floydwarshall( \%dist , \@clus_mut ); #get geodesics
+		#calculate closeness centralities
+		foreach my $current ( keys %dist ) {
+			my $C = 0;
+			foreach my $other ( keys %{$dist{$current}} ) {
+				my $weight = 1; #stays as 1 if vertex_type eq 'unique'
+				if ( $this->{'vertex_type'} ne 'unique' ) {
+					if ( exists $Variants{$other} ) {
+						$weight = $Variants{$other};
+					}
+				}
+				if ( $current ne $other ) {
+					if ( $dist{$current}{$other} <= $this->{'max_radius'} ) {
+						$C += $weight/( 2**$dist{$current}{$other} );
+					}
+				} else {
+					$C += $weight -1;
+				}
+			}
+			$centrality{$clus_num}{$current} = $C;
+			if ( $C > $max ) {
+				$max = $C;
+				$centroid = $current;
+			}
+		}
+		print STDOUT "$clus_num\t$centroid\n";
+		if ( exists $dist{$centroid} ) {
+			foreach my $other ( keys %{$dist{$centroid}} ) {
+				my $geodesic = $dist{$centroid}{$other};
+				my $degrees = $degree_connectivity{$other};
+				my $closenesscentrality = $centrality{$clus_num}{$other};
+				if ( $geodesic <= $this->{'max_radius'} ) {
+					my ( $gene , $mutation ) = split /\:/ , $other;
+					my $weight = 1;
+					if ( exists $Variants{$other} ) {
+						$weight = $Variants{$other};
+					}
+					$fh->print( join( "\t" , ( $clus_num , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
+				}
+			} #foreach other vertex in network
+        } #if dist for centroid
+    } #foreach cluster
     my $numclusters = scalar keys %clusterings;
     print STDOUT "Found $numclusters clusters\n";
 
     return 1;
 }
-
+#####
+#	sub functions
+#####
 ## CLUSTERING FUNCTION - AGGLOMERATIVE HIERARCHICAL CLUSTERING (AHC)
 sub AHC {
     my ( $this, $pval , $pthreshold , $clusterings , $mutations ) = @_;
     if ( $pval < $pthreshold ) { #meets desired significance
-        my ( @temp, @found, @combine, ); 
-        foreach my $c ( keys %{$clusterings} ) { #each cluster
+        my ( @temp, @found, @combine ); 
+        my ( @uniq, $c );
+        foreach $c ( keys %{$clusterings} ) { #each cluster
             my @mus_in_cluster = @{$clusterings->{$c}};
             foreach my $mu ( @{$mutations} ) { foreach ( @mus_in_cluster ) { if ( $mu eq $_ ) { push @combine , $c; } } }
         }
         my @uniqcombo = uniq @combine; #cluster types
-        my ( @uniq, $c, );
         if ( scalar @uniqcombo > 0 ) { #collapse clusters into one
             my $collapse_to = min @uniqcombo; #cluster type
             my $j = 0; #iterator type
@@ -198,8 +448,11 @@ sub AHC {
 }
 
 sub redundant {
-    my ( $this, $pdb_loc, $aa_map, $gene, $aa, $loc, ) = @_;
+    my ( $this, $pdb_loc, $aa_map, $locations , $gene, $aa, $loc ) = @_;
     my $aa_orig = $aa;
+	if ( not grep{ $_ eq $loc} @{$locations->{$gene}->{$aa}} ) {
+		push @{$locations->{$gene}->{$aa}} , $loc;
+	}
     if ( exists $pdb_loc->{$gene} ) { #if pdb_loc has gene
         if ( grep{$_ eq $loc} @{$pdb_loc->{$gene}} ) { #if primary location list has this mapping location
             my @array = @{$pdb_loc->{$gene}}; #each gene has list of mutations
@@ -216,7 +469,7 @@ sub redundant {
                 }
                 push(@{$pdb_loc->{$gene}}, $loc);
                 push(@{$aa_map->{$gene}}, $aa_orig);
-            } elsif ( abs($prev_aa-$loc)==abs($aa-$loc) && !(grep(/^$aa_orig/,@{$aa_map->{$gene}})) ) {
+            } elsif ( abs($prev_aa-$loc)==abs($aa-$loc) && !(grep(/^\Q$aa_orig\E/,@{$aa_map->{$gene}})) ) {
                 push(@{$pdb_loc->{$gene}}, $loc);
                 push(@{$aa_map->{$gene}}, $aa_orig);
             }
@@ -232,27 +485,43 @@ sub redundant {
     return 1;
 }
 
-## BUILD DISTANCE MATRIX - CAN USE ENTRY STATUS AS ADJACENCY MATRIX
-sub build_distance_matrix {
-    my ( $this, $m1 , $m2 , $dist , $distance_matrix ) = @_;
-    $distance_matrix->{$m1}->{$m2} = $dist;
-
-    return 1;
+sub floydwarshall {
+	my ( $dist , $clus_mut ) = @_;
+	foreach my $mu_k ( @{$clus_mut} ) {
+		foreach my $mu_i ( @{$clus_mut} ) {
+			my $dist_ik = $dist->{$mu_i}->{$mu_k};
+			foreach my $mu_j ( @{$clus_mut} ) {
+				my $dist_ij = $dist->{$mu_i}->{$mu_j};
+				my $dist_kj = $dist->{$mu_k}->{$mu_j};
+				if ( $dist_ij > $dist_ik + $dist_kj ) {
+					$dist->{$mu_i}->{$mu_j} = $dist_ik + $dist_kj;
+				}
+			}
+		}
+	}
 }
 
 sub help_text{
     my $this = shift;
         return <<HELP
 
-Usage: hotspot3d cluter [options]
+Usage: hotspot3d cluster [options]
 
---inter-intra-proximity-file     Both inter & intra molecular 3D proximity interactions
---data-location-file             Location data file
+--collapsed-pairs-file           Both inter & intra molecular 3D proximity interactions
+--pairwise-file                  Location data file
 --output-file                    Output file
---target-nontarget-file          Both target & nontarget drug data (optional)
---p-value-cutoff		 P_value cutoff, default 0.05
+--drug-pairs-file                Both target & nontarget drug data file
+--p-value-cutoff                 P_value cutoff, default <0.05
+--linear-cutoff                  Linear distance cutoff, default >20 uniques
+--max-radius                     Maximum cluster radius (max network geodesic from centroid), default <=10 Angstroms
+--vertex-type                    Graph vertex type (recurrence or unique), default recurrence
+--maf-file                       MAF file used in proximity search step (used if vertex-type = recurrence)
+--transcript-id-header           MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header              MAF file column header for amino acid changes, default: amino_acid_change 
 
---help			this message
+--help                           this message
+
+NOTE: At least one of two pair files are needed: collapsed-pairs-file and/or drug-pairs-file.
 
 HELP
 

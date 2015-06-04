@@ -15,8 +15,9 @@ Usage
 Key commands:
 
         search    --  3D mutation proximity searching
-        visual    --  Visulization of 3D proximity
+		post      --  Post-processing on pairwise data (needed for cluster step)
         cluster   --  Determine mutation clusters from HotSpot3D inter, intra, and druggable data 
+        visual    --  Visulization of 3D proximity
 
         drugport  --  Parse drugport database 
         uppro     --  Update proximity files
@@ -41,6 +42,7 @@ Prerequisites:
 
 In order to install HotSpot3D package, first install CPANM
 (cpanm - get, unpack build and install modules from CPANM)
+NOTE: Some steps may require adding --force to install successfully.
 
         sudo apt-get install cpanminus
 
@@ -68,6 +70,10 @@ Install HotSpot3D package:
         cd hotspot3d
         cpanm HotSpot3D-0.1.tar.gz
 
+(Installations under some organizations may use an internal perl version.
+To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
+from: #!/org/bin/perl
+to: #!/usr/bin/perl)
 
 example
 -------
@@ -119,11 +125,15 @@ the necessary PDB file is not yet in the pdb files directory) :
 
         hotspot3d search --maf-file=pancan19_input.maf --data-dir=preprocessing_output --output-prefix=pancan19 --skip-silent 1>pancan19.t.out 2>pancan19.t.err
 
-2. Visualization :
+2. Post-processing of pairwise data (required for cluster step):
 
-        hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
+		hotspot3d post --maf-file=pancan19_input.maf --input-prefix=pancan19
 
 3. 3D proximity results clustering : 
 
         hotspot3d cluster --inter-intra-proximity-file=interactions_file --data-location-file=location_data --output-file=clustering.out --target-nontarget-file=drug_data_file
+
+4. Visualization :
+
+        hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
 
