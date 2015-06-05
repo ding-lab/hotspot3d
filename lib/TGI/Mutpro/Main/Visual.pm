@@ -189,14 +189,14 @@ sub getClusters {
 			my %ccols = map{ ( $_ , $i++ ) } split( /\t/ , $line );
 			unless(	defined( $ccols{"Cluster"} )
 				and defined( $ccols{"Gene/Drug"} )
-				and defined( $ccols{"Mutation/PDB"} )
+				and defined( $ccols{"Mutation/Gene"} )
 				and defined( $ccols{"Closeness_Centrality"} )
 				and defined( $ccols{"Geodesic_From_Centroid"} ) ) {
 				die "Not a valid clusters file!\n";
 			}
 			@ccols = (	$ccols{"Cluster"} ,
 						$ccols{"Gene/Drug"} , 
-						$ccols{"Mutation/PDB"} , 
+						$ccols{"Mutation/Gene"} , 
 						$ccols{"Closeness_Centrality"} , 
 						$ccols{"Geodesic_From_Centroid"} );
 		} else {
