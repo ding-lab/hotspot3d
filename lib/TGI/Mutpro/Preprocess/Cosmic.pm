@@ -13,6 +13,7 @@ use warnings;
 
 use Carp;
 use Cwd;
+use FileHandle;
 use Getopt::Long;
 
 sub new {

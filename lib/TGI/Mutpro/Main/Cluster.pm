@@ -94,12 +94,34 @@ sub process {
 		print STDOUT "\nWorking on HotSpot3D drug pairs ..... \n";
 		my $fh = new FileHandle;
 		unless( $fh->open( $this->{'drug_pairs_file'} , "r" ) ) { die "Could not open drug pairs data file $! \n" };
+		my $rxi = 0;
+		my $headline = $fh->getline(); chomp( $headline );
+		my %drugcols = map{ ( $_ , $rxi++ ) } split( /\t/ , $headline );
+		unless(	defined( $drugcols{"Drug"} )										#0
+			and defined( $drugcols{"PDB_ID"} )										#2
+			and defined( $drugcols{"Gene"} )										#6
+			and defined( $drugcols{"Chromosome"} )									#7
+			and defined( $drugcols{"Start"} )										#8
+			and defined( $drugcols{"Stop"} )										#9
+			and defined( $drugcols{"Amino_Acid_Change"} )							#10
+			and defined( $drugcols{"Mutation_Location_In_PDB"} )					#12
+			and defined( $drugcols{"3D_Distance_Information"} ) ) {					#17
+			die "not a valid drug-pairs file\n";
+		}
+		my @wantrxcols = (	$drugcols{"Drug"} ,
+							$drugcols{"PDB_ID"} ,
+							$drugcols{"Gene"} ,
+							$drugcols{"Chromosome"} ,
+							$drugcols{"Start"} ,
+							$drugcols{"Stop"} ,
+							$drugcols{"Amino_Acid_Change"} ,
+							$drugcols{"Mutation_Location_In_PDB"} ,
+							$drugcols{"3D_Distance_Information"} );
 		map { 
-			unless( /Drugport/ ) {
 				chomp;
-				my @t = split /\t/; 
-				map{ $_ =~ s/"//g } @t;
-				my ( $drug, $pdb, $gene2, $chr , $start , $stop , $m2, $loc, $infor_3d ) = @t[0,2,5,6,7,8,9,11,15];
+				my @line = split /\t/; 
+				map{ $_ =~ s/"//g } @line;
+				my ( $drug, $pdb, $gene2, $chr , $start , $stop , $m2, $loc, $infor_3d ) = @line[@wantrxcols];
 				my ( $dist, $pdb2, $pval ) = split / /, $infor_3d;
 				$mut_chrpos{$gene2.":".$m2}{$chr."_".$start."_".$stop} = 1;
 				$pval =~ s/"//g;
@@ -108,7 +130,6 @@ sub process {
 				my $info = $dist.":".$pval;
 				$master{$first}{$second} = $info; #store necessary pair info
 				$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene2, $m2, $loc); #filter transcripts
-			}
 		} $fh->getlines; 
 		$fh->close();
 		#Pick longest transcript representation of unique
@@ -168,7 +189,7 @@ sub process {
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	map {
-		my ( $gene1 , $chr1 , $start1 , $stop1 , $aa_1 , $loc_1 , $gene2 , $chr2 , $start2 , $stop2 , $aa_2 , $loc_2 ) = (split /\t/)[0,1,2,3,4,6,9,10,11,12,13,15];
+		my ( $gene1 , $chr1 , $start1 , $stop1 , $aa_1 , $loc_1 , $gene2 , $chr2 , $start2 , $stop2 , $aa_2 , $loc_2 ) = (split /\t/)[0..4,6,9..13,15];
 		$mut_chrpos{$gene1.":".$aa_1}{$chr1."_".$start1."_".$stop1} = 1;
 		$mut_chrpos{$gene2.":".$aa_2}{$chr2."_".$start2."_".$stop2} = 1;
 		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene1, $aa_1, $loc_1);
@@ -213,7 +234,7 @@ sub process {
 		unless( $fh->open( $this->{'collapsed_pairs_file'} , "r" ) ) { die "Could not open collapsed file $! \n" };
 		map {
 			chomp;
-			my ( $gene1, $m1, $gene2, $m2, $lindists , $dist, $pdb, $pval ) = ( split /\t/ )[0,1,5,6,11,12,13,14];
+			my ( $gene1, $m1, $gene2, $m2, $lindists , $dist, $pdb, $pval ) = ( split /\t/ )[0,1,5,6,11..14];
 			my @mus1 = split /,/, $m1;
 			my @mus2 = split /,/, $m2;
 			my @gm1 = (); my @gm2 = ();
@@ -315,7 +336,7 @@ sub process {
 			chomp;
 			my @line = split /\t/;
 			if ( $#line > $mafcols[-1] && $#line > $mafcols[-2] ) {
-				my ( $gene , $chr , $start , $stop , $barID , $aachange ) = @mafcols;
+				my ( $gene , $chr , $start , $stop , $reference , $tumorAllele , $barID , $transcript_name , $aachange ) = @line[@mafcols];
 				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
 				if ( exists $variants_from_pairs{$variant} ) {
 					my $gene_aachange = $gene.":".$aachange;
