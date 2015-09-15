@@ -418,6 +418,15 @@ sub drug_proximity_postprocessing {
         chomp; my @t = split /\t/, $_; my ($chain) = $t[1] =~ /\[(\w+)\]/; my $d3info = "";
         map { 
             my @m = split / /, $_; if ( $t[0] eq $m[1] ) { $d3info = $_; } 
+		} split /\|/, $t[15];
+		my $drug = join( "\|", keys %{$ss{$t[0]}{$chain}{$t[2]}{'DRUG'}} );
+		my $drugid = join( "\|", keys %{$ss{$t[0]}{$chain}{$t[2]}{'DRUGID'}} );
+		$sub_fh_output->print( join( "\t", $drug, $drugid, @t[0..14], $d3info )."\n" );
+	} <$sub_fh_target>;
+	$sub_fh_output->close;
+	$sub_fh_target->close;
+	$sub_fh_drugport_parsing->close;
+	die "Could not open drug nontarget output file\n" unless( $sub_fh_nontarget->open( "$output_prefix.drugs.nontarget" ) );
     die "Could not open drugprot parsing output file\n" unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) );
     my $sub_fh_nontarget_output = new FileHandle;
     die "Could not create clean nontarget drug output file\n" unless( $sub_fh_nontarget_output->open( ">$output_prefix.drugs.nontarget.clean" ) );
