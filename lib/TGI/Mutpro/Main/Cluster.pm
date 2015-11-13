@@ -1,7 +1,7 @@
 package TGI::Mutpro::Main::Cluster;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam Scott
+# $Authors: Adam Scott & Sohini Sengupta
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision:  $
 # $URL: $
@@ -21,6 +21,8 @@ use List::Util qw( min max );
 
 use IO::File;
 use FileHandle;
+
+use Data::Dumper;
 
 sub new {
     my $class = shift;
@@ -359,70 +361,10 @@ sub process {
 #####
     die "Could not create clustering output file\n" unless( $fh->open( $this->{'output_file'} , "w" ) );
     $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );
-	my %centrality = ();
 	print STDOUT "Cluster ID & Centroid\n";
     foreach my $clus_num ( keys %clusterings ) {
-		my $max = 0;
-		my $centroid = "";
-		my %dist = ();
 		my @clus_mut = @{$clusterings{$clus_num}};
-		#initialize geodesics
-		foreach my $mut1 ( @clus_mut ) {
-			my @mu1 = split( ":" , $mut1 );
-			foreach my $mut2 ( @clus_mut ) {
-				my @mu2 = split( ":" , $mut2 );
-				if ( $mu1[1] =~ /p\./ ) { $mu1[1] =~ s/\D//g; }
-				if ( $mu2[1] =~ /p\./ ) { $mu2[1] =~ s/\D//g; }
-				if ( exists $distance_matrix{$mut1}{$mut2} ) {
-					$dist{$mut1}{$mut2} = $distance_matrix{$mut1}{$mut2};
-				} elsif ( ( $mu1[0] eq $mu2[0] ) && ( $mu1[1] eq $mu2[1] ) ) {
-					$dist{$mut1}{$mut2} = 0;
-				} else {
-					$dist{$mut1}{$mut2} = 1000000;
-				}
-			}
-		}
-		&floydwarshall( \%dist , \@clus_mut ); #get geodesics
-		#calculate closeness centralities
-		foreach my $current ( keys %dist ) {
-			my $C = 0;
-			foreach my $other ( keys %{$dist{$current}} ) {
-				my $weight = 1; #stays as 1 if vertex_type eq 'unique'
-				if ( $this->{'vertex_type'} ne 'unique' ) {
-					if ( exists $Variants{$other} ) {
-						$weight = $Variants{$other};
-					}
-				}
-				if ( $current ne $other ) {
-					if ( $dist{$current}{$other} <= $this->{'max_radius'} ) {
-						$C += $weight/( 2**$dist{$current}{$other} );
-					}
-				} else {
-					$C += $weight -1;
-				}
-			}
-			$centrality{$clus_num}{$current} = $C;
-			if ( $C > $max ) {
-				$max = $C;
-				$centroid = $current;
-			}
-		}
-		print STDOUT "$clus_num\t$centroid\n";
-		if ( exists $dist{$centroid} ) {
-			foreach my $other ( keys %{$dist{$centroid}} ) {
-				my $geodesic = $dist{$centroid}{$other};
-				my $degrees = $degree_connectivity{$other};
-				my $closenesscentrality = $centrality{$clus_num}{$other};
-				if ( $geodesic <= $this->{'max_radius'} ) {
-					my ( $gene , $mutation ) = split /\:/ , $other;
-					my $weight = 1;
-					if ( exists $Variants{$other} ) {
-						$weight = $Variants{$other};
-					}
-					$fh->print( join( "\t" , ( $clus_num , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
-				}
-			} #foreach other vertex in network
-        } #if dist for centroid
+		$this->centroid(\%Variants,\%distance_matrix,\%degree_connectivity,$clus_num,\@clus_mut,$fh,0, 1);
     } #foreach cluster
     my $numclusters = scalar keys %clusterings;
     print STDOUT "Found $numclusters clusters\n";
@@ -432,6 +374,102 @@ sub process {
 #####
 #	sub functions
 #####
+sub centroid{
+		my ($this, $Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster,$counter)=@_;
+		my %dist = ();
+		foreach my $mut1 ( @{$clus_mut} ) { #initialize geodesics
+			my @mu1 = split( ":" , $mut1 );
+			foreach my $mut2 ( @{$clus_mut} ) {
+				my @mu2 = split( ":" , $mut2 );
+				if ( $mu1[1] =~ /p\./ ) { $mu1[1] =~ s/\D//g; }
+				if ( $mu2[1] =~ /p\./ ) { $mu2[1] =~ s/\D//g; }
+				if ( exists $distance_matrix->{$mut1}->{$mut2} ) {
+					$dist{$mut1}{$mut2} = $distance_matrix->{$mut1}->{$mut2};
+				} elsif ( ( $mu1[0] eq $mu2[0] ) && ( $mu1[1] eq $mu2[1] ) ) {
+					$dist{$mut1}{$mut2} = 0;
+				} else {
+					$dist{$mut1}{$mut2} = 1000000;
+				}
+			}
+		}
+		&floydwarshall( \%dist, \@{$clus_mut}); #get geodesics
+		my %centrality;
+		my $max=0;
+		my $centroid='';
+		my $count=0;
+		foreach my $current ( keys %dist ) {
+			my $C = 0;
+			foreach my $other ( keys %{$dist{$current}}) {
+				my $weight = 1; #stays as 1 if vertex_type eq 'unique'
+				if ( $this->{'vertex_type'} ne 'unique' ) {
+					if ( exists $Variants->{$other} ) {
+						$weight = $Variants->{$other};
+					}
+				}
+				if ( $current ne $other ) {
+					if ( $dist{$current}{$other} <= $this->{'max_radius'} ) {
+						$C += $weight/( 2**$dist{$current}{$other} );
+						$count+=1;
+						print "$current\t$other\t$dist{$current}{$other}\n";	
+					}
+					else{
+						$recluster=1;
+					}
+				} 
+				else {
+					$C += $weight -1;
+				}
+				$centrality{$clus_num}{$current} = $C;
+				if ( $C > $max ) {
+					$max = $C;
+					$centroid = $current;
+				}
+			} #foreach other
+		} #foreach current
+
+		my $cluster_size=scalar @{$clus_mut};
+		print"$count\t$cluster_size\t$centroid\n";
+		$count=0;
+		print STDOUT "$clus_num\t$centroid\n";
+		if ( exists $dist{$centroid} ) {
+			foreach my $other ( keys %{$dist{$centroid}} ) {
+				my $geodesic = $dist{$centroid}{$other};
+				my $degrees = $degree_connectivity->{$other};
+				my $closenesscentrality = $centrality{$clus_num}{$other};
+				my ( $gene , $mutation ) = split /\:/ , $other;
+				my $weight = 1;
+
+				if ( $geodesic <= $this->{'max_radius'} ) {
+					if ( exists $Variants->{$other} ) {
+						$weight = $Variants->{$other};
+					}
+					$count+=1;
+					if ($recluster==1){
+						$fh->print( join( "\t" , ( "$clus_num.$counter" , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
+						my $index=0;
+						$index++ until $clus_mut->[$index] eq $other;
+						splice(@{$clus_mut}, $index, 1);
+					}
+					else {
+						$fh->print( join( "\t" , ( $clus_num , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
+					}
+				}
+			} #foreach other vertex in network
+		} #if dist for centroid
+
+		if ($count<2)
+		{
+			return;
+		}
+
+		if ($recluster==1) {
+			$counter+=1;
+			print STDOUT "$counter\n";
+			$this->centroid($Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster, $counter);
+		}
+}
+
+
 ## CLUSTERING FUNCTION - AGGLOMERATIVE HIERARCHICAL CLUSTERING (AHC)
 sub AHC {
     my ( $this, $pval , $pthreshold , $clusterings , $mutations ) = @_;
@@ -521,6 +559,9 @@ sub floydwarshall {
 		}
 	}
 }
+
+
+
 
 sub help_text{
     my $this = shift;
