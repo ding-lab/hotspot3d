@@ -21,10 +21,10 @@ use Scalar::Util qw( reftype );
 sub new {
 	my $class = shift;
 	my $this = {};
-	$this->{'prep_dir'} = undef;
+	$this->{'prep-dir'} = undef;
 	$this->{'pairwise'} = undef;
 	$this->{'clusters'} = undef;
-	$this->{'output'} = "hotspot3d.cluster.significance.tsv";
+	$this->{'output'} = "hotspot3d.sigclus";
 	$this->{'simulations'} = 1000000;
 	bless $this, $class;
 	$this->process();
@@ -36,7 +36,7 @@ sub process {
 	my ( $help, $options );
 	unless( @ARGV ) { die $this->help_text(); }
 	$options = GetOptions (
-		'prep_dir=s' => \$this->{'prep_dir'},
+		'prep-dir=s' => \$this->{'prep_dir'},
 		'pairwise=s' => \$this->{'pairwise'},
 		'clusters=s' => \$this->{'clusters'},
 		'output=s' => \$this->{'output_prefix'},
@@ -256,7 +256,7 @@ sub getDistances{
 						foreach my $cluster ( keys %{$massDistribution{$numResidues}} ) {
 						#	print "cluster: $cluster, avg dist: $avgDist, withinetc: $withinClusterAvgDistance{$cluster}\n";
 							if ( $avgDist < $withinClusterAvgDistance{$cluster} ) {
-							$below{$cluster}++;
+								$below{$cluster}++;
 							}
 						} #foreach cluster
 					} #foreach simulation
@@ -303,7 +303,7 @@ sub help_text{
 
 Usage: hotspot3d sigclus [options]
 
-	--prep_dir			Preprocessing directory 
+	--prep-dir			Preprocessing directory 
 	--pairwise			Pairwise file (pancan19.pairwise)
 	--clusters			Cluster file (pancan19.intra.20..05.10.clusters)
 	--output			Output file prefix (pancan19.intra.20..05.10)
