@@ -1,22 +1,24 @@
 HotSpot3D
 ===========
 
-This 3D proximity tool can be used to identify mutation hotspots from the linear protein sequence and correlates the hotspots with known or potentially interacting domains and mutations. 
+This 3D proximity tool can be used to identify mutation hotspots from the linear protein sequence and correlates the hotspots with known or potentially interacting domains and mutations. Mutation-mutation and mutation-drug clusters can also be identified and viewed.
 
 Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V0.2
-         Author:     Beifang Niu && John Wallis
+        Version:     V0.4
+         Author:     Beifang Niu, John Wallis, Adam D Scott, & Sohini Sengupta
 
-        Usage:  hotspot3d <command> [options]
+          Usage:     hotspot3d <command> [options]
 
 Key commands:
 
         search    --  3D mutation proximity searching
-		post      --  Post-processing on pairwise data (needed for cluster step)
-        cluster   --  Determine mutation clusters from HotSpot3D inter, intra, and druggable data 
+		post      --  Post-processing on pairwise data
+        cluster   --  Determine clusters from HotSpot3D inter, intra, and druggable pairwise data 
+		sigclus   --  Determine significance of clusters
+		summary   --  Determine cluster-level measures
         visual    --  Visulization of 3D proximity
 
         drugport  --  Parse drugport database 
@@ -32,7 +34,7 @@ Key commands:
         help      --  this message
 
 SUPPORT
-For user support please mail bniu@genome.wustl.edu
+For user support please mail adamscott@wustl.edu
 
 
 Install (Ubuntu 14.04.01)
@@ -51,6 +53,10 @@ Another way to install cpanminus is to just download it, as per the installer
         curl -LO http://xrl.us/cpanm
         chmod +x cpanm
 
+Or by using cpan
+
+		cpan App::cpanminus
+
 Intall Perl5 local lib
 
         cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
@@ -68,7 +74,7 @@ Install HotSpot3D package:
         
         git clone https://github.com/ding-lab/hotspot3d
         cd hotspot3d
-        cpanm HotSpot3D-0.1.tar.gz
+        cpanm HotSpot3D-#.#.tar.gz
 
 (Installations under some organizations may use an internal perl version.
 To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
@@ -129,11 +135,19 @@ the necessary PDB file is not yet in the pdb files directory) :
 
 		hotspot3d post --maf-file=pancan19_input.maf --input-prefix=pancan19
 
-3. 3D proximity results clustering : 
+3. Cluster pairwise data:
 
         hotspot3d cluster --inter-intra-proximity-file=interactions_file --data-location-file=location_data --output-file=clustering.out --target-nontarget-file=drug_data_file
 
-4. Visualization :
+4. Cluster significance calculation:
+
+        hotspot3d sigclus --prep-dir=preprocessing_output --pairwise=pairwise_file --clusters=clusters_file --output=output_file
+
+5. Clustering Summary:
+
+        hotspot3d summary --clusters-file=cluster_file --output-file=output_summary
+
+6. Visualization:
 
         hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
 
