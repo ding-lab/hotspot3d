@@ -337,7 +337,7 @@ sub process {
 		map {
 			chomp;
 			my @line = split /\t/;
-			if ( $#line > $mafcols[-1] && $#line > $mafcols[-2] ) {
+			if ( $#line >= $mafcols[-1] && $#line >= $mafcols[-2] ) { #makes sure custom maf cols are in range
 				my ( $gene , $chr , $start , $stop , $reference , $tumorAllele , $barID , $transcript_name , $aachange ) = @line[@mafcols];
 				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
 				if ( exists $variants_from_pairs{$variant} ) {
@@ -361,7 +361,7 @@ sub process {
 #####
     die "Could not create clustering output file\n" unless( $fh->open( $this->{'output_file'} , "w" ) );
     $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );
-	print STDOUT "Cluster ID & Centroid\n";
+	print STDOUT "Getting Cluster ID's & Centroids\n";
     foreach my $clus_num ( keys %clusterings ) {
 		my @clus_mut = @{$clusterings{$clus_num}};
 		$this->centroid(\%Variants,\%distance_matrix,\%degree_connectivity,$clus_num,\@clus_mut,$fh,0, 1);
@@ -410,7 +410,7 @@ sub centroid{
 					if ( $dist{$current}{$other} <= $this->{'max_radius'} ) {
 						$C += $weight/( 2**$dist{$current}{$other} );
 						$count+=1;
-						print "$current\t$other\t$dist{$current}{$other}\n";	
+						#print "$current\t$other\t$dist{$current}{$other}\n";	
 					}
 					else{
 						$recluster=1;
@@ -428,9 +428,9 @@ sub centroid{
 		} #foreach current
 
 		my $cluster_size=scalar @{$clus_mut};
-		print"$count\t$cluster_size\t$centroid\n";
+		#print"$count\t$cluster_size\t$centroid\n";
 		$count=0;
-		print STDOUT "$clus_num\t$centroid\n";
+		#print STDOUT "$clus_num\t$centroid\n";
 		if ( exists $dist{$centroid} ) {
 			foreach my $other ( keys %{$dist{$centroid}} ) {
 				my $geodesic = $dist{$centroid}{$other};
@@ -464,7 +464,7 @@ sub centroid{
 
 		if ($recluster==1) {
 			$counter+=1;
-			print STDOUT "$counter\n";
+			#print STDOUT "$counter\n";
 			$this->centroid($Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster, $counter);
 		}
 }
@@ -500,7 +500,7 @@ sub AHC {
             $clusterings->{$c} = \@uniq;
         }
         $c = scalar keys %{$clusterings};
-        print STDOUT "New cluster $c\n";
+        #print STDOUT "New cluster $c\n";
     } #if pval significant
 
     return 1; 
