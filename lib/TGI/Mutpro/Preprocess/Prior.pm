@@ -45,7 +45,6 @@ sub process {
     unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide output directory ! ', "\n"; die help_text(); }
     unless( -d $this->{_OUTPUT_DIR} ) { warn 'You must provide a valid output directory ! ', "\n"; die help_text(); }
     my $fh   = new FileHandle;
-    die "Could not create pairwise close output file\n"  unless($fh->open(">$this->{_OUTPUT_PREFIX}.pairwise"));
     #### processing ####
     # do prioritization 
     my ( $UniprotIdFile, $proximityDir, $cosmicDir, $prioritizationDir, );
