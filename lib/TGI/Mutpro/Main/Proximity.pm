@@ -401,10 +401,15 @@ sub proximitySearching {
 # post processing of drug results
 sub drug_proximity_postprocessing {
     my ( $this, $output_prefix, $drugport_parsing_results ) = @_;
-    my $sub_fh_target = new FileHandle; my $sub_fh_drugport_parsing = new FileHandle; my $sub_fh_nontarget = new FileHandle; 
-    die "Could not open drug target output file\n" unless( $sub_fh_target->open( "$output_prefix.drugs.target" ) );
-    die "Could not open drugprot parsing output file\n" unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) );
+    my $sub_fh_target = new FileHandle;
+	my $sub_fh_drugport_parsing = new FileHandle;
+	my $sub_fh_nontarget = new FileHandle; 
     my $sub_fh_output = new FileHandle;
+	unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) ) {
+		warn "Could not open drugprot parsing output file\n";
+		return 0;
+	}
+    die "Could not open drug target output file\n" unless( $sub_fh_target->open( "$output_prefix.drugs.target" ) );
     die "Could not create clean drug output file\n" unless( $sub_fh_output->open( ">$output_prefix.drugs.target.clean" ) );
     $sub_fh_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Drug_Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Res_Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotation", "Cosmic_Annotation", "Linear_Distance_Between_Drug_and_Mutation", "3D_Distance_Information\n" ) );
     my %ss; map { 
