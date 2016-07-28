@@ -1,16 +1,16 @@
 package TGI::Mutpro::Preprocess::Uppro;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu and Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 2016-07-27 $
 # $URL: $
 # $Doc: $ create & update proximity files (the first step of preprocessing procedure)
 #----------------------------------
 #
 use strict;
 use warnings;
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 use Carp;
 use Cwd;
@@ -18,6 +18,7 @@ use Getopt::Long;
 use LWP::Simple;
 use IO::File;
 use FileHandle;
+use List::MoreUtils qw( uniq );
 
 use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
@@ -31,8 +32,9 @@ sub new {
         'min_seq_dis' => 1,
         'status' => undef,
         'pdb_file_dir' => undef,
+        'genes' => undef,
         #'drugport_file' => undef, 
-        'cmd-list-submit-file' => 'cmd_list_submit_file', 
+        'cmd_list_submit_file' => "cmd_list_submit_file", 
     );
     map{ $this->{$_} = $sub_cmds{$_} } keys %sub_cmds;
     bless $this, $class;
@@ -49,15 +51,20 @@ sub process {
         'min-seq-dis=i'   => \$this->{'min_seq_dis'},
         'output-dir=s'    => \$this->{'output_dir'},
         'pdb-file-dir=s'  => \$this->{'pdb_file_dir'},
+        'gene-file=s'  => \$this->{'genes'},
         #'drugport-file=s' => \$this->{'drugport_file'},
         'cmd-list-submit-file=s' => \$this->{'cmd_list_submit_file'},
         'help' => \$help,
     );
     if ($help) { print STDERR help_text(); exit 0; }
     unless ($options) { die $this->help_text(); }
-    #map{ unless($this->{$_} and (-e $this->{$_})) { warn " $_ is not exist ! \n"; die $this->help_text(); } } qw( output_dir pdb_file_dir drugport_file );
-    map{ unless($this->{$_} and (-e $this->{$_})) { warn " $_ is not exist ! \n"; die $this->help_text(); } } qw( output_dir pdb_file_dir );
-    my $update_program = 'hotspot3d calpro';
+    #map{ unless($this->{$_} and (-e $this->{$_})) { warn " $_ does not exist ! \n"; die $this->help_text(); } } qw( output_dir pdb_file_dir drugport_file );
+    map{
+		unless($this->{$_} and (-e $this->{$_})) {
+			warn " $_ does not exist ! \n";
+			die $this->help_text();
+		}
+	} qw( output_dir pdb_file_dir );
     my $pro_dir = "$this->{'output_dir'}\/proximityFiles";
     my $inpro_dir = "$pro_dir\/inProgress";
     my $pdbcor_dir = "$pro_dir\/pdbCoordinateFiles";
@@ -72,8 +79,27 @@ sub process {
     my $fh = new FileHandle;
     unless ($fh->open(">$log_file")) { die "Could not open hugo uniprot file !\n" };
     my ($hugo_id, $alias_ref, $previous_ref, $alias_list, $uniprot_id, $uniprot_ref, $pdb_ref);
-    my $hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjects();
+	my $hugogene_ref;
+	my ( @list , @fields , @uniqList );
+	if ( $this->{'genes'} ) { 
+		my $genesFH = new FileHandle;
+		unless( $genesFH->open( $this->{'genes'} , "r" ) ) { die "HotSpot3D Uppro Error: Could not open file with genes (".$this->{'genes'}.")"; }
+		map {
+			chomp;
+			@fields = split( "\t" , $_ );
+			push @list , $fields[0];
+		} $genesFH->getlines;
+		$genesFH->close();
+		@uniqList = uniq @list;
+		$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjectsFromList( \@uniqList );
+	} else {
+		$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjects();
+	}
+	my %list = map { $_ => 1 } @uniqList;
+	@list = @uniqList = @fields = undef;
+	foreach ( keys %list ) { print "got it: ".$_."\n"; }
     foreach $hugo_id (sort keys %{$hugogene_ref}) {
+		next unless( exists $list{$hugo_id} );
         print STDERR 'HUGO: ', "$hugo_id\n";
         $alias_ref = $$hugogene_ref{$hugo_id}->getAllAliases();
         $previous_ref =  $$hugogene_ref{$hugo_id}->getAllPreviousSymbols();
@@ -82,24 +108,42 @@ sub process {
         map { $alias_list .= "$_ "; } keys %{$previous_ref};
         if ($alias_list !~ /\w+/) {$alias_list = "N/A"; };
         $uniprot_id = $$hugogene_ref{$hugo_id}->uniprot();
-        if (!defined $uniprot_id) { $fh->print("$hugo_id\tN/A\tN/A\t$alias_list\n"); next; }
+        if (!defined $uniprot_id) {
+			$fh->print("$hugo_id\tN/A\tN/A\t$alias_list\n");
+			next;
+		}
         $uniprot_ref = TGI::Mutpro::Preprocess::Uniprot->new($uniprot_id);
         $pdb_ref = $uniprot_ref->annotations("PDB");
-        if (!defined $pdb_ref || scalar(@{$pdb_ref}) == 0) { $fh->print( "$hugo_id\t$uniprot_id\tN/A\t$alias_list\n" ); next; }
-        if (!defined $$uniprot_fileref{$uniprot_id}) { $uniprotid_toupdate{$uniprot_id} = 1; }
+        if (!defined $pdb_ref || scalar(@{$pdb_ref}) == 0) {
+			$fh->print( "$hugo_id\t$uniprot_id\tN/A\t$alias_list\n" );
+			next;
+		}
+        if (!defined $$uniprot_fileref{$uniprot_id}) {
+			$uniprotid_toupdate{$uniprot_id} = 1;
+		}
         $fh->print("$hugo_id\t$uniprot_id\t");
-        map { my ($pdb_id) = $_ =~ /^(\w+)\;/; if (defined $pdb_id) { if (!defined $$uniprot_to_structureref{$uniprot_id}{$pdb_id}) { $uniprotid_toupdate{$uniprot_id} = 1; }; $fh->print("$pdb_id "); } } @{$pdb_ref};
+        map {
+			my ($pdb_id) = $_ =~ /^(\w+)\;/;
+			if (defined $pdb_id) {
+				if (!defined $$uniprot_to_structureref{$uniprot_id}{$pdb_id}) {
+					$uniprotid_toupdate{$uniprot_id} = 1;
+				}
+				$fh->print("$pdb_id ");
+			}
+		} @{$pdb_ref};
         $fh->print( "\t$alias_list\n" );
     }
     $fh->close();
-    open ( my $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} );
+	my $cmd_list_submit_file_fh;
+    unless( open ( $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} ) ) { die "HotSpot3D Uppro Error: Could not open cmd file (".$this->{'cmd_list_submit_file'}.")"; }
     map {
         system("touch $inpro_dir/$_.ProximityFile.csv");
-        #my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>8000] rusage[mem=8000]' -M 8000000 '$update_program --output-dir=$this->{'output_dir'} --pdb-file-dir=$this->{'pdb_file_dir'} --drugport-file=$this->{'drugport_file'} --uniprot-id=$_ --max-3d-dis=$this->{'max_3d_dis'} --min-seq-dis=$this->{'min_seq_dis'}'";
-        my $submit_cmd = "bsub -oo $_.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 '$update_program --output-dir=$this->{'output_dir'} --pdb-file-dir=$this->{'pdb_file_dir'} --uniprot-id=$_ --max-3d-dis=$this->{'max_3d_dis'} --min-seq-dis=$this->{'min_seq_dis'}'";
+		my $bsub = "bsub -oo ".$_.".err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000";
+		my $update_program = " 'hotspot3d calpro";
+		my $programOptions = " --output-dir=".$this->{'output_dir'}." --pdb-file-dir=".$this->{'pdb_file_dir'}." --uniprot-id=".$_." --max-3d-dis=".$this->{'max_3d_dis'}." --min-seq-dis=".$this->{'min_seq_dis'}."'";
+        my $submit_cmd = $bsub.$update_program.$programOptions;
         print STDERR $submit_cmd."\n"; 
         $cmd_list_submit_file_fh->print($submit_cmd."\n");
-        #system("$submit_cmd");
     } keys %uniprotid_toupdate;
     $cmd_list_submit_file_fh->close();
 
@@ -113,7 +157,11 @@ sub currentuniprot_files {
     my ($this, $dir) = @_;
     my (%uniprot_ids, $file);
     opendir(DIR, $dir) || die "Could not open '$dir': $!";
-    map { if ($_ =~ /(\w+)\.ProximityFile\.csv/) { $uniprot_ids{$1} = 1; } } (readdir DIR);
+    map {
+		if ($_ =~ /(\w+)\.ProximityFile\.csv/) {
+			$uniprot_ids{$1} = 1;
+		}
+	} (readdir DIR);
     closedir DIR;
 
     return \%uniprot_ids;
@@ -127,7 +175,15 @@ sub current_structures {
     my ($uniprot_id, $pdb_id, %uniprot_tostructure, $pdb_list);
     my $fh = new FileHandle;
     unless ($fh->open($logfilef)) { die "Could not open hugo uniprot file\n" };
-    map { chomp; (undef, $uniprot_id, $pdb_list) = split /\t/, $_; unless ($uniprot_id eq "N/A") { map { $uniprot_tostructure{$uniprot_id}{$_} = 1; } split /s+/, $pdb_list; } } $fh->getlines;
+    map {
+		chomp;
+		(undef, $uniprot_id, $pdb_list) = split /\t/, $_;
+		unless ($uniprot_id eq "N/A") {
+			map {
+				$uniprot_tostructure{$uniprot_id}{$_} = 1;
+			} split /s+/, $pdb_list;
+		}
+	} $fh->getlines;
     $fh->close();
 
     return \%uniprot_tostructure;
@@ -139,8 +195,9 @@ sub help_text{
 
 Usage: hotspot3d uppro [options]
 
---output-dir		Output directory of proximity files
+--output-dir			Output directory of proximity files
 --pdb-file-dir          PDB file directory 
+--gene-file				File with HUGO gene names in the first column (like a .maf)
 
 --max-3d-dis            Maximum 3D distance in angstroms befor two amino acids
                         are considered 'close', default = 100

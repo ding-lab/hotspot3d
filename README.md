@@ -1,7 +1,7 @@
 HotSpot3D
 ===========
 
-This 3D proximity tool can be used to identify mutation hotspots from the linear protein sequence and correlates the hotspots with known or potentially interacting domains and mutations. Mutation-mutation and mutation-drug clusters can also be identified and viewed.
+This 3D proximity tool can be used to identify mutation hotspots from linear protein sequence and correlate the hotspots with known or potentially interacting domains, mutations, or drugs. Mutation-mutation and mutation-drug clusters can also be identified and viewed.
 
 Usage
 -----
@@ -34,7 +34,7 @@ Key commands:
         help      --  this message
 
 SUPPORT
-For user support please mail adamscott@wustl.edu
+For user support please email adamscott@wustl.edu
 
 
 Install (Ubuntu 14.04.01)
@@ -81,12 +81,12 @@ To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
 from: #!/org/bin/perl
 to: #!/usr/bin/perl)
 
-example
+Example
 -------
 
 Preprocessing procedure
 
-1. Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
+1. (Optional) Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
 
         hotspot3d drugport --pdb-file-dir=pdb_files_dir --output-file=drugport_parsing_results_file
 
@@ -151,3 +151,21 @@ the necessary PDB file is not yet in the pdb files directory) :
 
         hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
 
+Tips
+----
+
+Current Annotation Support
+Transcript ID - Ensembl coding transcript ID's (ENST)
+Gene name - HUGO symbol
+Mutation file - Standard .maf with custom coding and protein annotations (ENST00000275493 and p.L858R)
+
+Clustering with different pairs data:
+For intra you need to include the singleprotein pairs without DrugPort results/pairs.
+For inter you need complex pairs without DrugPort pairs.
+For DrugPort only, do not include singleprotein or complex pairs; include only DrugPort pairs.
+For intra+inter you can concatenate the singleprotein and complex pairs without DrugPort pairs.
+For intra+DrugPort include singleprotein pairs and DrugPort pairs.
+For inter+DrugPort include complex pairs and DrugPort pairs.
+For intra+inter+DrugPort include a concatenated singleprotein and complex pairs file with the DrugPort pairs.
+
+Note that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter pairs.
