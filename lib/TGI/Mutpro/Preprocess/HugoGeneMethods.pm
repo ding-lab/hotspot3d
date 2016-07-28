@@ -1,11 +1,11 @@
 package TGI::Mutpro::Preprocess::HugoGeneMethods;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: $
 # $URL: $
-# $Doc: $ hogo gene processing class 
+# $Doc: $ hugo gene processing class 
 #----------------------------------
 #
 use strict;
@@ -114,10 +114,6 @@ sub makeHugoGeneObjects {
     # 31. UniProt ID (mapped data supplied by UniProt)
     # 32. Ensembl ID (mapped data supplied by Ensembl)
     # 33. UCSC ID (mapped data supplied by UCSC) 
-	my $table;
-	if ( @ARGV ) {
-		$table = shift;
-	}
     my %hugo_objects;
     my $page = get($HugoUrl);
     foreach my $line (split /\n/, $page) {
@@ -483,90 +479,3 @@ sub hugoToUniprotId {
     }
     return \%hugoToUniprot;
 }
-
-sub makeHugoGeneObjectsFromList {
-    # Return: ref to HugoGene objects with key = Hugo name
-    #
-    # 0. HGNC ID
-    # 1. Approved Symbol
-    # 2. Approved Name
-    # 4. Locus Type   ('pseudogene', 'gene with protein product, function unknown',
-    #                  'pseudogene, transcribed', etc.)
-    # 5. Previous Symbols
-    # 6. Previous Names
-    # 7. Aliases
-    # 8. Name Aliases
-    # 9. Chromosome
-    # 16. Entrez Gene ID
-    # 28. Entrez Gene ID (mapped data supplied by NCBI)
-    # 21. RefSeq IDs
-    # 30. RefSeq (mapped data supplied by NCBI)
-    # 25. VEGA IDs 
-    # 29. OMIM ID (mapped data supplied by NCBI)
-    # 31. UniProt ID (mapped data supplied by UniProt)
-    # 32. Ensembl ID (mapped data supplied by Ensembl)
-    # 33. UCSC ID (mapped data supplied by UCSC) 
-	my $list = shift;
-	foreach ( @{$list} ) { print $_."\n"; }
-    my %hugo_objects;
-    my $page = get($HugoUrl);
-    foreach my $line (split /\n/, $page) {
-		if ($line =~ /withdrawn/i || $line =~ /HGNC ID\s+Approved\s+Symbol\s+/) { next; }
-		my @entries = split /\t/, $line;
-		my $hugo = $entries[1];
-		$hugo =~ s/\s+//g;
-		$hugo_objects{$hugo} = new TGI::Mutpro::Preprocess::HugoGene;
-		$hugo_objects{$hugo}->symbol($hugo);
-		(defined $entries[0] && $entries[0] ne "" ) || confess "No ID for '$hugo'";
-		# Remove 'HGNC:' prefix in ID
-		if ($entries[0] =~ /HGNC\:(\d+)/) {
-			$hugo_objects{$hugo}->id($1); 
-		} else { 
-			confess "Unexpected format for Hugo id '$entries[0]'"; 
-		}
-		if (defined $entries[2]  && $entries[2]  ne "") { $hugo_objects{$hugo}->name($entries[2]); }
-		if (defined $entries[4]  && $entries[4]  ne "") { $hugo_objects{$hugo}->type($entries[4]); }
-		if (defined $entries[9]  && $entries[9]  ne "") { $hugo_objects{$hugo}->chr($entries[9]); }
-		if (defined $entries[29] && $entries[29] ne "") { $hugo_objects{$hugo}->omim($entries[29]); }
-		if (defined $entries[31] && $entries[31] ne "") { $hugo_objects{$hugo}->uniprot($entries[31]); }
-		if (defined $entries[32] && $entries[32] ne "") { $hugo_objects{$hugo}->ensembl($entries[32]); }	
-		if (defined $entries[33] && $entries[33] ne "") { $hugo_objects{$hugo}->ucsc($entries[33]); }
-		if (defined $entries[16] && $entries[16] ne "") { $hugo_objects{$hugo}->addEntrezName($entries[16]); }
-		if (defined $entries[28] && $entries[28] ne "") { $hugo_objects{$hugo}->addEntrezName($entries[28]); }
-		if (defined $entries[21] && $entries[21] ne "") { $hugo_objects{$hugo}->addRefSeqName($entries[21]); }
-		if (defined $entries[30] && $entries[30] ne "") { $hugo_objects{$hugo}->addRefSeqName($entries[30]); }
-		my ($id);
-		if (defined $entries[5] && $entries[5] ne "") {
-			foreach $id (split /\,/, $entries[5]) { 
-				$id =~ s/\s+//g;
-				$hugo_objects{$hugo}->addPreviousSymbol($id); 
-			} 
-		}
-		if (defined $entries[7] && $entries[7] ne "") {
-			foreach $id (split /\,/, $entries[7]) { 
-				$id =~ s/\s+//g;
-				$hugo_objects{$hugo}->addAlias($id); 
-			} 
-		}
-		if (defined $entries[6] && $entries[6] ne "") {
-			foreach $id (split /\,/, $entries[6]) { 
-				$hugo_objects{$hugo}->addOldDescription($id); 
-			} 
-		}
-		if (defined $entries[8] && $entries[8] ne "") {
-			foreach $id (split /\,/, $entries[6]) { 
-				$hugo_objects{$hugo}->addOldDescription($id);
-			} 
-		}
-		if (defined $entries[25] && $entries[25] ne "") {
-			foreach $id (split /\,/, $entries[25]) { 
-			$id =~ s/\s+//g;
-			$hugo_objects{$hugo}->addVegaName($id); 
-			} 
-		}
-    }
-    return \%hugo_objects;
-}
-
-return 1;
-

@@ -18,7 +18,6 @@ use Getopt::Long;
 use LWP::Simple;
 use IO::File;
 use FileHandle;
-use List::MoreUtils qw( uniq );
 
 use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
@@ -80,26 +79,12 @@ sub process {
     unless ($fh->open(">$log_file")) { die "Could not open hugo uniprot file !\n" };
     my ($hugo_id, $alias_ref, $previous_ref, $alias_list, $uniprot_id, $uniprot_ref, $pdb_ref);
 	my $hugogene_ref;
-	my ( @list , @fields , @uniqList );
-	if ( $this->{'genes'} ) { 
-		my $genesFH = new FileHandle;
-		unless( $genesFH->open( $this->{'genes'} , "r" ) ) { die "HotSpot3D Uppro Error: Could not open file with genes (".$this->{'genes'}.")"; }
-		map {
-			chomp;
-			@fields = split( "\t" , $_ );
-			push @list , $fields[0];
-		} $genesFH->getlines;
-		$genesFH->close();
-		@uniqList = uniq @list;
-		$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjectsFromList( \@uniqList );
-	} else {
-		$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjects();
-	}
-	my %list = map { $_ => 1 } @uniqList;
-	@list = @uniqList = @fields = undef;
-	foreach ( keys %list ) { print "got it: ".$_."\n"; }
+	my $list = $this->getUserGenes();
+	$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjects();
     foreach $hugo_id (sort keys %{$hugogene_ref}) {
-		next unless( exists $list{$hugo_id} );
+		if ( scalar keys %{$list} > 0 ) {
+			next unless( exists $list->{$hugo_id} );
+		}
         print STDERR 'HUGO: ', "$hugo_id\n";
         $alias_ref = $$hugogene_ref{$hugo_id}->getAllAliases();
         $previous_ref =  $$hugogene_ref{$hugo_id}->getAllPreviousSymbols();
@@ -108,6 +93,8 @@ sub process {
         map { $alias_list .= "$_ "; } keys %{$previous_ref};
         if ($alias_list !~ /\w+/) {$alias_list = "N/A"; };
         $uniprot_id = $$hugogene_ref{$hugo_id}->uniprot();
+		print $hugo_id."\t";
+		print $uniprot_id."\n";
         if (!defined $uniprot_id) {
 			$fh->print("$hugo_id\tN/A\tN/A\t$alias_list\n");
 			next;
@@ -138,7 +125,7 @@ sub process {
     unless( open ( $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} ) ) { die "HotSpot3D Uppro Error: Could not open cmd file (".$this->{'cmd_list_submit_file'}.")"; }
     map {
         system("touch $inpro_dir/$_.ProximityFile.csv");
-		my $bsub = "bsub -oo ".$_.".err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000";
+		my $bsub = "bsub -oo ".$this->{'output_dir'}."/".$_.".calpro.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000";
 		my $update_program = " 'hotspot3d calpro";
 		my $programOptions = " --output-dir=".$this->{'output_dir'}." --pdb-file-dir=".$this->{'pdb_file_dir'}." --uniprot-id=".$_." --max-3d-dis=".$this->{'max_3d_dis'}." --min-seq-dis=".$this->{'min_seq_dis'}."'";
         my $submit_cmd = $bsub.$update_program.$programOptions;
@@ -187,6 +174,22 @@ sub current_structures {
     $fh->close();
 
     return \%uniprot_tostructure;
+}
+
+sub getUserGenes {
+	my $this = shift;
+	my ( %list , @fields );
+	if ( $this->{'genes'} ) { 
+		my $genesFH = new FileHandle;
+		unless( $genesFH->open( $this->{'genes'} , "r" ) ) { die "HotSpot3D Uppro Error: Could not open file with genes (".$this->{'genes'}.")"; }
+		map {
+			chomp;
+			@fields = split( "\t" , $_ );
+			$list{$fields[0]} = 1;
+		} $genesFH->getlines;
+		$genesFH->close();
+	}
+	return \%list;
 }
 
 sub help_text{
