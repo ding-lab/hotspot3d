@@ -26,6 +26,7 @@ sub new {
     my $this = {};
     $this->{_OUTPUT_DIR} = getcwd;
     $this->{_STAT} = undef;
+    $this->{_BLAT} = undef;
     bless $this, $class;
     $this->process();
     return $this;
@@ -37,6 +38,7 @@ sub process {
     unless( @ARGV ) { die $this->help_text(); };
     $options = GetOptions (
         'output-dir=s' => \$this->{_OUTPUT_DIR},
+        'blat=s' => \$this->{_BLAT},
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; };
@@ -98,7 +100,9 @@ sub process {
                 $tmp_transcript_fh->print( ">$transcript\n$proteinsequence\n" );
                 $tmp_uniprot_fh->close; $tmp_transcript_fh->close;
                 my ( undef, $tmp_blat_output_file ) = tempfile();
-                system( "blat $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
+				my $blat = "blat";
+				if ( $this->{_BLAT} ) { $blat = $this->{_BLAT}; }
+                system( "$blat $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
                 # parse blat output
                 my $tmp_parse_cont = ""; 
                 map{ $tmp_parse_cont .= $_.":"; } @{$this->parse_blat_output( $tmp_blat_output_file, $uniprotId, 0.90 )};
@@ -217,6 +221,8 @@ sub help_text {
 Usage: hotspot3d trans [options]
 
 --output-dir		Output directory of proximity files
+
+--blat				Installation of blat to use (defaults to your system default)
 
 --help			this message
 
