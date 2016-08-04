@@ -1,7 +1,7 @@
 package TGI::Mutpro::Preprocess::Prior;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu and Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision:  $
 # $URL: $
@@ -22,7 +22,7 @@ sub new {
     $this->{_OUTPUT_DIR} = undef;
     $this->{_PVALUE_CUTOFF} = 0.05;
     $this->{_3D_CUTOFF} = 20;
-    $this->{_1D_CUTOFF} = 1;
+    $this->{_1D_CUTOFF} = 0;
     $this->{_STAT} = undef;
     bless $this, $class;
     $this->process();
@@ -35,9 +35,9 @@ sub process {
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
         'output-dir=s' => \$this->{_OUTPUT_DIR},
-        'p-value=f' => \$this->{_PVALUE_CUTOFF},
-        '3d-dis=i' => \$this->{_3D_CUTOFF},
-        'linear-dis=i' => \$this->{_1D_CUTOFF},
+        'p-value-cutoff=f' => \$this->{_PVALUE_CUTOFF},
+        '3d-distance-cutoff=i' => \$this->{_3D_CUTOFF},
+        'linear-cutoff=i' => \$this->{_1D_CUTOFF},
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
@@ -103,7 +103,7 @@ sub doPrior {
         $uniprotCoorOneEnd = $t[2] + $t[3];
         $uniprotCoorTwoEnd = $t[9] + $t[10];
         my $tlineard = abs($uniprotCoorOneEnd - $uniprotCoorTwoEnd);
-        next if ( ($t[0] eq $t[7]) and ( $tlineard < $lineard) );
+        next if ( ($t[0] eq $t[7]) and ( $tlineard <= $lineard) );
         next if ( $t[16] > $pvalue );
         next if ( $t[14] > $threed );
         # load infor into %ss hash
@@ -133,12 +133,15 @@ sub help_text{
 
 Usage: hotspot3d prior [options]
 
---output-dir		Output directory
---p-value               p_value cutoff(<=), default is 0.05
---3d-dis                3D distance cutoff (<=), default is 20
---linear-dis            linear distance cutoff (>=), default is 1
+                             REQUIRED
+--output-dir                 Output directory
 
---help			this message
+                             OPTIONAL
+--p-value-cutoff             p_value cutoff(<=), default is 0.05
+--3d-distance-cutoff         3D distance cutoff (<= Angstroms), default is 20
+--linear-cutoff              Linear distance cutoff (> peptides), default is 0
+
+--help                       this message
 
 HELP
 

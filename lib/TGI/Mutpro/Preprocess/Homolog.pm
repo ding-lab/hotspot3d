@@ -222,10 +222,13 @@ sub help_text {
 
 Usage: hotspot3d homo [options]
 
---output-dir		Output directory of proximity files
---identity              Identities cutoff, default is 30%
+                             REQUIRED
+--output-dir                 Output directory of proximity files
 
---help			this message
+                             OPTIONAL
+--identity                   Identities cutoff, default is 30%
+
+--help                       this message
 
 HELP
 

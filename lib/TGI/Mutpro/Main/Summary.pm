@@ -25,8 +25,8 @@ use FileHandle;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'output_file'} = 'HotSpot3D_results.clusters.measures';
-    $this->{'clusters_file'} = undef;
+    $this->{'clusters_file'} = '3D_Proximity.pairwise.singleprotein.collapsed.clusters';
+    $this->{'output_prefix'} = undef;
     $this->{mutationmass} = {};
     $this->{drugmass} = {};
     $this->{degrees} = {};
@@ -44,16 +44,12 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
-        'output-file=s' => \$this->{'output_file'},
+        'output-prefix=s' => \$this->{'output_prefix'},
         'clusters-file=s' => \$this->{'clusters_file'},
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
-    unless( $this->{'output_file'} ) {
-		warn 'You did not provide an output file! ', "\n";
-		warn 'Writing to default: HotSpot3D_results.clusters.measures! ', "\n";
-	}
     unless( $this->{'clusters_file'} ) { warn 'You must provide a clusters file! ', "\n"; die $this->help_text(); }
     unless( -e $this->{'clusters_file'} ) { warn "The input clusters file (".$this->{'clusters_file'}.") does not exist! ", "\n"; die $this->help_text(); }
 
@@ -66,7 +62,14 @@ sub process {
 	my $infh = new FileHandle;
 	unless( $infh->open( $this->{'clusters_file'} , "r" ) ) { die "Could not open clusters file $! \n" };
 	my $fh = new FileHandle;
-	unless( $fh->open( $this->{'output_file'} , "w" ) ) { die "Could not open output-file $! \n"; }
+	my $outFilename = "";
+	if ( defined $this->{'output_prefix'} ) {
+		$outFilename = $this->{'output_prefix'};
+	} else {
+		$outFilename = $this->{'clusters_file'};
+	}
+	$outFilename .= ".summary";
+	unless( $fh->open( $outFilename , "w" ) ) { die "Could not open $outFilename $! \n"; }
 	my @cols;
 	while ( my $line = <$infh> ) {
 		chomp( $line );
@@ -225,10 +228,13 @@ sub help_text{
 
 Usage: hotspot3d summary [options]
 
---clusters-file         Clusters file
---output-file           Output file
+                             REQUIRED
+--clusters-file              Clusters file
 
---help                  this message
+                             OPTIONAL
+--output-prefix              Output prefix
+
+--help                       this message
 
 HELP
 

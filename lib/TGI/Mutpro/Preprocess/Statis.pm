@@ -141,9 +141,10 @@ sub help_text{
 
 Usage: hotspot3d statis [options]
 
---output-dir		Output directory of proximity files
+                             REQUIRED
+--output-dir                 Output directory of proximity files
 
---help			this message
+--help                       this message
 
 HELP
 

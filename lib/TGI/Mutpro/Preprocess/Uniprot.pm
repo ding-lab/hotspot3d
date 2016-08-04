@@ -20,8 +20,8 @@ use Carp;
 sub new {
     my ($class, $uniprotId) = @_;    
     bless {
-	ID => $uniprotId,
-	PAGE => ""
+		ID => $uniprotId,
+		PAGE => ""
     }, $class;
 }
 
@@ -80,7 +80,20 @@ sub generalAnnotation {
     }
     return \@annotations;
 }
-    
+
+sub parsePDBAnnotation {
+	my ( $self , $pdbannotation ) = @ARGV;
+	my $details = {};
+	my ( $pdbID , $type , $resolution , $chainInfo ) = split( ";" , $pdbannotation );
+	$pdbID =~ s/\s+//g;
+	$type =~ s/\s+//g;
+	$resolution =~ s/\s+//g;
+	$chainInfo =~ s/\s+\.*//g;
+	my ( $chains , $positions ) = split( "=" , $chainInfo );
+
+
+	return $details;
+}
 
 sub annotations {
     # Returns: ref to array of annotations of given type

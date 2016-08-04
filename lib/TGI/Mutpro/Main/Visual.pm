@@ -25,7 +25,7 @@ sub new {
 	$this->{_CLUSTERS_FILE} = undef;
     $this->{_PAIRWISE_FILE} = undef;
     $this->{_DRUG_PAIRS_FILE} = undef;
-    $this->{_OUTPUT_FILE} = "hotspot3d.visual.pml";
+    $this->{_OUTPUT_FILE} = undef;
     $this->{_OUTPUT_DIR} = getcwd;
     $this->{_PDB_DIR} = getcwd;
     $this->{_PYMOL} = '/usr/bin/pymol';
@@ -282,7 +282,8 @@ sub makePyMOLScript {
 		}
 	}
 	my $fh = new FileHandle;
-	unless( $fh->open( $this->{_OUTPUT_FILE} , "w" ) ) { die "Could not open output file\n"; }
+	my $outFilename = $this->{_CLUSTERS_FILE}.".".$this->{_PDB}.".pml";
+	unless( $fh->open( $outFilename , "w" ) ) { die "Could not open output file, $outFilename\n"; }
 
 	#viewer
 	$fh->print( "reinitialize everything;\n" );
@@ -344,27 +345,27 @@ sub help_text{
 
 Usage: hotspot3d visual [options]
 
---pairwise-file        Pairwise file
---drug-pairs-file      Drug pairs file (target/nontarget/hs3dd)
---clusters-file        Clusters file
---pdb                  PDB ID on which to view clusters
---output-file          Output filename for single PyMol script, default: hotspot3d.visual.pml
+                             REQUIRED
+--clusters-file              Clusters file
+--pdb                        PDB ID on which to view clusters
 
---pymol                PyMoL program location, default: /usr/bin/pymol
---output-dir           Output directory for multiple PyMol scripts, current working directory
---pdb-dir              PDB file directory, default: current working directory
+                             AT LEAST ONE
+--pairwise-file              Pairwise file
+--drug-pairs-file            Drug pairs file (target/nontarget/hs3dd)
 
---bg-color             background color, default: white
---mut-color            mutation color, default: red
---mut-style            mutation style, default: spheres
---compound-color       compound color, default: util.cbag
---compound-style       compound style, default: sticks if compound-color, util.cbag otherwise
+                             OPTIONAL
+--output-file                Output filename for single PyMol script, default: hotspot3d.visual.pml
+--pymol                      PyMoL program location, default: /usr/bin/pymol
+--output-dir                 Output directory for multiple PyMol scripts, current working directory
+--pdb-dir                    PDB file directory, default: current working directory
+--bg-color                   background color, default: white
+--mut-color                  mutation color, default: red
+--mut-style                  mutation style, default: spheres
+--compound-color             compound color, default: util.cbag
+--compound-style             compound style, default: sticks if compound-color, util.cbag otherwise
+--script-only                If included (on), pymol is not run with new <output-file> when finished, default: off
 
---script-only          If included (on), pymol is not run with new <output-file> when finished, default: off
-
---help			this message
-
-Example: hotspot3d visual --pairwise-file=pancan19.pairwise --clusters-file=pancan19.intra.clusters --output-file=draw.3HIZ.pml --pdb=3HIZ
+--help                       this message
 
 Tip: To run an already created .pml file, run pymol <your output-file>
 

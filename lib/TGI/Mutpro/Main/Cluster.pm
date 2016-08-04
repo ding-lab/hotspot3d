@@ -27,12 +27,12 @@ use Data::Dumper;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'output_file'} = 'HotSpot3D_results.clusters';
-    $this->{'pairwise_file'} = undef;
-    $this->{'collapsed_pairs_file'} = undef;
-    $this->{'drug_pairs_file'} = undef;
+    $this->{'pairwise_file'} = '3D_Proximity.pairwise';
+    $this->{'collapsed_file'} = '3D_Proximity.pairwise.singleprotein.collapsed';
+    $this->{'drug_clean_file'} = undef;
+    $this->{'output_prefix'} = undef;
     $this->{'p_value_cutoff'} = 0.05;
-    $this->{'linear_cutoff'} = 20;
+    $this->{'linear_cutoff'} = 0;
 	$this->{'max_radius'} = 10;
 	$this->{'vertex_type'} = 'recurrence';
     $this->{'maf_file'} = undef;
@@ -48,10 +48,10 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
-        'output-file=s' => \$this->{'output_file'},
+        'output-prefix=s' => \$this->{'output_prefix'},
         'pairwise-file=s' => \$this->{'pairwise_file'},
-        'collapsed-pairs-file=s' => \$this->{'collapsed_pairs_file'},
-        'drug-pairs-file=s' => \$this->{'drug_pairs_file'},
+        'collapsed-file=s' => \$this->{'collapsed_file'},
+        'drug-clean-file=s' => \$this->{'drug_clean_file'},
         'p-value-cutoff=f' => \$this->{'p_value_cutoff'},
         'linear-cutoff=f' => \$this->{'linear_cutoff'},
         'max-radius=f' => \$this->{'max_radius'},
@@ -63,18 +63,18 @@ sub process {
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
-    if ( ( not defined $this->{'collapsed_pairs_file'} ) and ( not defined $this->{'drug_pairs_file'} ) ) {
+    if ( ( not defined $this->{'collapsed_file'} ) and ( not defined $this->{'drug_clean_file'} ) ) {
 		warn 'You must provide a collapsed pairs file or drug pairs file! ', "\n";
 		die $this->help_text();
 	}
-	if ( not defined $this->{'drug_pairs_file'} ) {
-		if ( not -e $this->{'collapsed_pairs_file'} ) { 
-			warn "The input collapsed pairs file (".$this->{'collapsed_pairs_file'}.") does not exist! ", "\n";
+	if ( not defined $this->{'drug_clean_file'} ) {
+		if ( not -e $this->{'collapsed_file'} ) { 
+			warn "The input collapsed pairs file (".$this->{'collapsed_file'}.") does not exist! ", "\n";
 			die $this->help_text();
 		}
-	} elsif ( not defined $this->{'collapsed_pairs_file'} ) {
-		if ( not -e $this->{'drug_pairs_file'} ) { 
-			warn "The input drug pairs file (".$this->{'drug_pairs_file'}.") does not exist! ", "\n";
+	} elsif ( not defined $this->{'collapsed_file'} ) {
+		if ( not -e $this->{'drug_clean_file'} ) { 
+			warn "The input drug pairs file (".$this->{'drug_clean_file'}.") does not exist! ", "\n";
 			die $this->help_text();
 		}
 	}
@@ -92,10 +92,10 @@ sub process {
 #####
 #	drug-mutation pairs
 #####
-    if ( $this->{'drug_pairs_file'} ) { #if drug pairs included
+    if ( $this->{'drug_clean_file'} ) { #if drug pairs included
 		print STDOUT "\nWorking on HotSpot3D drug pairs ..... \n";
 		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'drug_pairs_file'} , "r" ) ) { die "Could not open drug pairs data file $! \n" };
+		unless( $fh->open( $this->{'drug_clean_file'} , "r" ) ) { die "Could not open drug pairs data file $! \n" };
 		my $rxi = 0;
 		my $headline = $fh->getline(); chomp( $headline );
 		my %drugcols = map{ ( $_ , $rxi++ ) } split( /\t/ , $headline );
@@ -108,7 +108,7 @@ sub process {
 			and defined( $drugcols{"Amino_Acid_Change"} )							#10
 			and defined( $drugcols{"Mutation_Location_In_PDB"} )					#12
 			and defined( $drugcols{"3D_Distance_Information"} ) ) {					#17
-			die "not a valid drug-pairs file\n";
+			die "not a valid drug-clean file\n";
 		}
 		my @wantrxcols = (	$drugcols{"Drug"} ,
 							$drugcols{"PDB_ID"} ,
@@ -232,8 +232,8 @@ sub process {
 #	collapsed pairwise data
 #####
     print STDOUT "\nWorking on collapsed data ... \n";
-	if ( $this->{'collapsed_pairs_file'} ) {
-		unless( $fh->open( $this->{'collapsed_pairs_file'} , "r" ) ) { die "Could not open collapsed file $! \n" };
+	if ( $this->{'collapsed_file'} ) {
+		unless( $fh->open( $this->{'collapsed_file'} , "r" ) ) { die "Could not open collapsed file $! \n" };
 		map {
 			chomp;
 			my ( $gene1, $m1, $gene2, $m2, $lindists , $dist, $pdb, $pval ) = ( split /\t/ )[0,1,5,6,11..14];
@@ -359,7 +359,22 @@ sub process {
 #####
 #	write cluster output
 #####
-    die "Could not create clustering output file\n" unless( $fh->open( $this->{'output_file'} , "w" ) );
+	my $outFilename = "";
+	if ( defined $this->{'output_prefix'} ) {
+		$outFilename = $this->{'output_prefix'};
+	} else {
+		if ( $this->{'collapsed_file'} ) {
+			$outFilename = $this->{'collapsed_file'};
+		}
+		if ( $this->{'drugport_clean'} and $outFilename ) {
+			$outFilename .= ".".$this->{'drugport_clean'};
+		} else {
+			$outFilename = $this->{'drugport_clean'};
+		}
+		$outFilename .= ".".$this->{'p_value_cutoff'}.".".$this->{'linear_cutoff'};
+	}
+	$outFilename .= ".clusters";
+    die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
     $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );
 	print STDOUT "Getting Cluster ID's & Centroids\n";
     foreach my $clus_num ( keys %clusterings ) {
@@ -397,10 +412,11 @@ sub centroid{
 		my $max=0;
 		my $centroid='';
 		my $count=0;
+		my ( $other , $weight );
 		foreach my $current ( keys %dist ) {
 			my $C = 0;
-			foreach my $other ( keys %{$dist{$current}}) {
-				my $weight = 1; #stays as 1 if vertex_type eq 'unique'
+			foreach $other ( keys %{$dist{$current}}) {
+				$weight = 1; #stays as 1 if vertex_type eq 'unique'
 				if ( $this->{'vertex_type'} ne 'unique' ) {
 					if ( exists $Variants->{$other} ) {
 						$weight = $Variants->{$other};
@@ -432,12 +448,12 @@ sub centroid{
 		$count=0;
 		#print STDOUT "$clus_num\t$centroid\n";
 		if ( exists $dist{$centroid} ) {
-			foreach my $other ( keys %{$dist{$centroid}} ) {
+			foreach $other ( keys %{$dist{$centroid}} ) {
 				my $geodesic = $dist{$centroid}{$other};
 				my $degrees = $degree_connectivity->{$other};
 				my $closenesscentrality = $centrality{$clus_num}{$other};
 				my ( $gene , $mutation ) = split /\:/ , $other;
-				my $weight = 1;
+				$weight = 1;
 
 				if ( $geodesic <= $this->{'max_radius'} ) {
 					if ( exists $Variants->{$other} ) {
@@ -569,21 +585,24 @@ sub help_text{
 
 Usage: hotspot3d cluster [options]
 
---collapsed-pairs-file           Both inter & intra molecular 3D proximity interactions
---pairwise-file                  Location data file
---output-file                    Output file
---drug-pairs-file                Both target & nontarget drug data file
---p-value-cutoff                 P_value cutoff, default <0.05
---linear-cutoff                  Linear distance cutoff, default >20 uniques
---max-radius                     Maximum cluster radius (max network geodesic from centroid), default <=10 Angstroms
---vertex-type                    Graph vertex type (recurrence or unique), default recurrence
---maf-file                       MAF file used in proximity search step (used if vertex-type = recurrence)
---transcript-id-header           MAF file column header for transcript id's, default: transcript_name
---amino-acid-header              MAF file column header for amino acid changes, default: amino_acid_change 
+                             REQUIRED
+--pairwise-file              3D pairwise data file
 
---help                           this message
+                             AT LEAST ONE
+--collapsed-file             Either (or concatenated) pairwise.singleprotein.collapsed & pairwise.complex.collapsed data
+--drug-clean-file            Either (or concatenated) drugs.target.clean & drugs.nontarget.clean data
 
-NOTE: At least one of two pair files are needed: collapsed-pairs-file and/or drug-pairs-file.
+                             OPTIONAL
+--output-prefix              Output prefix, default: 3D_Proximity
+--p-value-cutoff             P_value cutoff (<), default: 0.05
+--linear-cutoff				 Linear distance cutoff (> peptides), default: 20
+--max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
+--vertex-type                Graph vertex type (recurrence or unique), default: recurrence
+--maf-file                   MAF file used in proximity search step (used if vertex-type = recurrence)
+--transcript-id-header       MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header          MAF file column header for amino acid changes, default: amino_acid_change 
+
+--help                       this message
 
 HELP
 

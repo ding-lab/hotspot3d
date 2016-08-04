@@ -1,9 +1,9 @@
 package TGI::Mutpro::Main::Proximity;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu and Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 0.2 $
 # $URL: $
 # $Doc: $ proximity pairs searching (main function)
 #----------------------------------
@@ -26,8 +26,8 @@ sub new {
     $this->{'drugport_file'} = undef;
     $this->{'output_prefix'} = '3D_Proximity';
     $this->{'pvalue_cutoff'} = 0.05;
-    $this->{'3d_cufoff'} = 10;
-    $this->{'1d_cutoff'} = 20;
+    $this->{'3d_distance_cutoff'} = 10;
+    $this->{'linear_cutoff'} = 20;
     $this->{'stat'} = undef;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
@@ -47,9 +47,9 @@ sub process {
         'drugport-file=s' => \$this->{'drugport_file'},
         'skip-silent' => \$this->{'skip_silent'},
         'missense-only' => \$this->{'missense_only'},
-        'p-value=f' => \$this->{'pvalue_cutoff'},
-        '3d-dis=i' => \$this->{'3d_cufoff'},
-        'linear-dis=i' => \$this->{'1d_cutoff'},
+        'p-value-cutoff=f' => \$this->{'pvalue_cutoff'},
+        '3d-distance-cutoff=i' => \$this->{'3d_distance_cutoff'},
+        'linear-cutoff=i' => \$this->{'linear_cutoff'},
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'help' => \$help,
@@ -308,7 +308,7 @@ sub proximitySearching {
                     ## close each other
                     foreach my $c ( keys %{$mafHashref->{$a}->{$uniprotcor1}} ) {
                         foreach my $d ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
                                 push( @pairResults, join("\t", $c, @ta[1,2,5,6], $d, @ta[8,9,12,13], $lineardis, $proximityinfor) );
                             }
                         }
@@ -318,12 +318,12 @@ sub proximitySearching {
                     map { 
                         my $t_item = join("\t", $_, @ta[1,2,5,6,8,9,12,13], $lineardis, $proximityinfor); 
                         if ( $domain2 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
                                 push(@roiclose, $t_item);
                             }
                         };
                         if ( $cosmic2 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
                                 push(@cosmicclose, $t_item); 
                             }
                         }; 
@@ -334,12 +334,12 @@ sub proximitySearching {
                     map {  
                         my $t_item = join("\t", $_, @ta[8,9,12,13,1,2,5,6], $lineardis, $proximityinfor); 
                         if ( $domain1 !~ /N\/A/ ) { 
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
                                 push(@roiclose, $t_item); 
                             }
                         }; 
                         if ( $cosmic1 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
                                 push(@cosmicclose, $t_item); 
                             }
                         } 
@@ -356,7 +356,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 							map { 
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
 									push( @drugport_target_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) );
 								}
 							} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
@@ -365,7 +365,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
 						if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 							map { 
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
 									push( @drugport_target_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
 								} 
 							} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
@@ -374,7 +374,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 							map {
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
 									push( @drugport_nontarget_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) ); 
 								}
 							} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
@@ -383,7 +383,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
 						if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 							map {
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
 									push( @drugport_nontarget_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
 								}
 							} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
@@ -479,20 +479,22 @@ sub help_text{
 
 Usage: hotspot3d search [options]
 
---maf-file              Input MAF file
---data-dir              HotSpot3D preprocessing results directory
+                             REQUIRED
+--maf-file                   Input MAF file used to search proximity results
+--data-dir                   HotSpot3D preprocessing results directory
 
---drugport-file         Drugport database parsing results file ( optional )
---output-prefix         Prefix of output files, default: 3D_Proximity 
---skip-silent           skip silent mutations, default: no
---missense-only         missense mutation only, default: no
---p-value               p_value cutoff(<=), default: 0.05
---3d-dis                3D distance cutoff (<=), default: 10
---linear-dis            linear distance cutoff (>=), default: 20 
---transcript-id-header  MAF file column header for transcript id's, default: transcript_name
---amino-acid-header     MAF file column header for amino acid changes, default: amino_acid_change 
+                             OPTIONAL
+--drugport-file              DrugPort database parsing results file
+--output-prefix              Prefix of output files, default: 3D_Proximity 
+--skip-silent                skip silent mutations, default: no
+--missense-only              missense mutation only, default: no
+--p-value-cutoff             p_value cutoff(<=), default: 0.05
+--3d-distance-cutoff         3D distance cutoff (<=), default: 10
+--linear-cutoff              Linear distance cutoff (>= peptides), default: 20 
+--transcript-id-header       MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header          MAF file column header for amino acid changes, default: amino_acid_change 
 
---help			this message
+--help                       this message
 
 HELP
 

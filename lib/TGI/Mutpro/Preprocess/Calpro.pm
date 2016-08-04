@@ -64,7 +64,7 @@ sub new {
     my $this = {};
     $this->{'output_dir'} = getcwd;
     $this->{'max_3d_dis'} = 100;
-    $this->{'min_seq_dis'} = 1;
+    $this->{'min_seq_dis'} = 0;
     $this->{'uniprot_id'} = undef;
     $this->{'restrictedaa_pairs'} = 0;
     $this->{'uniprot_ref'} = undef;
@@ -82,8 +82,8 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
-        'maX-3d-dis=i'    => \$this->{'max_3d_dis'},
-        'min-seq-dis=i'   => \$this->{'min_seq_dis'},
+        '3d-distance-cutoff=i'    => \$this->{'max_3d_dis'},
+        'linear-cutoff=i'   => \$this->{'min_seq_dis'},
         'output-dir=s'    => \$this->{'output_dir'},
         'uniprot-id=s'    => \$this->{'uniprot_id'},
         'pdb-file-dir=s'  => \$this->{'pdb_file_dir'},
@@ -321,7 +321,7 @@ sub writeProximityFile {
 		    # If two amino acids are close to each other in the primary sequence, 
                     # don't record them.
 		    # They will be detected by the proximity analysis in other application
-		    next if ( $chain eq $uniprotChain && abs($position - $residuePosition) < $this->{'min_seq_dis'} );
+		    next if ( $chain eq $uniprotChain && abs($position - $residuePosition) <= $this->{'min_seq_dis'} );
 		    $otherAaName = $$aaObjRef->name();
                     unless( defined $otherChainUniprotId ){ $otherChainUniprotId = "N/A"; };
                     unless( defined $otherChainOffset )   { $otherChainOffset    = "N/A"; };
@@ -547,16 +547,16 @@ sub help_text {
 
 Usage: hotspot3d calpro [options]
 
---output-dir		Output directory of proximity files
---pdb-file-dir          PDB file directory 
---uniprot-id            Uniprot ID
+                             REQUIRED
+--output-dir                 Output directory of proximity files
+--pdb-file-dir               PDB file directory 
+--uniprot-id                 Uniprot ID
 
---max-3d-dis            Maximum 3D distance in angstroms befor two amino acids
-                        are considered 'close', default = 100
---min-seq-dis           Minimum linear distance in primary sequence. If two amino acids are < 1 positions 
-                        apart in the primary sequence, don't record them, default = 1 
+                             OPTIONAL
+--3d-distance-cutoff         Maximum 3D distance (<= Angstroms), default: 100
+--linear-cutoff              Minimum linear distance (> peptides), default: 0
 
---help			this message
+--help                       this message
 
 HELP
 

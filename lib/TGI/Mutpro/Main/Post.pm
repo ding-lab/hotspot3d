@@ -117,7 +117,7 @@ sub process {
 	unless (    defined($mafcols{"Hugo_Symbol"})
 			and defined($mafcols{"Tumor_Sample_Barcode"})
 			and defined($mafcols{$this->{'amino_acid_header'}}) ) {
-		die "not a valid MAF annotation file with transcript and amino acid change !\n";
+		die "HotSpot3D Post Error: not a valid MAF annotation file with amino acid change!\n";
 	}
 	my @mafcols = (	$mafcols{"Hugo_Symbol"},
 					$mafcols{"Tumor_Sample_Barcode"},
@@ -307,13 +307,15 @@ sub help_text{
 
 Usage: hotspot3d post [options]
 
+						REQUIRED
+--maf-file				Input MAF file (2.3 standard + columns for transcript id & amino acid change)
+--input-prefix			The prefix of proximity searching output files
 
---maf-file              Input MAF file (2.3 standard + columns for transcript id & amino acid change)
---transcript-id-header  MAF file column header for transcript id's, default: transcript_name
---amino-acid-header     MAF file column header for amino acid changes, default: amino_acid_change					
---input-prefix          The prefix of proximity searching output files
+						OPTIONAL
+--transcript-id-header	MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header		MAF file column header for amino acid changes, default: amino_acid_change
 
---help                  this message
+--help					this message
 
 HELP
 

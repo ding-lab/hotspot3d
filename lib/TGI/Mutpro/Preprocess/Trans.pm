@@ -220,11 +220,13 @@ sub help_text {
 
 Usage: hotspot3d trans [options]
 
---output-dir		Output directory of proximity files
+                             REQUIRED
+--output-dir                 Output directory of proximity files
 
---blat				Installation of blat to use (defaults to your system default)
+                             OPTIONAL
+--blat                       Installation of blat to use (defaults to your system default)
 
---help			this message
+--help                       this message
 
 HELP
 

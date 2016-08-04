@@ -21,10 +21,10 @@ use Scalar::Util qw( reftype );
 sub new {
 	my $class = shift;
 	my $this = {};
-	$this->{'prep-dir'} = undef;
-	$this->{'pairwise'} = undef;
-	$this->{'clusters'} = undef;
-	$this->{'output'} = "hotspot3d.sigclus";
+	$this->{'output-dir'} = undef;
+	$this->{'pairwise-file'} = undef;
+	$this->{'clusters-file'} = undef;
+	$this->{'output-prefix'} = undef;
 	$this->{'simulations'} = 1000000;
 	bless $this, $class;
 	$this->process();
@@ -36,10 +36,10 @@ sub process {
 	my ( $help, $options );
 	unless( @ARGV ) { die $this->help_text(); }
 	$options = GetOptions (
-		'prep-dir=s' => \$this->{'prep_dir'},
-		'pairwise=s' => \$this->{'pairwise'},
-		'clusters=s' => \$this->{'clusters'},
-		'output=s' => \$this->{'output_prefix'},
+		'output-dir=s' => \$this->{'prep_dir'},
+		'pairwise-file=s' => \$this->{'pairwise'},
+		'clusters-file=s' => \$this->{'clusters'},
+		'output-prefix=s' => \$this->{'output_prefix'},
 		'simulations=i' => \$this->{'simulations'},
 		'help' => \$help,
 	);
@@ -303,14 +303,16 @@ sub help_text{
 
 Usage: hotspot3d sigclus [options]
 
-	--prep-dir			Preprocessing directory 
-	--pairwise			Pairwise file (pancan19.pairwise)
-	--clusters			Cluster file (pancan19.intra.20..05.10.clusters)
-	--output			Output file prefix (pancan19.intra.20..05.10)
+                             REQUIRED
+--output-dir                 Preprocessing directory 
+--pairwise-file              Pairwise file (pancan19.pairwise)
+--clusters-file              Cluster file (pancan19.intra.20..05.10.clusters)
 
-	--simulations	Number of simulations, default = 1000000
+                             OPTIONAL
+--output-prefix              Output file prefix (pancan19.intra.20..05.10)
+--simulations                Number of simulations, default = 1000000
 
-	--help				This message
+--help                       This message
 
 HELP
 
