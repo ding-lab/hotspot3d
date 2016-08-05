@@ -26,6 +26,7 @@ sub new {
 	$this->{'clusters'} = undef;
 	$this->{'output'} = "hotspot3d.sigclus";
 	$this->{'simulations'} = 1000000;
+	$this->{'structure'} = undef;
 	bless $this, $class;
 	$this->process();
 	return $this;
@@ -41,6 +42,7 @@ sub process {
 		'clusters=s' => \$this->{'clusters'},
 		'output=s' => \$this->{'output_prefix'},
 		'simulations=i' => \$this->{'simulations'},
+		'structure=s'=> \$this->{'structure'},
 		'help' => \$help,
 	);
 	#my $NSIMS = $this ->{'simulations'};
@@ -49,6 +51,7 @@ sub process {
 	unless( $options ) { die $this->help_text(); }
 
 	my $hup_file = $this->{'prep_dir'}."/hugo.uniprot.pdb.transcript.csv";
+#	my $hup_file = $this->{'prep_dir'}."/test_hugo";
 	my $proximity_dir = $this->{'prep_dir'}."/proximityFiles/cosmicanno/";
 
 #if hup file missing
@@ -81,8 +84,11 @@ sub process {
 
 #parse aaabbrv file
 	my $AA_hash_ref = $this->processAA( );
+#retrieve best structure
+	my $struc_f=$this->{'structure'};
+	my $bestStruc=$this->getStructure($struc_f);
 #process everything
-	$this ->getDistances($proximity_dir, $genesOnPDB_hash_ref, $HUGO2uniprot_hash_ref, $AA_hash_ref, $this->{'simulations'}, $clusters)
+	$this ->getDistances($proximity_dir, $genesOnPDB_hash_ref, $HUGO2uniprot_hash_ref, $AA_hash_ref, $this->{'simulations'}, $clusters,$bestStruc)
 } 
 
 #####
@@ -90,6 +96,7 @@ sub process {
 #####
 # process HUP file
 sub processHUP{
+	print "processing HUP\n";
 	my($this, $hup_f, $cluster) = @_;
 	my $hupHandle = &getFile( $hup_f , "r" );
 	unless ($hupHandle->open($hup_f)){die "Could not open hup file ".$hup_f."!\n"};
@@ -102,7 +109,7 @@ sub processHUP{
 		if( exists $cluster->{$hugo}){ #retrieve hup information only for specified clusters
 			foreach my $pdb ( split(/\s/ , $pdbs)  ) {
 				$genesOnPDB{$hugo}{$pdb} = 1;
-				#print "hugos: $hugo\n";#debug
+				print "hugos: $hugo\n";#debug
 			}
 			$uniprot2HUGO{$uniprot}{$hugo} = 1;
 			$HUGO2uniprot{$hugo} = $uniprot;
@@ -127,44 +134,86 @@ sub processAA {
 	return \%AA;
 }
 
-sub getClusters {
+sub getClusters { #get cluster id for gene and mutation
+	print "getting clusters now\n";
 	my ($this, $cluster_f) = @_;
 	my $cluster;
 	my %clusters;
 	my $clustersHandle = &getFile( $cluster_f, "r" );
 	while ( my $line = <$clustersHandle> ) {
 		chomp( $line );
-		my ( $clusterid , $gene , $mutation ) = (split( /\t/ , $line ))[0..2];
-		$clusters{$gene}{$mutation} = $clusterid;
+		if ($line!~/Cluster/){
+			my ( $clusterid , $gene , $mutation ) = (split( /\t/ , $line ))[0..2];
+			print $line;
+			$clusters{$gene}{$mutation} = $clusterid;
+		}
 	}
 	$clustersHandle->close();
 	return \%clusters;
 }
 
+sub getStructure{
+	print "choosing best structure now\n";
+	my ($this, $struc_f) = @_;
+	my $strucHandle = &getFile( $struc_f, "r" );
+	my %bestStruc;
+	while ( my $line = <$strucHandle> ) {
+		chomp($line);
+		print "$line\n";
+		my ($clus,$PDB,$count)=(split(/\t/,$line))[0,1,5];
+		print "$clus $PDB $count\n";
+		my @pair=(int($count),$PDB);
+	
+		if (exists $bestStruc{$clus}){
+				my $test=$bestStruc{$clus}->[0];
+#				my $test=$old_pair[0];
+				print "exists $test\n";
+				if($count> $test){
+				$bestStruc{$clus}=\@pair;
+
+			}
+		}
+
+		else{
+			$bestStruc{$clus}=\@pair;
+			my $test=$pair[0];
+			print "else $test\n";
+			print"else @pair\n";
+		}
+		print"loop working\n";
+
+	}
+	$strucHandle->close();
+	print"while loop done\n";
+	return \%bestStruc
+}
+
+
 sub getPairwise {
-#	print "getting pairwise now\n"; #debug
-	my ( $this , $clusters , $pdb , $genesOnPDBref ) = @_;
+	print "getting pairwise now\n"; #debug
+	my ( $this , $clusters , $pdb , $genesOnPDBref,$bestStruc ) = @_;
 	my $pairwiseHandle = &getFile( $this->{'pairwise'},"r" );
 	my ( %mass2pvalues , %mapping , %withinClusterSumDistance );
 	while ( my $line = <$pairwiseHandle> ) {
 		chomp( $line );
 		my @line = split( /\t/ , $line );
 		my ( $gene1 , $mu1 , $chain1 , $res1 , $gene2 , $mu2 , $chain2 , $res2 , $info ) = @line[0,4,5,6,9,13,14,15,19];
-		if ( exists $clusters->{$gene1}->{$mu1}
-		&& exists $clusters->{$gene2}->{$mu2}
-		&& $clusters->{$gene1}->{$mu1} == $clusters->{$gene2}->{$mu2} ) {
-		#	print "pairwise info exists in clusters\n";#debug
+		if ( exists $clusters->{$gene1}->{$mu1} && exists $clusters->{$gene2}->{$mu2} && $clusters->{$gene1}->{$mu1} eq $clusters->{$gene2}->{$mu2} ) 
+		{
 			my @infos = split( /\|/ , $info );
 			foreach my $dinfo ( @infos ) {
 				my ( $dist , $pdb , $pval ) = split( /\s/ , $dinfo );
-				if ( exists $genesOnPDBref->{$gene1}->{$pdb}#{$chain1}
-				&& exists $genesOnPDBref->{$gene2}->{$pdb}#{$chain2}
+				my $cluster = $clusters->{$gene1}->{$mu1}; #store clusterid of mutation
+				my $best_pdb=$bestStruc->{$cluster}->[1];
+			#	my $best_pdb=$pair[1];
+				if ( exists $genesOnPDBref->{$gene1}->{$pdb}#{$chain1} #if PDB structure exists for gene1
+				&& exists $genesOnPDBref->{$gene2}->{$pdb}#{$chain2} #if PDB structure exists for gene2
+				&& $pdb eq $best_pdb
 #				&& $chain1 eq $chain2 ) { #specific check to mimic SpacePAC restriction
 				){	
 		#			print "pairwise exists in hup file\n"; #debug
-					my $cluster = $clusters->{$gene1}->{$mu1};
-					$mapping{$cluster}{$res1} = 1;
-					$mapping{$cluster}{$res2} = 1;
+					$mapping{$cluster}{$res1} = 1; #store location of residue 1 for particular cluster
+					$mapping{$cluster}{$res2} = 1; #store location of residue 2 for particular cluster
 					$withinClusterSumDistance{$cluster} += $dist;
 					$mass2pvalues{$cluster} = $pval;
 				} #if gene,pdb,chain1 exists
@@ -176,14 +225,24 @@ sub getPairwise {
 	return ( \%mapping , \%withinClusterSumDistance , \%mass2pvalues );
 }
 
+
+
 sub getDistances{
-	my ($this, $proximity_d, $genesOnPDBref, $HUGO2uniprotref, $AAref, $NSIMS, $clusters) = @_;
-#	print "getDistances started\n"; #debug
+	my ($this, $proximity_d, $genesOnPDBref, $HUGO2uniprotref, $AAref, $NSIMS, $clusters,$bestStruc) = @_;
+	print "getDistances started\n"; #debug
 	my $hash_count = keys %$genesOnPDBref;#debug
-#	print "number of genesonpdb keys: $hash_count\n";#debug
+	my @best_pdb=();
+	foreach my $clus(keys %{$bestStruc}){
+	
+		
+		push(@best_pdb,$bestStruc->{$clus}->[1]);
+
+	}
+
+	print "number of genesonpdb keys: $hash_count\n";#debug
 	foreach my $hugo(keys %$genesOnPDBref) {
-#		print "hugo: $hugo\n";#debug
-		my $uniprot = $HUGO2uniprotref->{$hugo};
+		print "hugo: $hugo\n";#debug
+	my $uniprot = $HUGO2uniprotref->{$hugo};
 		my %distances;
 		my $proxFile = $proximity_d.$uniprot.".ProximityFile.csv";
 #		print "proxfile: $proxFile\n"; #debug
@@ -201,82 +260,83 @@ sub getDistances{
 			}
 		}
 		$proxHandle->close();
-		
 		foreach my $pdb ( keys %distances ) {
-			print "PDB: $pdb\n";#debug
-			foreach my $chain ( keys %{$distances{$pdb}} ) {
-#				print "chain: $chain\n";#debug
-				my @distances = sort {$a <=> $b} @{$distances{$pdb}{$chain}};
-				#my @distances = sort {$a <=> $b} keys %{$distances{$pdb}{$chain}};
-				my $numDistances = scalar( @distances );
+			if (grep {$_ eq $pdb} @best_pdb){
+				print "PDB: $pdb\n";#debug
+				foreach my $chain ( keys %{$distances{$pdb}} ) {
+					print "chain: $chain\n";#debug
+					my @distances = sort {$a <=> $b} @{$distances{$pdb}{$chain}};
+					#my @distances = sort {$a <=> $b} keys %{$distances{$pdb}{$chain}};
+					my $numDistances = scalar( @distances );
 
-				#print STDOUT $tossedPairs{$pdb}{$chain}." pairs thrown out\n";
-				
-				my $fout = $this->{'output_prefix'}.".$hugo."."$pdb".".".$chain.".".$NSIMS."sims.avgDist_pvalue";
-				my $OUT = &getFile( $fout , "w" );
-#				print "Cluster\tGene\tPDB_ID\tChain\tNum_Residues\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n";
-				$OUT->print( "Cluster\tGene\tPDB_ID\tChain\tNum_Residues\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n" );
-				
-				my ( $mapping , $withinClusterSumDistance , $mass2pvalues ) = $this->getPairwise( $clusters , $pdb , $genesOnPDBref );
-	
-				my %massDistribution;
-				my %withinClusterAvgDistance;
-				my ( $mass , $numPairs );
-				foreach my $cluster ( keys %{$mapping} ) {
-					$mass = scalar keys %{$mapping->{$cluster}};
-					$numPairs = ( $mass ) * ( $mass - 1 ) / 2;
-					if ( $mass > 2 ) {
-						$massDistribution{$mass}{$cluster} = 1;
-						$withinClusterAvgDistance{$cluster} = $withinClusterSumDistance->{$cluster} / $numPairs;
-#						print "cluster: $cluster, avg distance: $withinClusterAvgDistance{$cluster}, sum distance: $withinClusterSumDistance->{$cluster}\n";#debug
-						delete $mass2pvalues->{$cluster};
-					} elsif ( $mass == 2 ) {
-#print STDOUT "Cluster ".$cluster." has ".$mass." residues, so its p-value is ".$mass2pvalues->{$cluster}."\n"; #debug
-						$OUT->print( join( "\t" , ( $cluster , $hugo , $pdb , $chain , $mass , $numPairs , $withinClusterSumDistance->{$cluster} , $mass2pvalues->{$cluster} ) )."\n" );
-					} elsif ( $mass == 1 ) {
-#						print STDOUT "Cluster ".$cluster." has ".$mass." residue, so it has no p-value\n";#debug
-						$OUT->print( join( "\t" , ( $cluster , $hugo , $pdb , $chain , $mass , $numPairs , 0 , "NA" ) )."\n" );
-					} #if mass block
-				} #foreach cluster
-
-				#my %permutationTestPValues;
-#				print STDOUT $hugo."\t".$pdb."\t".$chain."\n";
-				foreach my $numResidues ( keys %massDistribution ) {
-					$numPairs = ( $numResidues ) * ( $numResidues - 1 ) / 2;
-					my %below;
-#					print STDOUT "Simulation\tSum_Distances\tAvg_Distance\n";
-					for ( my $simulation = 0; $simulation < $NSIMS ; $simulation++ ) {
-						my $sumDists = 0;
-						for ( my $i = 0; $i < $numPairs ; $i++ ) {
-							my $randIndex = int( rand( $numDistances ) );
-							$sumDists += $distances[$randIndex];
-						} #foreach random pick
-						my $avgDist = $sumDists / $numPairs;
-#						print STDOUT $simulation."\t".$sumDists."\t".$avgDist."\n";
-						foreach my $cluster ( keys %{$massDistribution{$numResidues}} ) {
-						#	print "cluster: $cluster, avg dist: $avgDist, withinetc: $withinClusterAvgDistance{$cluster}\n";
-							if ( $avgDist < $withinClusterAvgDistance{$cluster} ) {
-								$below{$cluster}++;
-							}
-						} #foreach cluster
-					} #foreach simulation
-					foreach my $cluster ( keys %{$massDistribution{$numResidues}} ) {
-						my $permutationTestPValue;
-						if(exists $below{$cluster}){
-							$permutationTestPValue = $below{$cluster} / $NSIMS;
-
-						#	print " below: $below{$cluster}\t";#debug
-						#	print STDOUT "Estimated p-value: ".$permutationTestPValue."\n";
-						} else{
-							$permutationTestPValue=0;
-							#print "why zero\n";#debug
-						}
-	
-						$OUT->print( join( "\t" , ( $cluster , $hugo , $pdb , $chain , $numResidues , $numPairs , $withinClusterAvgDistance{$cluster} , $permutationTestPValue ) )."\n" );
+					#print STDOUT $tossedPairs{$pdb}{$chain}." pairs thrown out\n";
+					
+					my $fout = $this->{'output_prefix'}.".$hugo."."$pdb".".".$chain.".".$NSIMS."sims.avgDist_pvalue";
+					my $OUT = &getFile( $fout , "w" );
+	#				print "Cluster\tGene\tPDB_ID\tChain\tNum_Residues\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n";
+					$OUT->print( "Cluster\tGene\tPDB_ID\tChain\tNum_Residues\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n" );
+					
+					my ( $mapping , $withinClusterSumDistance , $mass2pvalues ) = $this->getPairwise( $clusters , $pdb , $genesOnPDBref,$bestStruc);
+		
+					my %massDistribution;
+					my %withinClusterAvgDistance;
+					my ( $mass , $numPairs );
+					foreach my $cluster ( keys %{$mapping} ) {
+						$mass = scalar keys %{$mapping->{$cluster}};
+						$numPairs = ( $mass ) * ( $mass - 1 ) / 2;
+						if ( $mass > 2 ) {
+							$massDistribution{$mass}{$cluster} = 1;
+							$withinClusterAvgDistance{$cluster} = $withinClusterSumDistance->{$cluster} / $numPairs;
+	#						print "cluster: $cluster, avg distance: $withinClusterAvgDistance{$cluster}, sum distance: $withinClusterSumDistance->{$cluster}\n";#debug
+							delete $mass2pvalues->{$cluster};
+						} elsif ( $mass == 2 ) {
+	#print STDOUT "Cluster ".$cluster." has ".$mass." residues, so its p-value is ".$mass2pvalues->{$cluster}."\n"; #debug
+							$OUT->print( join( "\t" , ( $cluster , $hugo , $pdb , $chain , $mass , $numPairs , $withinClusterSumDistance->{$cluster} , $mass2pvalues->{$cluster} ) )."\n" );
+						} elsif ( $mass == 1 ) {
+	#						print STDOUT "Cluster ".$cluster." has ".$mass." residue, so it has no p-value\n";#debug
+							$OUT->print( join( "\t" , ( $cluster , $hugo , $pdb , $chain , $mass , $numPairs , 0 , "NA" ) )."\n" );
+						} #if mass block
 					} #foreach cluster
-				} #foreach numResidues
-				$OUT->close();
-			} #foreach chain
+
+					#my %permutationTestPValues;
+	#				print STDOUT $hugo."\t".$pdb."\t".$chain."\n";
+					foreach my $numResidues ( keys %massDistribution ) {
+						$numPairs = ( $numResidues ) * ( $numResidues - 1 ) / 2;
+						my %below;
+	#					print STDOUT "Simulation\tSum_Distances\tAvg_Distance\n";
+						for ( my $simulation = 0; $simulation < $NSIMS ; $simulation++ ) {
+							my $sumDists = 0;
+							for ( my $i = 0; $i < $numPairs ; $i++ ) {
+								my $randIndex = int( rand( $numDistances ) );
+								$sumDists += $distances[$randIndex];
+							} #foreach random pick
+							my $avgDist = $sumDists / $numPairs;
+	#						print STDOUT $simulation."\t".$sumDists."\t".$avgDist."\n";
+							foreach my $cluster ( keys %{$massDistribution{$numResidues}} ) {
+							#	print "cluster: $cluster, avg dist: $avgDist, withinetc: $withinClusterAvgDistance{$cluster}\n";
+								if ( $avgDist < $withinClusterAvgDistance{$cluster} ) {
+									$below{$cluster}++;
+								}
+							} #foreach cluster
+						} #foreach simulation
+						foreach my $cluster ( keys %{$massDistribution{$numResidues}} ) {
+							my $permutationTestPValue;
+							if(exists $below{$cluster}){
+								$permutationTestPValue = $below{$cluster} / $NSIMS;
+
+							#	print " below: $below{$cluster}\t";#debug
+							#	print STDOUT "Estimated p-value: ".$permutationTestPValue."\n";
+							} else{
+								$permutationTestPValue=0;
+								#print "why zero\n";#debug
+							}
+		
+							$OUT->print( join( "\t" , ( $cluster , $hugo , $pdb , $chain , $numResidues , $numPairs , $withinClusterAvgDistance{$cluster} , $permutationTestPValue ) )."\n" );
+						} #foreach cluster
+					} #foreach numResidues
+					$OUT->close();
+				} #foreach chain
+			}
 		} #foreach pdb
 	} #foreach gene/protein from hup
 	return 1;
