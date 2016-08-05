@@ -401,6 +401,10 @@ sub proximitySearching {
 # post processing of drug results
 sub drug_proximity_postprocessing {
     my ( $this, $output_prefix, $drugport_parsing_results ) = @_;
+	if ( not defined $drugport_parsing_results ) {
+		warn "HotSpot3D Search Warning: Skipping drugport proximity, because no results file given.\n";
+		return;
+	}
     my $sub_fh_target = new FileHandle;
 	my $sub_fh_drugport_parsing = new FileHandle;
 	my $sub_fh_nontarget = new FileHandle; 

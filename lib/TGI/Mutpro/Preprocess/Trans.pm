@@ -26,7 +26,7 @@ sub new {
     my $this = {};
     $this->{_OUTPUT_DIR} = getcwd;
     $this->{_STAT} = undef;
-    $this->{_BLAT} = undef;
+    $this->{_BLAT} = "blat";
     bless $this, $class;
     $this->process();
     return $this;
@@ -44,7 +44,8 @@ sub process {
     if ( $help ) { print STDERR help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
     unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
-    unless( -e $this->{_OUTPUT_DIR} ) { warn 'output directory is not exist  ! ', "\n"; die $this->help_text(); };
+    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Trans Error: output directory does not exist  ! ', "\n"; die $this->help_text(); };
+	unless( -e $this->{_BLAT} ) { warn 'HotSpot3D Trans Error: blat not found - $this->{_BLAT} $ ' , "\n"; die $this->help_text(); };
     #### processing ####
     # add transcript annotation for uniprot
     my ( $peptidesDir, $UniprotIdFile, $peptidesFile, $outputFile, );
@@ -101,8 +102,7 @@ sub process {
                 $tmp_uniprot_fh->close; $tmp_transcript_fh->close;
                 my ( undef, $tmp_blat_output_file ) = tempfile();
 				my $blat = "blat";
-				if ( $this->{_BLAT} ) { $blat = $this->{_BLAT}; }
-                system( "$blat $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
+                system( "$this->{_BLAT} $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
                 # parse blat output
                 my $tmp_parse_cont = ""; 
                 map{ $tmp_parse_cont .= $_.":"; } @{$this->parse_blat_output( $tmp_blat_output_file, $uniprotId, 0.90 )};
