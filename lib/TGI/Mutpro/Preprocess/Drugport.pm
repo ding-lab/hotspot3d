@@ -64,7 +64,7 @@ sub process {
         $content = ""; $id = $_;
         $drug_name = $drug_hash{$id}{'name'};
         $content .= $drug_name."\t".$id."\t";
-        print STDERR $drug_name."\t".$id."\n";
+        print STDOUT $drug_name."\t".$id."\n";
         my ($t2n) = $_ =~ /(\d\d)$/;
         my $drugdata_url = "http://www.ebi.ac.uk/thornton-srv/databases/drugport/drugs/$t2n/$_/database.dat";
         $this->{'page'} = get( $drugdata_url );

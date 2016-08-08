@@ -63,7 +63,7 @@ sub process {
         ( undef, $uniprotId, $pdb, ) = split /\t/, $line;
         # Only use Uniprot IDs with PDB structures
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-        print STDERR $uniprotId."\n";
+        print STDOUT $uniprotId."\n";
         my $annotationFile = "$annotationFileDir\/$uniprotId\.annotation\.txt";
         # get annotation infor
         $this->getAnnotation($uniprotId, $annotationFile, \%annotations);
@@ -75,7 +75,7 @@ sub process {
         ( undef, $uniprotId, $pdb, ) = split /\t/, $line;
         # Only use Uniprot IDs with PDB structures
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-        print STDERR $uniprotId."\n";
+        print STDOUT $uniprotId."\n";
         # proximity file
         my $proximityFile = "$pvaluesDir\/$uniprotId\.ProximityFile\.csv";
         next unless( -e $proximityFile );
@@ -124,7 +124,7 @@ sub addAnnotation {
         next if ($t[1] !~ /^\[[A-Z]\]$/);
         next if ($t[6] !~ /^\[[A-Z]\]$/);
         my $distance = $t[10];
-        if ( $distance !~ /^-?\d+\.?\d*$/ ) { print "Wrong distance : $distance \n"; next; }
+        if ( $distance !~ /^-?\d+\.?\d*$/ ) { print STDERR "Wrong distance : $distance \n"; next; }
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
         $annoOneEnd = $annoTwoEnd = "N\/A";
         $uniprotCoorOneEnd = $t[2] + $t[3];

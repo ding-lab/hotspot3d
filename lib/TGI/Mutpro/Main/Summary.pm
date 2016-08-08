@@ -135,7 +135,7 @@ sub process {
 		if ( exists $this->{centroids}->{$id} ) {
             $fh->print( $this->{centroids}->{$id}."\t" ); #Centroid
         } else {
-            print $id." has no centroid\n";
+            print STDERR $id." has no centroid\n";
 			$fh->print( "NULL\t" );
         }
 		$fh->printf( $fill , $this->avg( 'degrees' , $id , 'mutationmass' ) ); #AVG_Degree (pairs)

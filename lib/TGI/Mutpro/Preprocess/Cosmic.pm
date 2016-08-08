@@ -64,7 +64,7 @@ sub process {
         my $annotationFile = "$annotationsDir\/$uniprotId\.ProximityFile\.csv";
         next unless( -e $annotationFile );
         my $outputFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
-        print STDERR $uniprotId."\n";
+        print STDOUT $uniprotId."\n";
         # add annotation infor
         $this->addCosmic( $annotationFile, $cosmicHashRef, $outputFile, $uniprotId );
         #delete file if null

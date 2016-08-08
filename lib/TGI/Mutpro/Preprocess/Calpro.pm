@@ -205,7 +205,7 @@ sub writeProximityFile {
     # Filtering some pdb files here to avoid unnecessary heavy load from CPU and Memory
     # Found this problem by testing all uniprot IDs initiation
     my $pdbfilterRef = $this->filteringPdb( $pdbRef, $ulink );
-    map{ print STDERR "$_\n"; $pdbIds{$1} = 1 if ( $_ =~ /^(\w+)\;/ ); } @{$pdbfilterRef};
+    map{ print STDOUT "$_\n"; $pdbIds{$1} = 1 if ( $_ =~ /^(\w+)\;/ ); } @{$pdbfilterRef};
     # Download and parse PDB files
     foreach my $pdbId (keys %pdbIds) {	
 	%allOffsets = ();
@@ -227,9 +227,9 @@ sub writeProximityFile {
 	    my ( $chainStart, $chainStop, ) = $structureRef->chainStartStop( $chain );
 	    if ( $chainStop - $chainStart + 1 > $chainLength ) { 
 		$uniprotChain = $chain;
-                print STDERR "$pdbId\t$uniprotChain\t";
+                print STDOUT "$pdbId\t$uniprotChain\t";
 		$chainLength = $chainStop - $chainStart + 1; 
-                print STDERR $chainLength."\n";
+                print STDOUT $chainLength."\n";
 	    }
 	}
 	unless ( defined $uniprotChain ) {

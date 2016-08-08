@@ -42,7 +42,7 @@ sub process {
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
         'maf-file=s' => \$this->{'maf'},
-        'data-dir=s'    => \$this->{'data_dir'},
+        'prep-dir=s'    => \$this->{'data_dir'},
         'output-prefix=s' => \$this->{'output_prefix'},
         'drugport-file=s' => \$this->{'drugport_file'},
         'skip-silent' => \$this->{'skip_silent'},
@@ -90,12 +90,12 @@ sub process {
     my $maf_hash_ref = $this->parseMaf( $this->{'maf'}, $trans_to_uniprot );
     $this->{'stat'}{'num_uniprot_involved'} = keys %$maf_hash_ref;
     my ( $pairoutref, $cosmicref, $roiref, $drugport_results_ref, $drugport_nonresults_ref ) = $this->proximitySearching( $maf_hash_ref, $prior_dir, $drugport_hash_ref );
-    print STDERR "searching done...\n";
+    print STDOUT "searching done...\n";
     my %filterHash; map {
         chomp; @_ = split /\t/;
         my $geneOne = join("\t", @_[0..8]);
         my $geneTwo = join("\t", @_[9..17]);
-        print STDERR $geneOne."\t".$geneTwo."\n";
+        print STDOUT $geneOne."\t".$geneTwo."\n";
         if ( defined $filterHash{$geneOne}{$geneTwo} ) { $filterHash{$geneOne}{$geneTwo} .= $_[19]; 
         } elsif ( defined $filterHash{$geneTwo}{$geneOne} ) { $filterHash{$geneTwo}{$geneOne} .= $_[19];
         } else { $filterHash{$geneOne}{$geneTwo} .= $_[18] . "\t" . $_[19]; }
@@ -134,16 +134,16 @@ sub process {
     map { $fh->print( $_."\n" )  } @$drugport_nonresults_ref; $fh->close();
     # post processing like collapsed clean results
     $this->drug_proximity_postprocessing( $this->{'output_prefix'}, $this->{'drugport_file'} );
-    print STDERR "\n\n##################################################\n";
-    print STDERR "total mutations: " . $this->{'stat'}{'num_muts'} . "\n";
-    print STDERR "expected mutations: " . $this->{'stat'}{'num_expect_format'} . "\n";
-    print STDERR "unexpected format mutations: " . $this->{'stat'}{'num_unexpect_format'} . "\n";
-    print STDERR "mutations with matched uniprot: ". $this->{'stat'}{'num_with_uniprot'} . "\n";
-    print STDERR "total transcripts with valid uniprot sequences : " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
-    print STDERR "total transcripts in maf : " . $this->{'stat'}{'num_trans'} . "\n";
-    print STDERR "total mutations to be analyzed:  " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
-    print STDERR "total uniprots involved: " . $this->{'stat'}{'num_uniprot_involved'} . "\n";
-    print STDERR "\n\n##################################################\n";
+    print STDOUT "\n\n##################################################\n";
+    print STDOUT "total mutations: " . $this->{'stat'}{'num_muts'} . "\n";
+    print STDOUT "expected mutations: " . $this->{'stat'}{'num_expect_format'} . "\n";
+    print STDOUT "unexpected format mutations: " . $this->{'stat'}{'num_unexpect_format'} . "\n";
+    print STDOUT "mutations with matched uniprot: ". $this->{'stat'}{'num_with_uniprot'} . "\n";
+    print STDOUT "total transcripts with valid uniprot sequences : " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
+    print STDOUT "total transcripts in maf : " . $this->{'stat'}{'num_trans'} . "\n";
+    print STDOUT "total mutations to be analyzed:  " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
+    print STDOUT "total uniprots involved: " . $this->{'stat'}{'num_uniprot_involved'} . "\n";
+    print STDOUT "\n\n##################################################\n";
 
     return 1;
 }
@@ -259,14 +259,14 @@ sub getDrugportInfo {
 				map{ 
 					my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
 					$pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-					unless ( $pdb and $chain and $loc ) { print $a."\n"; }
+					unless ( $pdb and $chain and $loc ) { print STDOUT $a."\n"; }
 					$drugport_hash{'TARGET'}{uc($pdb)}{$chain}{$loc} = $het;
 				} split /,/,$target_pdb; 
 			}
 			unless ( $not_target_include_compound =~ /NULL/ ) { 
 				map{ 
 					my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-					unless ( $pdb and $chain and $loc ) { print $a."\n"; }
+					unless ( $pdb and $chain and $loc ) { print STDOUT $a."\n"; }
 					$drugport_hash{'NONTARGET'}{uc($pdb)}{$chain}{$loc} = $het;
 				} split /,/, $not_target_include_compound; 
 			}
@@ -468,7 +468,8 @@ sub drug_proximity_postprocessing {
 # get drugport database information
 sub cutFiltering {
     my ( $this, $pvalue_cut, $linear_cut, $threed_cut, $linear_dis, $info_proximity ) = @_;
-    my ( $dis_3d, $pvalue ) = (split / /, $info_proximity)[0,2];
+	my @infos = split( "|" , $info_proximity );
+    my ( $dis_3d, $pvalue ) = (split / /, $infos[0])[0,2];
     if ( $linear_dis =~ /N\/A/ ) {
         return 1 if ( ($dis_3d <= $threed_cut) and ($pvalue <= $pvalue_cut) );
     } else {
@@ -485,7 +486,7 @@ Usage: hotspot3d search [options]
 
                              REQUIRED
 --maf-file                   Input MAF file used to search proximity results
---data-dir                   HotSpot3D preprocessing results directory
+--prep-dir                   HotSpot3D preprocessing results directory
 
                              OPTIONAL
 --drugport-file              DrugPort database parsing results file

@@ -21,10 +21,10 @@ use Scalar::Util qw( reftype );
 sub new {
 	my $class = shift;
 	my $this = {};
-	$this->{'output-dir'} = undef;
+	$this->{'prep-dir'} = undef;
 	$this->{'pairwise-file'} = undef;
 	$this->{'clusters-file'} = undef;
-	$this->{'output-prefix'} = undef;
+	$this->{'output-prefix'} = $this->{'clusters-file'};
 	$this->{'simulations'} = 1000000;
 	bless $this, $class;
 	$this->process();
@@ -36,7 +36,7 @@ sub process {
 	my ( $help, $options );
 	unless( @ARGV ) { die $this->help_text(); }
 	$options = GetOptions (
-		'output-dir=s' => \$this->{'prep_dir'},
+		'prep-dir=s' => \$this->{'prep_dir'},
 		'pairwise-file=s' => \$this->{'pairwise'},
 		'clusters-file=s' => \$this->{'clusters'},
 		'output-prefix=s' => \$this->{'output_prefix'},
@@ -106,7 +106,7 @@ sub processHUP{
 			}
 			$uniprot2HUGO{$uniprot}{$hugo} = 1;
 			$HUGO2uniprot{$hugo} = $uniprot;
-			print "HUGO: $hugo\n";
+			print STDOUT "HUGO: $hugo\n";
 		}
 	}
 	$hupHandle->close();
@@ -203,7 +203,7 @@ sub getDistances{
 		$proxHandle->close();
 		
 		foreach my $pdb ( keys %distances ) {
-			print "PDB: $pdb\n";#debug
+			print STDOUT "PDB: $pdb\n";#debug
 			foreach my $chain ( keys %{$distances{$pdb}} ) {
 #				print "chain: $chain\n";#debug
 				my @distances = sort {$a <=> $b} @{$distances{$pdb}{$chain}};
@@ -304,7 +304,7 @@ sub help_text{
 Usage: hotspot3d sigclus [options]
 
                              REQUIRED
---output-dir                 Preprocessing directory 
+--prep-dir                   Preprocessing directory 
 --pairwise-file              Pairwise file (pancan19.pairwise)
 --clusters-file              Cluster file (pancan19.intra.20..05.10.clusters)
 

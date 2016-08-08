@@ -101,7 +101,7 @@ sub process {
 		if ( scalar keys %list > 0 ) {
 			next unless( exists $list{$hugo_id} );
 		}
-        print STDERR 'HUGO: ', "$hugo_id\n";
+        print STDOUT 'HUGO: ', "$hugo_id\n";
         $alias_ref = $$hugogene_ref{$hugo_id}->getAllAliases();
         $previous_ref =  $$hugogene_ref{$hugo_id}->getAllPreviousSymbols();
         $alias_list = "";
@@ -143,7 +143,7 @@ sub process {
 		my $update_program = " 'hotspot3d calpro";
 		my $programOptions = " --output-dir=".$this->{'output_dir'}." --pdb-file-dir=".$this->{'pdb_file_dir'}." --uniprot-id=".$_." --3d-distance-cutoff=".$this->{'max_3d_dis'}." --linear-cutoff=".$this->{'min_seq_dis'}."'";
         my $submit_cmd = $bsub.$update_program.$programOptions;
-        print STDERR $submit_cmd."\n"; 
+        print STDOUT $submit_cmd."\n"; 
         $cmd_list_submit_file_fh->print($submit_cmd."\n");
 		if ( not $this->{'hold'} ) {
 			system( $submit_cmd );

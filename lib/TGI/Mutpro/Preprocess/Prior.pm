@@ -66,7 +66,7 @@ sub process {
         my $cosmicFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
         next unless( -e $cosmicFile );
         my $outputFile = "$prioritizationDir\/$uniprotId\.ProximityFile\.csv";
-        print STDERR $uniprotId."\n";
+        print STDOUT $uniprotId."\n";
         # add annotation infor
         $this->doPrior( $cosmicFile, $outputFile, $uniprotId, $this->{_PVALUE_CUTOFF}, $this->{_3D_CUTOFF}, $this->{_1D_CUTOFF} );
         #delete file if null
@@ -78,7 +78,7 @@ sub process {
 # COSMIC annotation results
 sub doPrior {
     my ( $this, $proximityfile, $outputf, $uniprotId, $pvalue, $threed, $lineard, ) = @_;
-    print STDERR "-------$proximityfile---\n";
+    print STDOUT "-------$proximityfile---\n";
     # read COSMIC annotation information
     my $fhproximity = new FileHandle;
     unless( $fhproximity->open("<$proximityfile") ) { die "Could not open COSMIC annotated proximity file !\n" };

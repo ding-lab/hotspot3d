@@ -60,7 +60,7 @@ sub process {
         (undef, $uniprotId, $pdb) = split /\t/, $line;
         # Only use Uniprot IDs with PDB structures
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-        print STDERR $uniprotId."\n";
+        print STDOUT $uniprotId."\n";
         # proximity file
         my $proximityFile = "$proDir\/$uniprotId\.ProximityFile\.csv";
         next unless(-e $proximityFile);
@@ -89,7 +89,7 @@ sub getPvalue {
         next if ($t[6] !~ /^\[[A-Z]\]$/);
         my $distance = $t[10];
         if ( $distance !~ /^-?\d+\.?\d*$/ ) {
-            print "Wrong distance : $distance \n";
+            print STDERR "Wrong distance : $distance \n";
             next;
         }
         $distances{$distance} = 1;

@@ -282,7 +282,13 @@ sub makePyMOLScript {
 		}
 	}
 	my $fh = new FileHandle;
-	my $outFilename = $this->{_CLUSTERS_FILE}.".".$this->{_PDB}.".pml";
+	my $outFilename; 
+	if ( defined $this->{_OUTPUT_FILE} ) { 
+		$outFilename = $this->{_OUTPUT_FILE};
+	} else {
+		$this->{_OUTPUT_FILE} = $this->{_CLUSTERS_FILE}.".".$this->{_PDB}.".pml";
+		$outFilename = $this->{_OUTPUT_FILE};
+	}
 	unless( $fh->open( $outFilename , "w" ) ) { die "Could not open output file, $outFilename\n"; }
 
 	#viewer
@@ -332,7 +338,7 @@ sub execute {
 	if ( not $this->{_SCRIPT_ONLY} ) {
 		my $pymol = $this->{_PYMOL};
 		my $pml = $this->{_OUTPUT_FILE};
-		print "HotSpot3D ... Visualize!\n\n";
+		print STDOUT "HotSpot3D ... Visualize!\n\n";
 		system( "$pymol $pml" );
 		#pymol <output-file>
 		#-x disables external GUI module

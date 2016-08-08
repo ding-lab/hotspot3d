@@ -114,7 +114,7 @@ sub process {
         }
         if ( $transcriptContent eq "" ) { $transcriptContent = "N\/A";
         } else { chop( $transcriptContent ); }
-        print "$line\t$transcriptContent\n";
+        print STDOUT "$line\t$transcriptContent\n";
         $outputContent .= "$line\t$transcriptContent\n";
     }
     my $fhout = new FileHandle;
@@ -172,7 +172,7 @@ sub parse_blat_output {
     }
     foreach my $d (keys %homos) { 
         next if ( $homos{$d}{'IDEN'} < $iden_cutoff * 100 );
-        print $homos{$d}{'IDEN'}."\n";
+        print STDOUT $homos{$d}{'IDEN'}."\n";
         #print $homos{$d}{'QUESTART'}." ".$homos{$d}{'QUECONT'}." ".$homos{$d}{'QUEEND'}."\n";      
         #print $homos{$d}{'SUBSTART'}." ".$homos{$d}{'SUBCONT'}." ".$homos{$d}{'SUBEND'}."\n";
         my ( @taq, @tas, $tqstart, $tsstart, $i, $j, $k, $open, );

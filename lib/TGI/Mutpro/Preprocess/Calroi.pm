@@ -65,7 +65,7 @@ sub process {
     foreach $uniprotId ( sort keys %allUniprotIds ) {
         $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
         defined ($uniprotRef) || die "no object for '$uniprotId'";
-        print STDERR $uniprotId."\n";
+        print STDOUT $uniprotId."\n";
         # The annotation is a ref to array made here:
         # 'push @domains, 
         # "$key\t($dmStart, $dmStop)\t$desc'";

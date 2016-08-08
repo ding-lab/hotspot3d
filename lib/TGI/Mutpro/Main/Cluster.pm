@@ -363,15 +363,18 @@ sub process {
 	if ( defined $this->{'output_prefix'} ) {
 		$outFilename = $this->{'output_prefix'};
 	} else {
+		if ( $thsi->{'maf_file'} ) {
+			$outFilename .= $this->{'maf_file'};
+		}
 		if ( $this->{'collapsed_file'} ) {
-			$outFilename = $this->{'collapsed_file'};
+			$outFilename .= $this->{'collapsed_file'};
 		}
 		if ( $this->{'drugport_clean'} and $outFilename ) {
 			$outFilename .= ".".$this->{'drugport_clean'};
 		} else {
 			$outFilename = $this->{'drugport_clean'};
 		}
-		$outFilename .= ".".$this->{'p_value_cutoff'}.".".$this->{'linear_cutoff'};
+		$outFilename .= ".".$this->{'linear_cutoff'}.".".$this->{'p_value_cutoff'}.".".$this->{'max_radius'};
 	}
 	$outFilename .= ".clusters";
     die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
