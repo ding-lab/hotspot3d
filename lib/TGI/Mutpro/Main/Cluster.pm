@@ -359,24 +359,29 @@ sub process {
 #####
 #	write cluster output
 #####
-	my $outFilename = "";
-	if ( defined $this->{'output_prefix'} ) {
-		$outFilename = $this->{'output_prefix'};
+	my @outFilename;
+	if ( $this->{'output_prefix'} ) {
+		push @outFilename , $this->{'output_prefix'};
 	} else {
-		if ( $thsi->{'maf_file'} ) {
-			$outFilename .= $this->{'maf_file'};
+		if ( $this->{'maf_file'} ) {
+			push @outFilename , $this->{'maf_file'};
 		}
 		if ( $this->{'collapsed_file'} ) {
-			$outFilename .= $this->{'collapsed_file'};
+			push @outFilename , $this->{'collapsed_file'};
 		}
-		if ( $this->{'drugport_clean'} and $outFilename ) {
-			$outFilename .= ".".$this->{'drugport_clean'};
-		} else {
-			$outFilename = $this->{'drugport_clean'};
+		if ( defined $this->{'drug_clean_file'} ) {
+			if ( $this->{'drug_clean_file'} ne '' and scalar @outFilename > 1 ) {
+				push @outFilename , $this->{'drug_clean_file'};
+			} elsif ( $this->{'drug_clean_file'} ne '' ) {
+				push @outFilename , $this->{'drug_clean_file'};
+			}
 		}
-		$outFilename .= ".".$this->{'linear_cutoff'}.".".$this->{'p_value_cutoff'}.".".$this->{'max_radius'};
+		push @outFilename , $this->{'linear_cutoff'};
+		push @outFilename , $this->{'p_value_cutoff'};
+		push @outFilename , $this->{'max_radius'};
 	}
-	$outFilename .= ".clusters";
+	push @outFilename , ".clusters";
+	my $outFilename = join( "." , @outFilename );
     die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
     $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );
 	print STDOUT "Getting Cluster ID's & Centroids\n";

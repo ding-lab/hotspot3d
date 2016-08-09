@@ -468,7 +468,7 @@ sub drug_proximity_postprocessing {
 # get drugport database information
 sub cutFiltering {
     my ( $this, $pvalue_cut, $linear_cut, $threed_cut, $linear_dis, $info_proximity ) = @_;
-	my @infos = split( "|" , $info_proximity );
+	my @infos = split( /\|/ , $info_proximity );
     my ( $dis_3d, $pvalue ) = (split / /, $infos[0])[0,2];
     if ( $linear_dis =~ /N\/A/ ) {
         return 1 if ( ($dis_3d <= $threed_cut) and ($pvalue <= $pvalue_cut) );
