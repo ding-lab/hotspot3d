@@ -293,14 +293,12 @@ sub makePyMOLScript {
 
 	#viewer
 	$fh->print( "reinitialize everything;\n" );
-	$this->addPDB(  );
-	#if ( -e $this->{_PDB_DIR}.$this->{_PDB} ) {
-		$fh->print( "load ".$this->{_PDB}.".pdb;\n" );
-	#	$fh->print( "#load http://www.rcsb.org/pdb/files/".$this->{_PDB}.".pdb.gz;\n" );
-	#} else {
-	#	$fh->print( "#load ".$this->{_PDB}.".pdb;\n" );
-	#	$fh->print( "load http://www.rcsb.org/pdb/files/".$this->{_PDB}.".pdb.gz;\n" );
-	#}
+	#$this->addPDB(  );
+	if ( -e $this->{_PDB_DIR}.$this->{_PDB} ) {
+		$fh->print( "load $this->{_PDB}.".pdb;\n" );
+	} else {
+		$fh->print( "load http://www.rcsb.org/pdb/files/".$this->{_PDB}.".pdb;\n" );
+	}
 	$fh->print( "viewport 480,480;\n" );
 	$fh->print( "preset.publication(\"".$this->{_PDB}."\");\n" );
 	$fh->print( "#show mesh;\n" );
