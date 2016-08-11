@@ -79,7 +79,7 @@ sub process {
 		}
 	}
     unless( $this->{'pairwise_file'} ) { warn 'You must provide pairwise file! ', "\n"; die $this->help_text(); }
-    unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwsie_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+    unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
 	if ( $this->{'vertex_type'} ne 'recurrence' and $this->{'vertex_type'} ne 'unique' ) {
 		warn "vertex_type option not recognized as \'recurrence\' or \'unique\'\n";
 		warn "Using default vertex_type = \'recurrence\'\n";
