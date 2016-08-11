@@ -294,8 +294,8 @@ sub makePyMOLScript {
 	#viewer
 	$fh->print( "reinitialize everything;\n" );
 	#$this->addPDB(  );
-	if ( -e $this->{_PDB_DIR}.$this->{_PDB} ) {
-		$fh->print( "load $this->{_PDB}.".pdb;\n" );
+	if ( -e $this->{_PDB_DIR}."/".$this->{_PDB} ) {
+		$fh->print( "load ".$this->{_PDB_DIR}."/".$this->{_PDB}.".pdb;\n" );
 	} else {
 		$fh->print( "load http://www.rcsb.org/pdb/files/".$this->{_PDB}.".pdb;\n" );
 	}
