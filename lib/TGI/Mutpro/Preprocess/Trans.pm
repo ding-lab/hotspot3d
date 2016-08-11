@@ -45,7 +45,7 @@ sub process {
     unless( $options ) { die $this->help_text(); };
     unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
     unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Trans Error: output directory does not exist  ! ', "\n"; die $this->help_text(); };
-	unless( -e $this->{_BLAT} ) { warn 'HotSpot3D Trans Error: blat not found - $this->{_BLAT} $ ' , "\n"; die $this->help_text(); };
+	unless( system( 'which $this->{_BLAT}' ) == 0 ) { warn 'HotSpot3D Trans Error: blat not found - $this->{_BLAT} ! ' , "\n"; die $this->help_text(); };
     #### processing ####
     # add transcript annotation for uniprot
     my ( $peptidesDir, $UniprotIdFile, $peptidesFile, $outputFile, );
