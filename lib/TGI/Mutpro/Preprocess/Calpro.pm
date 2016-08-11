@@ -168,6 +168,7 @@ sub writeProximityFile {
     # $ulink linkage infor of unirpot IDs
     my $fh = new FileHandle;
     unless( $fh->open( ">$file" ) ) { die "Could not open proximity file to write !\n" };
+	print STDOUT "Creating ".$file."\n";
     my ( $uniprotDomainRef,
          $pdbRef, %pdbIds, 
          %allOffsets,
@@ -428,6 +429,7 @@ sub checkOffsets {
     $profh->close();
     my $coorfh = new FileHandle;
     unless( $coorfh->open( "> $coordFile" ) ) {  die "Could not open coordinate file $coordFile to write !\n" };
+	print STDOUT "Creating ".$coordFile."\n";
     foreach $line ( @entireFile ) {
 	chomp $line;
 	next if ( $line =~ /WARNING/ );
