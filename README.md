@@ -151,28 +151,54 @@ Example - Analysis
 Tips
 ----
 
-Current Annotation Support
-
-Transcript ID - Ensembl coding transcript ID's (ENST)
-
-Gene name - HUGO symbol
-
 Mutation file - Standard .maf with custom coding transcript and protein annotations (ENST00000275493 and p.L858R)
+
+There are only a handful of columns necessary from .maf files. They are:
+
+		Hugo_Symbol
+		
+		Chromosome
+		
+		Start_Position
+		
+		End_Position
+		
+		Variant_Classification
+		
+		Reference_Allele
+		
+		Tumor_Seq_Allele1
+		
+		Tumor_Seq_Allele2
+		
+		Tumor_Sample_Barcode
+
+And two non-standard columns:
+
+		a transcript ID column
+		
+		a protein peptide change column (HGVS p. single letter abbreviations)
+
+Current Annotation Support:
+
+		Transcript ID - Ensembl coding transcript ID's (ENST)
+
+		Gene name - HUGO symbol
 
 Clustering with different pairs data:
 
-For intra you need to include the singleprotein pairs without DrugPort results/pairs.
+		For intra you need to include the singleprotein pairs without DrugPort results/pairs.
 
-For inter you need complex pairs without DrugPort pairs.
+		For inter you need complex pairs without DrugPort pairs.
 
-For DrugPort only, do not include singleprotein or complex pairs; include only DrugPort pairs.
+		For DrugPort only, do not include singleprotein or complex pairs; include only DrugPort pairs.
 
-For intra+inter you can concatenate the singleprotein and complex pairs without DrugPort pairs.
+		For intra+inter you can concatenate the singleprotein and complex pairs without DrugPort pairs.
 
-For intra+DrugPort include singleprotein pairs and DrugPort pairs.
+		For intra+DrugPort include singleprotein pairs and DrugPort pairs.
 
-For inter+DrugPort include complex pairs and DrugPort pairs.
+		For inter+DrugPort include complex pairs and DrugPort pairs.
 
-For intra+inter+DrugPort include a concatenated singleprotein and complex pairs file with the DrugPort pairs.
+		For intra+inter+DrugPort include a concatenated singleprotein and complex pairs file with the DrugPort pairs.
 
-Note that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter clustering.
+	Note that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter clustering.

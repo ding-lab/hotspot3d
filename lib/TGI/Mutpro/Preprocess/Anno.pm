@@ -115,6 +115,7 @@ sub addAnnotation {
     unless( $fhin->open("<$proximityfile") ) { die "Could not open proximity file !\n" };
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputf") ) { die "Could not open proximity file to add annotation information !\n" };
+	print STDOUT "Creating ".$outputf."\n";
     while ( my $a = $fhin->getline ) {
         next if ($a =~ /^WARNING:/);
         chomp($a);

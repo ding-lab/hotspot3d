@@ -80,6 +80,7 @@ sub addCosmic {
     unless( $fhin->open("<$proximityfile") ) { die "Could not open proximity file !\n" };
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputf") ) { die "Could not open output proximity file to write !\n" };
+	print STDOUT "Creating ".$outputf."\n";
     #print $uniprotId."\n";
     while ( my $a = <$fhin> ) {
         next if ($a =~ /^WARNING:/);

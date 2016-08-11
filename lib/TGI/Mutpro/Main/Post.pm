@@ -159,6 +159,7 @@ sub process {
     # output complex collapsed results 
     my $output_collapsed_file = "$this->{'input_prefix'}.pairwise.complex.collapsed";
     die "Could not create complex collapsed output file\n" unless( $fh1->open( ">$output_collapsed_file" ) );
+	print STDOUT "Creating ".$output_collapsed_file."\n";
     foreach my $pdb ( keys %thash ) {
         foreach my $g1 ( keys %{$thash{$pdb}} ) {
             foreach my $g2 ( keys %{$thash{$pdb}{$g1}}  ) {
@@ -280,6 +281,7 @@ sub process {
     # output complex collapsed results 
     $output_collapsed_file = "$this->{'input_prefix'}.pairwise.singleprotein.collapsed";
     die "Could not create singe protein collapsed output file\n" unless( $fh1->open( ">$output_collapsed_file" ) );
+	print STDOUT "Creating ".$output_collapsed_file."\n";
     foreach my $pdb ( keys %thash ) {
         foreach my $g1 ( keys %{$thash{$pdb}} ) {
             foreach my $g2 ( keys %{$thash{$pdb}{$g1}}  ) {

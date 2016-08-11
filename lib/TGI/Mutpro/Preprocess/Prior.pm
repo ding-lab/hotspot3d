@@ -116,6 +116,7 @@ sub doPrior {
     $fhproximity->close();
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputf") ) { die "Could not open prioritization output file to write !\n" };
+	print STDOUT "Creating ".$outputf."\n";
     # write prioritization result into file 
     foreach my $a (keys %ss) {
         foreach my $b (keys %{$ss{$a}}) {
