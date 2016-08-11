@@ -108,6 +108,7 @@ sub getPvalue {
     unless( $fh->open("<$proximityfile") ) { confess "Could not open hugo uniprot file '$proximityfile' !\n" };
     my $fho = new FileHandle;
     unless( $fho->open(">$outputf") ) { confess "Could not open file '$outputf' to write !\n" };
+	print STDOUT "Creating ".$outputf."\n";
     my $numberlines = 0;
     # load p_values
     while ( my $a = <$fh> ) {
