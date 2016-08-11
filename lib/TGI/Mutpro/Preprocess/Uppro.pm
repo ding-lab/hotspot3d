@@ -82,6 +82,7 @@ sub process {
     my $uniprot_fileref = $this->currentuniprot_files($pro_dir);
     my $fh = new FileHandle;
     unless ($fh->open(">$log_file")) { die "Could not open hugo uniprot file !\n" };
+	print STDOUT "Creating ".$log_file}."\n";
     my ($hugo_id, $alias_ref, $previous_ref, $alias_list, $uniprot_id, $uniprot_ref, $pdb_ref);
 	my $hugogene_ref;
 	my ( %list , @fields );
@@ -137,6 +138,7 @@ sub process {
     $fh->close();
 	my $cmd_list_submit_file_fh;
     unless( open ( $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} ) ) { die "HotSpot3D Uppro Error: Could not open cmd file (".$this->{'cmd_list_submit_file'}.")"; }
+	print STDOUT "Creating ".$this->{'cmd_list_submit_file'}."\n";
     map {
         system("touch $inpro_dir/$_.ProximityFile.csv");
 		my $bsub = "bsub -oo ".$log_dir.$_.".err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000";
