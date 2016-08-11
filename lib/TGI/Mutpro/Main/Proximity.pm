@@ -29,6 +29,7 @@ sub new {
     $this->{'3d_distance_cutoff'} = 10;
     $this->{'linear_cutoff'} = 20;
     $this->{'stat'} = undef;
+    $this->{'acceptable_types'} = undef;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
     bless $this, $class;
@@ -82,6 +83,7 @@ sub process {
                 proximity_close_eachother
                 );
     map{ $this->{'stat'}{$_} = 0; } @t;
+	$this->setAcceptableMutationTypes();
     # parse uniprot file 
     my $trans_to_uniprot = $this->getTransMaptoUniprot( $uniprot_file );
     $this->{'stat'}{'num_trans_with_uniprot'} = keys %$trans_to_uniprot;
@@ -118,19 +120,24 @@ sub process {
     # output pour out
     my $fh   = new FileHandle;
     die "Could not create pairwise close output file\n" unless( $fh->open(">$this->{'output_prefix'}.pairwise") );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".pairwise\n";
     map { map { $fh->print( $_."\n" ); $this->{'stat'}{'proximity_close_eachother'}++; } keys %{$sortedHash{$_}} } sort {$a<=>$b} keys %sortedHash;
     $fh->close();
     # pour out mutations close to cosmic
     die "Could not create cosmic close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.cosmic" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".cosmic\n";
     map { $fh->print( $_."\n" )  } @$cosmicref; $fh->close();
     # pour out mutations close to ROI
     die "Could not create Region of Interest(ROI) close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.roi" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".roi\n";
     map { $fh->print( $_."\n" )  } @$roiref; $fh->close();
     # pour out mutations close to drugs from drugport 
     die "Could not create drugport compound close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.target" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.target\n";
     map { $fh->print( $_."\n" )  } @$drugport_results_ref; $fh->close();
     # pour out mutations close to drugs from drugport (nontarget) 
     die "Could not create drugport compound close output file (nontarget)\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.nontarget" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.nontarget\n";
     map { $fh->print( $_."\n" )  } @$drugport_nonresults_ref; $fh->close();
     # post processing like collapsed clean results
     $this->drug_proximity_postprocessing( $this->{'output_prefix'}, $this->{'drugport_file'} );
@@ -189,10 +196,9 @@ sub parseMaf {
         my $tc = join( "\t", $gene, $chr, $start, $end, $aac );
         $this->{'stat'}{'num_muts'}++;
         $transHash{ $trans } = 1;
-        next if ( ($this->{'skip_silent'}) and ($type eq "Silent") );
-        next if ( ($this->{'missense_only'}) and ($type ne "Missense_Mutation") );
+		next if ( $this->unacceptable( $type ) );
         unless ( $aac =~ /p\.\w\D*\d+/ or $aac =~ /p\.\D*\d+in_frame_ins/i ) {
-            print STDERR "Unexpected format for mutation: '$aac'\n";
+            print STDERR "Unexpected format for mutation ".$gene.":g.".$chr.":".$start.$ref.$vart2." of type ".$type.": '$aac'\n";
             $this->{'stat'}{'num_unexpect_format'}++;
             next;
         }
@@ -415,6 +421,7 @@ sub drug_proximity_postprocessing {
 	}
     die "Could not open drug target output file\n" unless( $sub_fh_target->open( "$output_prefix.drugs.target" ) );
     die "Could not create clean drug output file\n" unless( $sub_fh_output->open( ">$output_prefix.drugs.target.clean" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.target.clean\n";
     $sub_fh_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Drug_Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Res_Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotation", "Cosmic_Annotation", "Linear_Distance_Between_Drug_and_Mutation", "3D_Distance_Information\n" ) );
     my %ss; map { 
         chomp; my @t = split /\t/; unless( $t[4] =~ /NULL/ ) { 
@@ -442,6 +449,7 @@ sub drug_proximity_postprocessing {
     die "Could not open drugprot parsing output file\n" unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) );
     my $sub_fh_nontarget_output = new FileHandle;
     die "Could not create clean nontarget drug output file\n" unless( $sub_fh_nontarget_output->open( ">$output_prefix.drugs.nontarget.clean" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.nontarget.clean\n";
     $sub_fh_nontarget_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotaiton", "Cosmic_Annotation", "Linear_Distance_Betweeen_Drug_and_Mutation", "3D_Distance_Information\n" ) );
     undef %ss; map { 
         chomp; my @t = split /\t/; unless ( $t[8] =~ /NULL/ ) {
@@ -476,6 +484,28 @@ sub cutFiltering {
         return 1 if ( ($dis_3d <= $threed_cut) and ($linear_dis >= $linear_cut) and ($pvalue <= $pvalue_cut) );
     }
     return undef;
+}
+
+sub setAcceptableMutationTypes {
+	my $this = shift;
+	@{$this->{'acceptable_types'}} = ( "Missense_Mutation" );
+	if ( $this->{'missense_only'} ) {
+		return 1;
+	}
+	push @{$this->{'acceptable_types'}} , "In_Frame_Ins";
+	push @{$this->{'acceptable_types'}} , "In_Frame_Del";
+	if ( not $this->{'skip_silent'} ) {
+		push @{$this->{'accepatble_types'}} , "Silent";
+	}
+	return 1;
+}
+
+sub unacceptable {
+	my ( $this , $type ) = @_;
+	if ( grep{ $_ eq $type } @{$this->{'acceptable_types'}} ) {
+		return 0;
+	}
+	return 1;
 }
 
 sub help_text{
