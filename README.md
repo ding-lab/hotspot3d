@@ -91,7 +91,7 @@ Example - Preprocessing
 
     hotspot3d uppro --output-dir=preprocessing_dir --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file 1>hotspot3d.uppro.err 2>hotspot3d.uppro.out
 
-3. Calculate protein domain information for each UniProt ID : 
+3. Calculate protein domain information for each UniProt ID (make sure all uppro jobs have finished!) : 
 
     hotspot3d calroi --output-dir=preprocessing_dir
 
@@ -144,7 +144,7 @@ Example - Analysis
 
     hotspot3d summary --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
-6. Visualization:
+6. Visualization (works with PyMol):
 
     hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
 

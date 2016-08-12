@@ -1,0 +1,69 @@
+##### HotSpot3D Demo ############################# 
+# created by: Adam D. Scott (adamscott@wustl.edu)#
+# date: 2016*08*11                               #
+##################################################
+
+# The goal of this demo is to familiarize the user with HotSpot3D.
+# There are two main parts to HotSpot3D, preprocessing and analysis.
+# There are many options not highlighted here, because I want to show how HotSpot3D can be run with defaults.
+# I have included somatic mutations from SMAD2, SMAD3, and SMAD4 derived from TCGA.
+# The included .maf file is really a subset of a full .maf file.
+# This is because the columns in the demo.maf are the minimum necessary columns needed to work with HotSpot3D.
+# For each step I have included standard out (1) and error (2) print outs, but these are optional.
+# In total, this demo can be run within an hour for most systems with LSF server capability.
+# Without the LSF server, you may try working with mutations from just one gene (grep SMAD2 demo.maf > small.demo.maf).
+# In addition without the LSF server, you will need to run calpro instead of uppro (see below).
+# Not included in preprocessing is the drugport step, but this can be run separately in the preprocessing stage.
+# Not included in analysis is the sigclus step due to very lengthy runtime.
+# HotSpot3D sigclus is under active development and should be efficient and available soon.
+# For each step, specific help information can be found by entering, 'hotspot3d <command>'.
+
+## BEFORE RUNNING
+mkdir -p prep/cosmic pdb
+# The pdb directory can hold .pdb files, but downloading them is not necessary for HotSpot3D.
+# When necessary, HotSpot3D will retrieve structures from RCSB.org without downloading them to your disk.
+
+# See the HotSpot3D README.md for details on the COSMIC download.
+# Put COSMIC annotation download into prep/cosmic/
+# Make sure COSMIC download has 6 columns:
+#1	gene_name
+#2	transcript_name
+#3	trv_type
+#4	amino_acid_change
+#5	domain
+#6	tissue_type
+
+## RUNNING PREPROCESSING
+hotspot3d uppro --output-dir prep/ --pdb pdb/ --gene-file demo.maf --3d-distance-cutoff 20 1>demo.uppro.out 2>demo.uppro.err
+
+# The uppro step launches jobs to an LSF server, and those jobs run calpro.
+# If you do not have an LSF server, you can skip uppro, and run calpro 'manually'.
+# To get help with calpro, simply enter the command, 'hotspot3d calpro'.
+
+# Before running any additional steps, make sure that the uppro/calpro runs are finished.
+hotspot3d calroi --output-dir prep 1>demo.calroi.out 2>demo.calroi.err
+
+hotspot3d statis --output-dir prep 1>demo.statis.out 2>demo.statis.err
+
+hotspot3d anno --output-dir prep 1>demo.anno.out 2>demo.anno.err
+
+hotspot3d trans --output-dir prep 1>demo.trans.out 2>demo.trans.err
+
+hotspot3d cosmic --output-dir prep 1>demo.cosmic.out 2>demo.cosmic.err
+
+hotspot3d prior --output-dir prep 1>demo.prior.out 2>demo.prior.err
+
+## RUNNING ANALYSIS
+hotspot3d search --maf-file demo.maf --prep-dir prep 1>demo.search.out 2>demo.search.err
+
+hotspot3d post --maf-file demo.maf --input-prefix 3D_Proximity 1>demo.post.out 2>demo.post.err
+
+# singleprotein means any homodimer and monomer
+hotspot3d cluster --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.singleprotein.collapsed 1>demo.cluster.singleprotein.out 2>demo.cluster.singleprotein.err
+# complex means any heterodimer
+hotspot3d cluster --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.complex.collapsed 1>demo.cluster.complex.out 2>demo.cluster.complex.err
+
+hotspot3d summary --clusters-file demo.maf.3D_Proximity.pairwise.singleprotein.collapsed.0.0.05.10..clusters 1>demo.summary.out 2>demo.summary.err
+
+hotspot3d visual --clusters-file demo.maf.3D_Proximity.pairwise.singleprotein.collapsed.0.0.05.10..clusters --pdb 1U7V --pairwise-file 3D_Proximity.pairwise
+# HotSpot3D visual generates a PyMol script and will attempt to launch pymol.
