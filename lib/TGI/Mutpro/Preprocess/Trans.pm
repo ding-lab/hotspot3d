@@ -119,7 +119,7 @@ sub process {
     }
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputFile") ) { die "Could not open output file !\n" };
-	print STDOUT "Creating ".$outpuFile."\n";
+	print STDOUT "Creating ".$outputFile."\n";
     print $fhout $outputContent;
     $fhout->close();
 }

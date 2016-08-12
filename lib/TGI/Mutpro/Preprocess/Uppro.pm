@@ -82,7 +82,7 @@ sub process {
     my $uniprot_fileref = $this->currentuniprot_files($pro_dir);
     my $fh = new FileHandle;
     unless ($fh->open(">$log_file")) { die "Could not open hugo uniprot file !\n" };
-	print STDOUT "Creating ".$log_file}."\n";
+	print STDOUT "Creating ".$log_file."\n";
     my ($hugo_id, $alias_ref, $previous_ref, $alias_list, $uniprot_id, $uniprot_ref, $pdb_ref);
 	my $hugogene_ref;
 	my ( %list , @fields );

@@ -116,6 +116,7 @@ sub addAnnotation {
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputf") ) { die "Could not open proximity file to add annotation information !\n" };
 	print STDOUT "Creating ".$outputf."\n";
+	my ( $coord , $offset );
     while ( my $a = $fhin->getline ) {
         next if ($a =~ /^WARNING:/);
         chomp($a);
@@ -128,8 +129,16 @@ sub addAnnotation {
         if ( $distance !~ /^-?\d+\.?\d*$/ ) { print STDERR "Wrong distance : $distance \n"; next; }
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
         $annoOneEnd = $annoTwoEnd = "N\/A";
-        $uniprotCoorOneEnd = $t[2] + $t[3];
-        $uniprotCoorTwoEnd = $t[7] + $t[8];
+		$coord = $t[2];
+		if ( $coord =~ /N\/A/ ) { $coord = 0; }
+		$offset = $t[3];
+		if ( $offset =~ /N\/A/ ) { $offset = 0; }
+        $uniprotCoorOneEnd = $coord + $offset;
+		$coord = $t[7];
+		if ( $coord =~ /N\/A/ ) { $coord = 0; }
+		$offset = $t[8];
+		if ( $offset =~ /N\/A/ ) { $offset = 0; }
+        $uniprotCoorTwoEnd = $coord + $offset;
         #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
         if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd} ) { $annoOneEnd = $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd}; }
         if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd} ) { $annoTwoEnd = $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd}; }
