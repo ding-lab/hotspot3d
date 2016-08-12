@@ -380,7 +380,7 @@ sub process {
 		push @outFilename , $this->{'p_value_cutoff'};
 		push @outFilename , $this->{'max_radius'};
 	}
-	push @outFilename , ".clusters";
+	push @outFilename , "clusters";
 	my $outFilename = join( "." , @outFilename );
     die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
     $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );

@@ -36,8 +36,8 @@ sub process {
     );
     if ( $help ) { print STDERR help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
-    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
-    unless( -e $this->{_OUTPUT_DIR} ) { warn 'output directory is not exist  ! ', "\n"; die $this->help_text(); };
+    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: You must provide a output directory! ', "\n"; die $this->help_text(); };
+    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: Output directory does not exist! ', "\n"; die $this->help_text(); };
     #### processing ####
     # add COSMIC annotations after get ROI annotation information
     ## do that after get ROI annotation
