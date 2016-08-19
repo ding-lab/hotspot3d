@@ -63,7 +63,7 @@ hotspot3d cluster --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.sin
 # complex means any heterodimer
 hotspot3d cluster --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.complex.collapsed 1>demo.cluster.complex.out 2>demo.cluster.complex.err
 
-hotspot3d summary --clusters-file demo.maf.3D_Proximity.pairwise.singleprotein.collapsed.0.0.05.10..clusters 1>demo.summary.out 2>demo.summary.err
+hotspot3d summary --clusters-file demo.maf.3D_Proximity.pairwise.singleprotein.collapsed.0.0.05.10.clusters 1>demo.summary.out 2>demo.summary.err
 
-hotspot3d visual --clusters-file demo.maf.3D_Proximity.pairwise.singleprotein.collapsed.0.0.05.10..clusters --pdb 1U7V --pairwise-file 3D_Proximity.pairwise
+hotspot3d visual --clusters-file demo.maf.3D_Proximity.pairwise.singleprotein.collapsed.0.0.05.10.clusters --pdb 1U7V --pairwise-file 3D_Proximity.pairwise
 # HotSpot3D visual generates a PyMol script and will attempt to launch pymol.
