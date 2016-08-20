@@ -1,0 +1,22 @@
+/gsc/bin/blat
+Loaded 467 letters in 1 sequences
+Searched 437 bases in 1 sequences
+100
+100
+Loaded 467 letters in 1 sequences
+Searched 437 bases in 1 sequences
+100
+100
+SMAD2	Q15796	1DEV 1KHX 1U7V 2LB3 	MADR2 JV18-1 MADH2 	ENST00000402690[1|1-467|467],ENST00000356825[109|79-467|437:1|1-78|78],ENST00000262160[1|1-467|467],ENST00000586040[109|79-467|437:1|1-78|78]
+Loaded 425 letters in 1 sequences
+Searched 320 bases in 1 sequences
+100
+Loaded 425 letters in 1 sequences
+Searched 230 bases in 1 sequences
+100
+Loaded 425 letters in 1 sequences
+Searched 381 bases in 1 sequences
+100
+SMAD3	P84022	1MHD 1MJS 1MK2 1OZJ 1U7F 2LAJ 2LB2 	HsT17436 JV15-2 MADH3 	ENST00000327367[1|1-425|425],ENST00000540846[106|1-425|320],ENST00000537194[196|1-425|230],ENST00000439724[69|25-425|381]
+SMAD4	Q13485	1DD1 1G88 1MR1 1U7F 1U7V 1YGS 	DPC4 MADH4 	ENST00000342988[1|1-552|552],ENST00000398417[1|1-552|552]
+Creating prep/hugo.uniprot.pdb.transcript.csv
