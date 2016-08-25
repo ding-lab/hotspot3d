@@ -24,6 +24,10 @@ use FileHandle;
 
 use Data::Dumper;
 
+my $WEIGHT = "weight";
+my $RECURRENCE = "recurrence";
+my $UNIQUE = "unique";
+
 sub new {
     my $class = shift;
     my $this = {};
@@ -34,10 +38,11 @@ sub new {
     $this->{'p_value_cutoff'} = 0.05;
     $this->{'linear_cutoff'} = 0;
 	$this->{'max_radius'} = 10;
-	$this->{'vertex_type'} = 'recurrence';
+	$this->{'vertex_type'} = $RECURRENCE;
     $this->{'maf_file'} = undef;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
+    $this->{'weight_header'} = $WEIGHT;
     bless $this, $class;
     $this->process();
     return $this;
@@ -59,6 +64,7 @@ sub process {
         'maf-file=s' => \$this->{'maf_file'},
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},		
+        'weight-header=s' => \$this->{'weight_header'},		
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
@@ -80,15 +86,16 @@ sub process {
 	}
     unless( $this->{'pairwise_file'} ) { warn 'You must provide pairwise file! ', "\n"; die $this->help_text(); }
     unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
-	if ( $this->{'vertex_type'} ne 'recurrence' and $this->{'vertex_type'} ne 'unique' ) {
-		warn "vertex_type option not recognized as \'recurrence\' or \'unique\'\n";
+	if ( $this->{'vertex_type'} ne $RECURRENCE and $this->{'vertex_type'} ne $UNIQUE and $this->{'vertex_type'} ne $WEIGHT ) {
+		warn "vertex_type option not recognized as \'recurrence\', \'unique\', or \'weight\'\n";
 		warn "Using default vertex_type = \'recurrence\'\n";
-		$this->{'vertex_type'} = 'recurrence';
+		$this->{'vertex_type'} = $RECURRENCE;
 	}
-    unless( ( $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'unique' ) ) { warn 'You must provide MAF file if not using unique vertex type! ', "\n"; die $this->help_text(); }
-    unless( ( -e $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne 'unique' ) ) { warn "The input MAF file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+    unless( ( $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne $UNIQUE ) ) { warn 'You must provide MAF file if not using unique vertex type! ', "\n"; die $this->help_text(); }
+    unless( ( -e $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne $UNIQUE ) ) { warn "The input MAF file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
     ## processing procedure
-	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, %master, %mut_chrpos , %locations , %Variants );
+	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, %master, %mut_chrpos , %locations , %Variants , $WEIGHT );
+	$WEIGHT = "weight";
 #####
 #	drug-mutation pairs
 #####
@@ -171,7 +178,7 @@ sub process {
 				if ( grep{ $_ eq $m2 } @{$aa_map{$gene2}} ) { 
 					my @mutations = ();
 					push @mutations , $first;
-					if ( $this->{'vertex_type'} eq 'unique' ) { $m2 =~ s/\D+(\d+)\D+/$1/g; }
+					if ( $this->{'vertex_type'} eq $UNIQUE ) { $m2 =~ s/\D+(\d+)\D+/$1/g; }
 					$second = $gene2.":".$m2;
 					push @mutations , $second; #@mus2;
 					my ( $dist , $pval ) = split ":" , $master{$first}{$second};
@@ -293,8 +300,8 @@ sub process {
     foreach ( keys %distance_matrix ) {
         $degree_connectivity{$_} = scalar keys %{$distance_matrix{$_}};
     }
-	if ( $this->{'vertex_type'} ne 'unique' ) {
-		print STDOUT "\nPreparing to get recurrence ...\n";
+	if ( $this->{'vertex_type'} ne $UNIQUE ) {
+		print STDOUT "\nPreparing to get recurrence or weight ...\n";
 		my %variants_from_pairs;
 		foreach my $id ( keys %clusterings ) {
 			foreach my $gene_mut ( @{$clusterings{$id}} ) {
@@ -307,7 +314,7 @@ sub process {
 				}
 			}
 		}
-		##Mutation recurrence from MAF
+		##Mutation recurrence or weight from MAF
 		my %mutations;
 		die "Could not open MAF file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
 		print STDOUT "\nReading in MAF ...\n";
@@ -334,22 +341,32 @@ sub process {
 						$mafcols{"Tumor_Sample_Barcode"},
 						$mafcols{$this->{"transcript_id_header"}},
 						$mafcols{$this->{"amino_acid_header"}} );
+		if ( $this->{'vertex_type'} eq $WEIGHT ) {
+			unless( defined( $mafcols{$this->{"weight_header"}} ) ) { die "\n"; };
+			push @mafcols , $mafcols{$this->{"weight_header"}};
+		}
 		map {
 			chomp;
 			my @line = split /\t/;
 			if ( $#line >= $mafcols[-1] && $#line >= $mafcols[-2] ) { #makes sure custom maf cols are in range
-				my ( $gene , $chr , $start , $stop , $reference , $tumorAllele , $barID , $transcript_name , $aachange ) = @line[@mafcols];
+				my ( $gene , $chr , $start , $stop , $reference , $tumorAllele , $barID , $transcript_name , $aachange );
+				my $weight = 1;
+				if ( $this->{'vertex_type'} eq $WEIGHT ) {
+					( $gene , $chr , $start , $stop , $reference , $tumorAllele , $barID , $transcript_name , $aachange , $weight ) = @line[@mafcols];
+				} else {
+					( $gene , $chr , $start , $stop , $reference , $tumorAllele , $barID , $transcript_name , $aachange ) = @line[@mafcols];
+				}
 				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
 				if ( exists $variants_from_pairs{$variant} ) {
 					my $gene_aachange = $gene.":".$aachange;
 					if ( exists $Variants{$gene_aachange} ) {
 						if ( not exists $mutations{$variant}{$barID} ) {
-							$Variants{$gene_aachange}++;
-							$mutations{$variant}{$barID}++;
+							$Variants{$gene_aachange} += $weight;
+							$mutations{$variant}{$barID} += $weight;
 						}
 					} else {
-						$Variants{$gene_aachange} = 1;
-						$mutations{$variant}{$barID} = 1;
+						$Variants{$gene_aachange} = $weight;
+						$mutations{$variant}{$barID} = $weight;
 					}
 				}
 			}
@@ -425,7 +442,7 @@ sub centroid{
 			my $C = 0;
 			foreach $other ( keys %{$dist{$current}}) {
 				$weight = 1; #stays as 1 if vertex_type eq 'unique'
-				if ( $this->{'vertex_type'} ne 'unique' ) {
+				if ( $this->{'vertex_type'} ne $UNIQUE ) {
 					if ( exists $Variants->{$other} ) {
 						$weight = $Variants->{$other};
 					}
@@ -435,13 +452,15 @@ sub centroid{
 						$C += $weight/( 2**$dist{$current}{$other} );
 						$count+=1;
 						#print "$current\t$other\t$dist{$current}{$other}\n";	
-					}
-					else{
+					} else{
 						$recluster=1;
 					}
-				} 
-				else {
-					$C += $weight -1;
+				} else { #current is same as other
+					if ( $this->{'vertex_type'} eq $WEIGHT ) { 
+						$C += $weight;
+					} else {
+						$C += $weight -1;
+					}
 				}
 				$centrality{$clus_num}{$current} = $C;
 				if ( $C > $max ) {
@@ -605,10 +624,11 @@ Usage: hotspot3d cluster [options]
 --p-value-cutoff             P_value cutoff (<), default: 0.05
 --linear-cutoff				 Linear distance cutoff (> peptides), default: 20
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
---vertex-type                Graph vertex type (recurrence or unique), default: recurrence
+--vertex-type                Graph vertex type (recurrence, unique, or weight), default: recurrence
 --maf-file                   MAF file used in proximity search step (used if vertex-type = recurrence)
 --transcript-id-header       MAF file column header for transcript id's, default: transcript_name
 --amino-acid-header          MAF file column header for amino acid changes, default: amino_acid_change 
+--weight-header              MAF file column header for mutation weight, default: weight (used if vertex-type = weight)
 
 --help                       this message
 
