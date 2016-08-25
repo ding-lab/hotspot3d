@@ -7,7 +7,7 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V0.4
+        Version:     V0.5.0
          Author:     Beifang Niu, John Wallis, Adam D Scott, & Sohini Sengupta
 
   Usage: hotspot3d <command> [options]
@@ -36,88 +36,112 @@ SUPPORT
 For user support please email adamscott@wustl.edu
 
 
+Update
+------
+
+To reinstall code (in some cases, may need --sudo):
+
+	cpanm --reinstall HotSpot3D-#.tar.gz
+
+
 Install (Ubuntu 14.04.01)
 -------
 
 Prerequisites:
 
 In order to install HotSpot3D package, first install CPANM
+
 (cpanm - get, unpack build and install modules from CPANM)
+
 NOTE: Some steps may require adding --force to install successfully.
 
-    sudo apt-get install cpanminus
+	sudo apt-get install cpanminus
 
     Another way to install cpanminus is to just download it, as per the installer
         
-       curl -LO http://xrl.us/cpanm
-       chmod +x cpanm
+		curl -LO http://xrl.us/cpanm
+    
+		chmod +x cpanm
 
     Or by using cpan
 
-       cpan App::cpanminus
+		cpan App::cpanminus
 
 Intall Perl5 local lib
 
-    cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
+	cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
 
 Intall LWP::Simple module
 
-    sudo apt-get install libwww-perl
+	sudo apt-get install libwww-perl
 
 Intall Test::Most module
         
-    wget http://search.cpan.org/CPAN/authors/id/O/OV/OVID/Test-Most-0.34.tar.gz
-    cpanm Test-Most-0.34.tar.gz
+	wget http://search.cpan.org/CPAN/authors/id/O/OV/OVID/Test-Most-0.34.tar.gz
+    
+	cpanm Test-Most-0.34.tar.gz
 
 Install HotSpot3D package: 
         
-    git clone https://github.com/ding-lab/hotspot3d
-    cd hotspot3d
-    cpanm HotSpot3D-#.#.tar.gz
+	git clone https://github.com/ding-lab/hotspot3d
 
-    Installations under some organizations may use an internal perl version.
-    To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
-    from: #!/org/bin/perl
-    to: #!/usr/bin/perl)
+	cd hotspot3d
+    
+	cpanm HotSpot3D-#.#.tar.gz
+
+    
+	Installations under some organizations may use an internal perl version.
+    
+	To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
+    
+	from: #!/org/bin/perl
+    
+	to: #!/usr/bin/perl)
+
 
 Example - Preprocessing
 -----------------------
 
 1. (Optional) Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
 
-    hotspot3d drugport --pdb-file-dir=pdb_files_dir
+	hotspot3d drugport --pdb-file-dir=pdb_files_dir
 
 2. Run 3D proximity calculation that also updates any existing preprocessed data :
 
-    hotspot3d uppro --output-dir=preprocessing_dir --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file 1>hotspot3d.uppro.err 2>hotspot3d.uppro.out
+	hotspot3d uppro --output-dir=preprocessing_dir --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file 1>hotspot3d.uppro.err 2>hotspot3d.uppro.out
 
 3. Calculate protein domain information for each UniProt ID (make sure all uppro jobs have finished!) : 
 
-    hotspot3d calroi --output-dir=preprocessing_dir
+	hotspot3d calroi --output-dir=preprocessing_dir
 
 4. Significance determination calculation :  
 
-    hotspot3d statis --output-dir=preprocessing_dir
+	hotspot3d statis --output-dir=preprocessing_dir
 
 5. Add protein domain annotation information to 3D proximity information :
 
-    hotspot3d anno --output-dir=preprocessing_dir
+	hotspot3d anno --output-dir=preprocessing_dir
 
 6. Choose transcripts based on the alignment between Uniprot sequence and human peptides sequences :
 
-    hotspot3d trans --output-dir=preprocessing_dir
+	hotspot3d trans --output-dir=preprocessing_dir
 
 7. Add cosmic v67 information to 3D proximity results :
 
-    mkdir preprocessing_dir/cosmic
-    cp COSMIc/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
-    cd ./preprocessing_dir/cosmic/ 
-    bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
-    hotspot3d cosmic --output-dir=preprocessing_dir
+	mkdir preprocessing_dir/cosmic
+
+	cp COSMIc/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
+
+	cd ./preprocessing_dir/cosmic/ 
+
+	bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
+
+	hotspot3d cosmic --output-dir=preprocessing_dir
 
 8. Prioritization :
 
-    hotspot3d prior --output-dir=preprocessing_dir --p-value-cutoff=0.1 --3d-distance-cutoff=20 --linear-distance-cutoff=0.5
+	hotspot3d prior --output-dir=preprocessing_dir --p-value-cutoff=0.1 --3d-distance-cutoff=20 --linear-distance-cutoff=0.5
+
 
 Example - Analysis
 ------------------
@@ -126,27 +150,27 @@ Example - Analysis
 
 1. Proximity searching (acquire proximity information for input mutations):
 
-    hotspot3d search --maf-file=your.maf --prep-dir=preprocessing_dir
+	hotspot3d search --maf-file=your.maf --prep-dir=preprocessing_dir
 
 2. Post-processing of pairwise data (required for cluster step):
 
-    hotspot3d post --maf-file=your.maf
+	hotspot3d post --maf-file=your.maf
 
 3. Cluster pairwise data:
 
-    hotspot3d cluster --collapsed-file=3D_Proximity.pairwise.singleprotein.collapsed --pairwise-file=3D_Proximity.pairwise
+	hotspot3d cluster --collapsed-file=3D_Proximity.pairwise.singleprotein.collapsed --pairwise-file=3D_Proximity.pairwise
 
 4. Cluster significance calculation:
 
-    hotspot3d sigclus --prep-dir=preprocessing_dir --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
+	hotspot3d sigclus --prep-dir=preprocessing_dir --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
 5. Clustering Summary:
 
-    hotspot3d summary --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
+	hotspot3d summary --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
 6. Visualization (works with PyMol):
 
-    hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
+	hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
 
 Tips
 ----
