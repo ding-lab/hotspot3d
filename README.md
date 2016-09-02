@@ -7,7 +7,7 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V0.5.0
+        Version:     V0.5.1
          Author:     Beifang Niu, John Wallis, Adam D Scott, & Sohini Sengupta
 
   Usage: hotspot3d <command> [options]
@@ -32,7 +32,9 @@ Usage
              summary   --  4) Summarize clusters (OPTIONAL)
              visual    --  5) Visulization of 3D proximity (OPTIONAL)
 
-SUPPORT
+Support
+-------
+
 For user support please email adamscott@wustl.edu
 
 
@@ -104,43 +106,43 @@ Example - Preprocessing
 
 1. (Optional) Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
 
-	hotspot3d drugport --pdb-file-dir=pdb_files_dir
+		hotspot3d drugport --pdb-file-dir=pdb_files_dir
 
-2. Run 3D proximity calculation that also updates any existing preprocessed data :
+2. Run 3D proximity calculation that also updates any existing preprocessed data (default launches LSF jobs) :
 
-	hotspot3d uppro --output-dir=preprocessing_dir --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file 1>hotspot3d.uppro.err 2>hotspot3d.uppro.out
+		hotspot3d uppro --output-dir=preprocessing_dir --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file 1>hotspot3d.uppro.err 2>hotspot3d.uppro.out
 
 3. Calculate protein domain information for each UniProt ID (make sure all uppro jobs have finished!) : 
 
-	hotspot3d calroi --output-dir=preprocessing_dir
+		hotspot3d calroi --output-dir=preprocessing_dir
 
 4. Significance determination calculation :  
 
-	hotspot3d statis --output-dir=preprocessing_dir
+		hotspot3d statis --output-dir=preprocessing_dir
 
 5. Add protein domain annotation information to 3D proximity information :
 
-	hotspot3d anno --output-dir=preprocessing_dir
+		hotspot3d anno --output-dir=preprocessing_dir
 
 6. Choose transcripts based on the alignment between Uniprot sequence and human peptides sequences :
 
-	hotspot3d trans --output-dir=preprocessing_dir
+		hotspot3d trans --output-dir=preprocessing_dir
 
 7. Add cosmic v67 information to 3D proximity results :
 
-	mkdir preprocessing_dir/cosmic
+		mkdir preprocessing_dir/cosmic
 
-	cp COSMIc/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
+		cp COSMIc/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
 
-	cd ./preprocessing_dir/cosmic/ 
+		cd ./preprocessing_dir/cosmic/ 
 
-	bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
+		bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
 
-	hotspot3d cosmic --output-dir=preprocessing_dir
+		hotspot3d cosmic --output-dir=preprocessing_dir
 
 8. Prioritization :
 
-	hotspot3d prior --output-dir=preprocessing_dir --p-value-cutoff=0.1 --3d-distance-cutoff=20 --linear-distance-cutoff=0.5
+		hotspot3d prior --output-dir=preprocessing_dir --p-value-cutoff=0.1 --3d-distance-cutoff=20 --linear-distance-cutoff=0.5
 
 
 Example - Analysis
@@ -150,27 +152,27 @@ Example - Analysis
 
 1. Proximity searching (acquire proximity information for input mutations):
 
-	hotspot3d search --maf-file=your.maf --prep-dir=preprocessing_dir
+		hotspot3d search --maf-file=your.maf --prep-dir=preprocessing_dir
 
 2. Post-processing of pairwise data (required for cluster step):
 
-	hotspot3d post --maf-file=your.maf
+		hotspot3d post --maf-file=your.maf
 
 3. Cluster pairwise data:
 
-	hotspot3d cluster --collapsed-file=3D_Proximity.pairwise.singleprotein.collapsed --pairwise-file=3D_Proximity.pairwise
+		hotspot3d cluster --collapsed-file=3D_Proximity.pairwise.singleprotein.collapsed --pairwise-file=3D_Proximity.pairwise
 
 4. Cluster significance calculation:
 
-	hotspot3d sigclus --prep-dir=preprocessing_dir --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
+		hotspot3d sigclus --prep-dir=preprocessing_dir --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
 5. Clustering Summary:
 
-	hotspot3d summary --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
+		hotspot3d summary --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
 6. Visualization (works with PyMol):
 
-	hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
+		hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
 
 Tips
 ----
@@ -201,7 +203,7 @@ And two non-standard columns:
 
 		a transcript ID column
 		
-		a protein peptide change column (HGVS p. single letter abbreviations)
+		a protein peptide change column (HGVS p. single letter abbreviations, ie p.T790M)
 
 Current Annotation Support:
 
@@ -225,4 +227,4 @@ Clustering with different pairs data:
 
 		For intra+inter+DrugPort include a concatenated singleprotein and complex pairs file with the DrugPort pairs.
 
-	Note that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter clustering.
+	NOTE: that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter clustering.
