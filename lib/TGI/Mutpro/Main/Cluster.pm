@@ -84,15 +84,17 @@ sub process {
 			die $this->help_text();
 		}
 	}
-    unless( $this->{'pairwise_file'} ) { warn 'You must provide pairwise file! ', "\n"; die $this->help_text(); }
+    unless( $this->{'pairwise_file'} ) { warn 'You must provide a pairwise file! ', "\n"; die $this->help_text(); }
     unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
 	if ( $this->{'vertex_type'} ne $RECURRENCE and $this->{'vertex_type'} ne $UNIQUE and $this->{'vertex_type'} ne $WEIGHT ) {
 		warn "vertex_type option not recognized as \'recurrence\', \'unique\', or \'weight\'\n";
 		warn "Using default vertex_type = \'recurrence\'\n";
 		$this->{'vertex_type'} = $RECURRENCE;
 	}
-    unless( ( $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne $UNIQUE ) ) { warn 'You must provide MAF file if not using unique vertex type! ', "\n"; die $this->help_text(); }
-    unless( ( -e $this->{'maf_file'} ) and ( $this->{'vertex_type'} ne $UNIQUE ) ) { warn "The input MAF file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+	if ( $this->{'vertex_type'} ne $UNIQUE ) {
+		unless( $this->{'maf_file'} ) { warn 'You must provide a .maf file if not using unique vertex type! ', "\n"; die $this->help_text(); }
+		unless( -e $this->{'maf_file'} ) { warn "The input .maf file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+	}
     ## processing procedure
 	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, %master, %mut_chrpos , %locations , %Variants , $WEIGHT );
 	$WEIGHT = "weight";
@@ -316,8 +318,8 @@ sub process {
 		}
 		##Mutation recurrence or weight from MAF
 		my %mutations;
-		die "Could not open MAF file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
-		print STDOUT "\nReading in MAF ...\n";
+		die "Could not open .maf file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
+		print STDOUT "\nReading in .maf ...\n";
 		my $mafi = 0;
 		my $headline = $fh->getline(); chomp( $headline );
 		my %mafcols = map{ ( $_ , $mafi++ ) } split( /\t/ , $headline );
@@ -330,7 +332,7 @@ sub process {
 				and defined( $mafcols{"Tumor_Sample_Barcode"} )
 				and defined( $mafcols{$this->{"transcript_id_header"}} )
 				and defined( $mafcols{$this->{"amino_acid_header"}} ) ) {
-			die "not a valid MAF file! Check transcript and amino acid change headers.\n";
+			die "not a valid .maf file! Check transcript and amino acid change headers.\n";
 		}
 		my @mafcols = ( $mafcols{"Hugo_Symbol"},
 						$mafcols{"Chromosome"},
@@ -622,13 +624,13 @@ Usage: hotspot3d cluster [options]
                              OPTIONAL
 --output-prefix              Output prefix, default: 3D_Proximity
 --p-value-cutoff             P_value cutoff (<), default: 0.05
---linear-cutoff				 Linear distance cutoff (> peptides), default: 20
+--linear-cutoff              Linear distance cutoff (> peptides), default: 20
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
 --vertex-type                Graph vertex type (recurrence, unique, or weight), default: recurrence
---maf-file                   MAF file used in proximity search step (used if vertex-type = recurrence)
---transcript-id-header       MAF file column header for transcript id's, default: transcript_name
---amino-acid-header          MAF file column header for amino acid changes, default: amino_acid_change 
---weight-header              MAF file column header for mutation weight, default: weight (used if vertex-type = weight)
+--maf-file                   .maf file used in proximity search step (used if vertex-type = recurrence)
+--transcript-id-header       .maf file column header for transcript id's, default: transcript_name
+--amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 
+--weight-header              .maf file column header for mutation weight, default: weight (used if vertex-type = weight)
 
 --help                       this message
 
