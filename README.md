@@ -160,7 +160,7 @@ Example - Analysis
 
 3. Cluster pairwise data:
 
-		hotspot3d cluster --collapsed-file=3D_Proximity.pairwise.singleprotein.collapsed --pairwise-file=3D_Proximity.pairwise
+		hotspot3d cluster --collapsed-file=3D_Proximity.pairwise.singleprotein.collapsed --pairwise-file=3D_Proximity.pairwise --maf-file=your.maf
 
 4. Cluster significance calculation:
 
