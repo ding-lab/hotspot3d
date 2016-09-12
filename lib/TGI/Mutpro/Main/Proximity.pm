@@ -16,6 +16,8 @@ use Getopt::Long;
 use IO::File;
 use FileHandle;
 
+use TGI::Mutpro::Preprocess::AminoAcid;
+
 sub new {
     my $class = shift;
     my $this = {};
@@ -282,19 +284,12 @@ sub getDrugportInfo {
 	return \%drugport_hash;
 }
 
-sub filterWater {
-	my ( $residue1 , $residue2 ) = @_;
-	if ( $residue1 =~ /HOH/ || $residue2 =~ /HOH/ ) {
-		return 1;
-	}
-	return 0;
-}
-
 # proximity searching 
 sub proximitySearching {
     my ( $this, $mafHashref, $proximityOutPrefix, $drugportref ) = @_;
     my ( @pairResults, @cosmicclose, @roiclose, @drugport_target_results, @drugport_nontarget_results, );
     my $fh = new FileHandle;
+	my $AA = new TGI::Mutpro::Preprocess::AminoAcid;
     foreach my $a ( keys %$mafHashref ) {
         my $uniprotf = "$proximityOutPrefix\/$a.ProximityFile.csv";
         next unless( -e $uniprotf and $fh->open($uniprotf) ); 
@@ -303,7 +298,11 @@ sub proximitySearching {
             my ( $uid1, $chain1, $pdbcor1, $offset1, $residue1, $domain1, $cosmic1, 
                  $uid2, $chain2, $pdbcor2, $offset2, $residue2, $domain2, $cosmic2, 
                  $proximityinfor ) = @ta;
-			if ( &filterWater( $residue1 , $residue2 ) ) { next; }
+			if ( $drugportref ) { 
+				if ( $AA->filterWater( $residue1 ) and $AA->filterWater( $residue2 ) ) { next; }
+			} else {
+				if ( $AA->checkAA( $residue1 ) and $AA->checkAA( $residue2 ) ) { next; }
+			}
             my $uniprotcor1 = $pdbcor1 + $offset1; 
             my $uniprotcor2 = $pdbcor2 + $offset2;
             my $lineardis = undef;
@@ -536,4 +535,3 @@ HELP
 }
 
 1;
-

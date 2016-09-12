@@ -1,7 +1,7 @@
 package TGI::Mutpro::Preprocess::AminoAcid;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu & Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision:  $
 # $URL: $
@@ -10,13 +10,10 @@ package TGI::Mutpro::Preprocess::AminoAcid;
 #
 use strict;
 use warnings;
-
 use Carp;
 use TGI::Mutpro::Preprocess::Point;
 #use PostData;
-
 my $Debug = 0;
-
 # Collection of points (atoms) in crystal structure
 sub new {    
     my $proto = shift;
@@ -30,6 +27,27 @@ sub new {
     $self->{POINTS} = ();      # Array of refs to Point objects (unordered Points -- i.e. atoms)
     $self->{AMBIGUOUS} = 0;    # Some PDB peptides have more than one residue at a given position. 
                                # Don't use these
+	$self->{ACCEPTED} = { 	"ALA" => "A" , 
+							"ARG" => "R" ,
+							"ASN" => "N" ,
+							"ASP" => "D" ,
+							"CYS" => "C" ,
+							"GLN" => "Q" ,
+							"GLU" => "E" ,
+							"GLY" => "G" ,
+							"HIS" => "H" ,
+							"ILE" => "I" ,
+							"LEU" => "L" ,
+							"LYS" => "K" ,
+							"MET" => "M" ,
+							"PHE" => "F" ,
+							"PRO" => "P" ,
+							"SER" => "S" ,
+							"THR" => "T" ,
+							"TRP" => "W" ,
+							"TYR" => "Y" ,
+							"VAL" => "V"
+	};
     bless ($self, $class);
 
     return $self;
@@ -57,7 +75,10 @@ sub position {
 sub name {
     # Name of amino acid (three letter code)
     my $self = shift;
-    if (@_) { $self->{AA} = shift; }
+    if (@_) {
+		#TODO: check if name is a real AA
+		$self->{AA} = shift;
+	}
     return $self->{AA};
 }
 
@@ -82,18 +103,18 @@ sub averagePoint {
     # belonging to this amino acid
     my $self = shift;
     if ( !defined $self->{AVGPOINT} ) {
-	my ( $xTotal, $yTotal, $zTotal, $totalAtoms, $pointRef, $avgPoint, );
-	foreach $pointRef ( $self->getPoints() ) {
-	    #PostData($pointRef); print "\n";
-	    my ($x,$y,$z) = $$pointRef->xyz();
-	    $xTotal += $x;
-	    $yTotal += $y;
-	    $zTotal += $z;
-	    $totalAtoms++;
-	}
-	$avgPoint = new TGI::Mutpro::Preprocess::Point;
-	$avgPoint->xyz($xTotal/$totalAtoms, $yTotal/$totalAtoms, $zTotal/$totalAtoms);
-	$self->{AVGPOINT} = \$avgPoint;
+		my ( $xTotal, $yTotal, $zTotal, $totalAtoms, $pointRef, $avgPoint, );
+		foreach $pointRef ( $self->getPoints() ) {
+			#PostData($pointRef); print "\n";
+			my ($x,$y,$z) = $$pointRef->xyz();
+			$xTotal += $x;
+			$yTotal += $y;
+			$zTotal += $z;
+			$totalAtoms++;
+		}
+		$avgPoint = new TGI::Mutpro::Preprocess::Point;
+		$avgPoint->xyz($xTotal/$totalAtoms, $yTotal/$totalAtoms, $zTotal/$totalAtoms);
+		$self->{AVGPOINT} = \$avgPoint;
     }
     return $self->{AVGPOINT};
 }
@@ -112,7 +133,6 @@ sub averageDistance {
     $avgDistance = $$thisAvgPointRef->distance($thatAvgPointRef);
     return $avgDistance;
 }
-    
 
 sub minDistance {
     # Input: ref to AminoAcid object
@@ -124,14 +144,34 @@ sub minDistance {
     my ( $distance, $minDistance, $thisPointRef, $thatPointRef  );
     $minDistance = 1e10;
     foreach $thisPointRef ( $self->getPoints() ) {
-	foreach $thatPointRef ( $$aaRef->getPoints() ) {
-	    $distance = $$thisPointRef->distance($thatPointRef);
-	    if ( $distance < $minDistance ) { $minDistance = $distance; }
-	}
+		foreach $thatPointRef ( $$aaRef->getPoints() ) {
+			$distance = $$thisPointRef->distance($thatPointRef);
+			if ( $distance < $minDistance ) { $minDistance = $distance; }
+		}
     }
     ($minDistance < 1e10) || confess "Did not get any distance values";
     return $minDistance;
 }
 
-return 1;
+sub filterWater {
+	my ( $this , $residue ) = @_;
+	if ( $residue eq "HOH" ) {
+		return 1;
+	}
+	return 0;
+}
 
+sub filterNonAA {
+	my ( $this , $residue ) = @_;
+	return $this->checkAA( $residue );
+}
+
+sub checkAA {
+	my ( $this , $residue ) = @_;
+	if ( exists $this->{ACCEPTED}->{$residue} ) {
+		return 1;
+	}
+	return 0;
+}
+
+return 1;
