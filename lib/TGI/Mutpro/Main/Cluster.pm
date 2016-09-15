@@ -362,9 +362,11 @@ sub process {
 				if ( exists $variants_from_pairs{$variant} ) {
 					my $gene_aachange = $gene.":".$aachange;
 					if ( exists $Variants{$gene_aachange} ) {
-						if ( not exists $mutations{$variant}{$barID} ) {
-							$Variants{$gene_aachange} += $weight;
-							$mutations{$variant}{$barID} += $weight;
+						if ( $this->{'vertex_type'} ne $WEIGHT ) {
+							if ( not exists $mutations{$variant}{$barID} ) {
+								$Variants{$gene_aachange} += $weight;
+								$mutations{$variant}{$barID} += $weight;
+							}
 						}
 					} else {
 						$Variants{$gene_aachange} = $weight;
