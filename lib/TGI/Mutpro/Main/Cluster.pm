@@ -96,7 +96,7 @@ sub process {
 		unless( -e $this->{'maf_file'} ) { warn "The input .maf file )".$this->{'maf_file'}.") does not exist! ", "\n"; die $this->help_text(); }
 	}
     ## processing procedure
-	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, %master, %mut_chrpos , %locations , %Variants , $WEIGHT );
+	my ( %clusterings , %distance_matrix , %pdb_loc, %aa_map, %master, %mut_chrpos , %locations , %Variants , $WEIGHT , %transcripts );
 	$WEIGHT = "weight";
 #####
 #	drug-mutation pairs
@@ -317,7 +317,6 @@ sub process {
 			}
 		}
 		##Mutation recurrence or weight from MAF
-		my %mutations;
 		die "Could not open .maf file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
 		print STDOUT "\nReading in .maf ...\n";
 		my $mafi = 0;
@@ -347,6 +346,7 @@ sub process {
 			unless( defined( $mafcols{$this->{"weight_header"}} ) ) { die "\n"; };
 			push @mafcols , $mafcols{$this->{"weight_header"}};
 		}
+		my %mutations;
 		map {
 			chomp;
 			my @line = split /\t/;
@@ -361,6 +361,7 @@ sub process {
 				my $variant = join( "_" , ( $gene , $aachange , $chr , $start , $stop ) );
 				if ( exists $variants_from_pairs{$variant} ) {
 					my $gene_aachange = $gene.":".$aachange;
+					$transcripts{$gene_aachange}{$transcript_name.":".$aachange} = $chr.":".$start.":".$stop;
 					if ( exists $Variants{$gene_aachange} ) {
 						if ( $this->{'vertex_type'} ne $WEIGHT ) {
 							if ( not exists $mutations{$variant}{$barID} ) {
@@ -404,11 +405,17 @@ sub process {
 	push @outFilename , "clusters";
 	my $outFilename = join( "." , @outFilename );
     die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
-    $fh->print( "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\n" );
+    $fh->print( join( "\t" , ( 	"Cluster" , "Gene/Drug" , "Mutation/Gene" , 
+								"Degree_Connectivity" , "Closeness_Centrality" , 
+								"Geodesic_From_Centroid" , "Recurrence" , 
+								"Chromosome" , "Start" , "Stop" , "Transcript" , "Alternative_Transcripts"
+							 )
+					)."\n"
+			  );
 	print STDOUT "Getting Cluster ID's & Centroids\n";
     foreach my $clus_num ( keys %clusterings ) {
 		my @clus_mut = @{$clusterings{$clus_num}};
-		$this->centroid(\%Variants,\%distance_matrix,\%degree_connectivity,$clus_num,\@clus_mut,$fh,0, 1);
+		$this->centroid(\%Variants,\%distance_matrix,\%degree_connectivity,$clus_num,\@clus_mut,$fh,0, 1 , \%transcripts);
     } #foreach cluster
     my $numclusters = scalar keys %clusterings;
     print STDOUT "Found $numclusters clusters\n";
@@ -419,7 +426,7 @@ sub process {
 #	sub functions
 #####
 sub centroid{
-		my ($this, $Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster,$counter)=@_;
+		my ($this, $Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster,$counter , $transcripts )=@_;
 		my %dist = ();
 		foreach my $mut1 ( @{$clus_mut} ) { #initialize geodesics
 			my @mu1 = split( ":" , $mut1 );
@@ -484,6 +491,8 @@ sub centroid{
 				my $degrees = $degree_connectivity->{$other};
 				my $closenesscentrality = $centrality{$clus_num}{$other};
 				my ( $gene , $mutation ) = split /\:/ , $other;
+				my ( $reportedTranscript , $altTranscript , 
+					 $chromosome , $start , $stop ) = $this->getTranscriptInfo( $transcripts , $other );
 				$weight = 1;
 
 				if ( $geodesic <= $this->{'max_radius'} ) {
@@ -492,13 +501,26 @@ sub centroid{
 					}
 					$count+=1;
 					if ($recluster==1){
-						$fh->print( join( "\t" , ( "$clus_num.$counter" , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
+						$fh->print( join( "\t" , ( "$clus_num.$counter" , $gene , $mutation , 
+													$degrees , $closenesscentrality , 
+													$geodesic , $weight ,
+													$chromosome , $start , $stop  ,
+													$reportedTranscript , $altTranscript 
+												 )
+										)."\n"
+								  );
 						my $index=0;
 						$index++ until $clus_mut->[$index] eq $other;
 						splice(@{$clus_mut}, $index, 1);
 					}
 					else {
-						$fh->print( join( "\t" , ( $clus_num , $gene , $mutation , $degrees , $closenesscentrality , $geodesic , $weight ) )."\n" );
+						$fh->print( join( "\t" , ( 	$clus_num , $gene , $mutation , $degrees , 
+													$closenesscentrality , $geodesic , $weight , 
+													$chromosome , $start , $stop  ,
+													$reportedTranscript , $altTranscript 
+												 )
+										)."\n"
+								  );
 					}
 				}
 			} #foreach other vertex in network
@@ -512,7 +534,7 @@ sub centroid{
 		if ($recluster==1) {
 			$counter+=1;
 			#print STDOUT "$counter\n";
-			$this->centroid($Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster, $counter);
+			$this->centroid($Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster, $counter , $transcripts);
 		}
 }
 
@@ -607,6 +629,37 @@ sub floydwarshall {
 	}
 }
 
+sub getTranscriptInfo {
+	my ( $this , $transcripts , $other ) = @_;
+	my ( $reportedTranscript , $altTranscript , $transcript );
+	my ( $chromosome , $start , $stop );
+	my ( $gene , $mu ) = split /\:/ , $other;
+	print $other." => ";
+	foreach my $tranmu ( sort keys %{$transcripts->{$other}} ) {
+		print $tranmu." ==> ";
+		my ( $transcript , $mutation ) = split /\:/ , $tranmu;
+		my $css = $transcripts->{$other}->{$tranmu};
+		print $css." | \n";
+		( $chromosome , $start , $stop ) = split /\:/ , $css;
+		if ( $mu eq $mutation ) {
+			if ( not $reportedTranscript ) {
+				$reportedTranscript = $transcript;
+			} else {
+				$reportedTranscript .= "|".$transcript;
+			}
+		} else {
+			if ( not $altTranscript ) {
+				$altTranscript = $transcript.":".$mutation;
+			} else {
+				$altTranscript .= "|".$transcript.":".$mutation;
+			}
+		}
+	} #foreach tranmu
+
+	if ( not $reportedTranscript ) { $reportedTranscript = "NA"; }
+	if ( not $altTranscript ) { $altTranscript = "NA"; }
+	return ( $reportedTranscript , $altTranscript , $chromosome , $start , $stop );
+}
 
 
 
