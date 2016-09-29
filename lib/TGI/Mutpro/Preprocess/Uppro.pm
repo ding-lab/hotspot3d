@@ -23,6 +23,9 @@ use List::MoreUtils qw( uniq );
 use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
 
+my $MINDISTANCE = "minDistance";
+my $AVGDISTANCE = "averageDistance";
+
 sub new {
     my $class = shift;
     my $this = {};
@@ -34,6 +37,7 @@ sub new {
         'status' => undef,
         'pdb_file_dir' => undef,
         'genes' => undef,
+        'distance_measure' => $AVGDISTANCE,
         #'drugport_file' => undef, 
         'cmd_list_submit_file' => "cmd_list_submit_file", 
     );
@@ -53,6 +57,7 @@ sub process {
         'output-dir=s'    => \$this->{'output_dir'},
         'pdb-file-dir=s'  => \$this->{'pdb_file_dir'},
         'gene-file=s'  => \$this->{'genes'},
+        'measure=s'  => \$this->{'distance_measure'},
         #'drugport-file=s' => \$this->{'drugport_file'},
         'cmd-list-submit-file=s' => \$this->{'cmd_list_submit_file'},
         'hold'   => \$this->{'hold'},
@@ -72,11 +77,15 @@ sub process {
     my $pdbcor_dir = "$pro_dir\/pdbCoordinateFiles";
     my $log_file = "$this->{'output_dir'}\/hugo.uniprot.pdb.csv";
     my $log_dir = "$this->{'output_dir'}\/Logs\/";
+    my $measure = $this->{'distance_measure'};
     unless (-e $pro_dir) { mkdir($pro_dir) || die "HotSpot3D Uppro Error: can not make $pro_dir !\n"; }
     unless (-e $log_file) { if (system("touch $log_file") != 0) { die "HotSpot3D Uppro Error: can not make hugo uniprot file !\n"; } }
     unless (-e $inpro_dir) { mkdir($inpro_dir) || die "HotSpot3D Uppro Error: can not make $inpro_dir !\n"; }
     unless (-e $pdbcor_dir) { mkdir($pdbcor_dir) || die "HotSpot3D Uppro Error: can not make $pdbcor_dir !\n"; }
     unless ( -e $log_dir ) { mkdir( $log_dir ) || die "HotSpot3D Uppro Error: can not make $log_dir !\n"; }
+	unless ( $measure eq $MINDISTANCE or $measure eq $AVGDISTANCE ) {
+		warn "HotSpot3D::Uppro warning: measure not recognized, resetting to default = averageDistance\n";
+	}
     my %uniprotid_toupdate;
     my $uniprot_to_structureref = $this->current_structures($log_file);
     my $uniprot_fileref = $this->currentuniprot_files($pro_dir);
@@ -143,7 +152,7 @@ sub process {
         system("touch $inpro_dir/$_.ProximityFile.csv");
 		my $bsub = "bsub -oo ".$log_dir.$_.".err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000";
 		my $update_program = " 'hotspot3d calpro";
-		my $programOptions = " --output-dir=".$this->{'output_dir'}." --pdb-file-dir=".$this->{'pdb_file_dir'}." --uniprot-id=".$_." --3d-distance-cutoff=".$this->{'max_3d_dis'}." --linear-cutoff=".$this->{'min_seq_dis'}."'";
+		my $programOptions = " --output-dir=".$this->{'output_dir'}." --pdb-file-dir=".$this->{'pdb_file_dir'}." --uniprot-id=".$_." --3d-distance-cutoff=".$this->{'max_3d_dis'}." --linear-cutoff=".$this->{'min_seq_dis'}." --measure=".$this->{'distance_measure'}."'";
         my $submit_cmd = $bsub.$update_program.$programOptions;
         print STDOUT $submit_cmd."\n"; 
         $cmd_list_submit_file_fh->print($submit_cmd."\n");
@@ -209,6 +218,7 @@ Usage: hotspot3d uppro [options]
 --gene-file                  File with HUGO gene names in the first column (like a .maf)
 --3d-distance-cutoff         Maximum 3D distance (<= Angstroms), defaul: 100
 --linear-distance-cutoff     Minimum linear distance (> peptides), default: 0
+--measure                    Distance measure between residues (minDistance or averageDistance), default: averageDistance
 --cmd-list-submit-file       Batch jobs file to run calpro step in parallel, default: cmd_list_submit_file
 --hold                       Do not submit batch jobs, just write cmd_list_submit_file, default: submits (takes no input)
 
