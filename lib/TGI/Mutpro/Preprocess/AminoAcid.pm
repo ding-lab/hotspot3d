@@ -155,7 +155,7 @@ sub minDistance {
 
 sub filterWater {
 	my ( $this , $residue ) = @_;
-	if ( $residue eq "HOH" ) {
+	if ( $residue ne "HOH" ) {
 		return 1;
 	}
 	return 0;

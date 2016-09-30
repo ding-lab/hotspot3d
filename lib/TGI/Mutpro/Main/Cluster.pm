@@ -27,6 +27,9 @@ use Data::Dumper;
 my $WEIGHT = "weight";
 my $RECURRENCE = "recurrence";
 my $UNIQUE = "unique";
+my $PVALUEDEFAULT = 0.05;
+my $DISTANCEDEFAULT = 10;
+my $MAXDISTANCE = 100;
 
 sub new {
     my $class = shift;
@@ -35,7 +38,8 @@ sub new {
     $this->{'collapsed_file'} = '3D_Proximity.pairwise.singleprotein.collapsed';
     $this->{'drug_clean_file'} = undef;
     $this->{'output_prefix'} = undef;
-    $this->{'p_value_cutoff'} = 0.05;
+    $this->{'p_value_cutoff'} = undef;
+    $this->{'3d_distance_cutoff'} = undef;
     $this->{'linear_cutoff'} = 0;
 	$this->{'max_radius'} = 10;
 	$this->{'vertex_type'} = $RECURRENCE;
@@ -58,6 +62,7 @@ sub process {
         'collapsed-file=s' => \$this->{'collapsed_file'},
         'drug-clean-file=s' => \$this->{'drug_clean_file'},
         'p-value-cutoff=f' => \$this->{'p_value_cutoff'},
+        '3d-distance-cutoff=f' => \$this->{'3d_distance_cutoff'},
         'linear-cutoff=f' => \$this->{'linear_cutoff'},
         'max-radius=f' => \$this->{'max_radius'},
         'vertex-type=s' => \$this->{'vertex_type'},
@@ -69,6 +74,19 @@ sub process {
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
+	if ( not defined $this->{'p_value_cutoff'} ) {
+		if ( not defined $this->{'3d_distance_cutoff'} ) {
+			warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
+			$this->{'p_value_cutoff'} = $PVALUEDEFAULT;
+			$this->{'3d_distance_cutoff'} = $MAXDISTANCE;
+		} else {
+			$this->{'p_value_cutoff'} = 1;
+		}
+	} else {
+		if ( not defined $this->{'3d_distance_cutoff'} ) {
+			$this->{'3d_distance_cutoff'} = $MAXDISTANCE;
+		}
+	}
     if ( ( not defined $this->{'collapsed_file'} ) and ( not defined $this->{'drug_clean_file'} ) ) {
 		warn 'You must provide a collapsed pairs file or drug pairs file! ', "\n";
 		die $this->help_text();
@@ -184,8 +202,8 @@ sub process {
 					$second = $gene2.":".$m2;
 					push @mutations , $second; #@mus2;
 					my ( $dist , $pval ) = split ":" , $master{$first}{$second};
-					$this->AHC( $pval , $this->{'p_value_cutoff'} , \%clusterings , \@mutations );
-					if ( $pval < $this->{'p_value_cutoff'} ) {
+					$this->AHC( $pval , $dist , \%clusterings , \@mutations );
+					if ( $pval < $this->{'p_value_cutoff'} or $dist < $this->{'3d_distance_cutoff'} ) {
 						$distance_matrix{$first}{$second} = $dist;
 						$distance_matrix{$second}{$first} = $dist;
 					}
@@ -274,7 +292,7 @@ sub process {
 			} #foreach transcript representation of mutations
 			my @mutations = @gm1;
 			push @mutations , @gm2;
-			$this->AHC( $pval , $this->{'p_value_cutoff'} , \%clusterings , \@mutations );
+			$this->AHC( $pval , $dist , \%clusterings , \@mutations );
 		} $fh->getlines;
 		$fh->close();
 	} #if using collapsed pairs file
@@ -399,7 +417,18 @@ sub process {
 			}
 		}
 		push @outFilename , $this->{'linear_cutoff'};
-		push @outFilename , $this->{'p_value_cutoff'};
+		if ( $this->{'3d_distance_cutoff'} != $MAXDISTANCE ) {
+            if ( $this->{'p_value_cutoff'} != 1 ) {
+                push @outFilename , $this->{'p_value_cutoff'};
+                push @outFilename , $this->{'3d_distance_cutoff'};
+            } else {
+                push @outFilename , $this->{'3d_distance_cutoff'};
+            }
+        } else {
+            if ( $this->{'p_value_cutoff'} != 1 ) {
+                push @outFilename , $this->{'p_value_cutoff'};
+            }
+        }
 		push @outFilename , $this->{'max_radius'};
 	}
 	push @outFilename , "clusters";
@@ -541,8 +570,8 @@ sub centroid{
 
 ## CLUSTERING FUNCTION - AGGLOMERATIVE HIERARCHICAL CLUSTERING (AHC)
 sub AHC {
-    my ( $this, $pval , $pthreshold , $clusterings , $mutations ) = @_;
-    if ( $pval < $pthreshold ) { #meets desired significance
+    my ( $this, $pval , $dist , $clusterings , $mutations ) = @_;
+    if ( $pval < $this->{'p_value_cutoff'} or $dist < $this->{'3d_distance_cutoff'} ) { #meets desired significance
         my ( @temp, @found, @combine ); 
         my ( @uniq, $c );
         foreach $c ( keys %{$clusterings} ) { #each cluster
@@ -661,6 +690,23 @@ sub getTranscriptInfo {
 	return ( $reportedTranscript , $altTranscript , $chromosome , $start , $stop );
 }
 
+sub checkPair {
+	my ( $this , $dist , $pval ) = @_;
+	if ( $this->{'3d_distance_cutoff'} == $MAXDISTANCE ) {
+		if ( $pval < $this->{'p_value_cutoff'} ) {
+			return 1;
+		}
+	} elsif ( $this->{'p_value_cutoff'} == 1 ) {
+		if ( $dist < $this->{'3d_distance_cutoff'} ) {
+			return 1;
+		}
+	} else {
+		if ( $dist < $this->{'3d_distance_cutoff'} and $pval < $this->{'p_value_cutoff'} ) {
+			return 1;
+		}
+	}
+	return 0;
+}
 
 
 sub help_text{
@@ -678,7 +724,8 @@ Usage: hotspot3d cluster [options]
 
                              OPTIONAL
 --output-prefix              Output prefix, default: 3D_Proximity
---p-value-cutoff             P_value cutoff (<), default: 0.05
+--p-value-cutoff             P_value cutoff (<), default: 0.05 (if 3d-distance-cutoff also not set)
+--3d-distance-cutoff         3D distance cutoff (<), default: 100 (if p-value-cutoff also not set)
 --linear-cutoff              Linear distance cutoff (> peptides), default: 20
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
 --vertex-type                Graph vertex type (recurrence, unique, or weight), default: recurrence

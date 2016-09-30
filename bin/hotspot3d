@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-our $VERSION = 'V0.5.5';
+our $VERSION = 'V0.6.0';
 
 use Carp;
 use FileHandle;
@@ -32,10 +32,11 @@ use TGI::Mutpro::Preprocess::Anno;
 use TGI::Mutpro::Preprocess::Cosmic;
 use TGI::Mutpro::Preprocess::Prior;
 use TGI::Mutpro::Preprocess::Homolog;
+#use TGI::Mutpro::Preprocess::AllPreprocess;
 
 my $subCmd = shift;
 ## Add module option here
-my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior help );
+my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep help );
 unless (defined $subCmd) { die help_text(); };
 unless (exists $cmds{$subCmd}) {
     warn ' Please give valid sub command ! ', "\n";
@@ -43,23 +44,24 @@ unless (exists $cmds{$subCmd}) {
 }
 SWITCH:{
 	## Add module action here
-    $subCmd eq 'search'   && do { TGI::Mutpro::Main::Proximity->new();      last SWITCH; };
-    $subCmd eq 'post'     && do { TGI::Mutpro::Main::Post->new();           last SWITCH; };
-    $subCmd eq 'visual'   && do { TGI::Mutpro::Main::Visual->new();         last SWITCH; };
-    $subCmd eq 'cluster'  && do { TGI::Mutpro::Main::Cluster->new();        last SWITCH; };
-    $subCmd eq 'sigclus'  && do { TGI::Mutpro::Main::Significance->new();   last SWITCH; };
-    $subCmd eq 'summary'  && do { TGI::Mutpro::Main::Summary->new();        last SWITCH; };
-    $subCmd eq 'drugport' && do { TGI::Mutpro::Preprocess::Drugport->new(); last SWITCH; };
-    $subCmd eq 'uppro'    && do { TGI::Mutpro::Preprocess::Uppro->new();    last SWITCH; };
-    $subCmd eq 'calpro'   && do { TGI::Mutpro::Preprocess::Calpro->new();   last SWITCH; };
-    $subCmd eq 'calroi'   && do { TGI::Mutpro::Preprocess::Calroi->new();   last SWITCH; };
-    $subCmd eq 'statis'   && do { TGI::Mutpro::Preprocess::Statis->new();   last SWITCH; };
-    $subCmd eq 'anno'     && do { TGI::Mutpro::Preprocess::Anno->new();     last SWITCH; };
-    $subCmd eq 'trans'    && do { TGI::Mutpro::Preprocess::Trans->new();    last SWITCH; };
-    $subCmd eq 'homo'     && do { TGI::Mutpro::Preprocess::Homolog->new();  last SWITCH; };
-    $subCmd eq 'cosmic'   && do { TGI::Mutpro::Preprocess::Cosmic->new();   last SWITCH; };
-    $subCmd eq 'prior'    && do { TGI::Mutpro::Preprocess::Prior->new();    last SWITCH; };
-    $subCmd eq 'help'     && do { die help_text(); last SWITCH; };
+    $subCmd eq 'search'   && do { TGI::Mutpro::Main::Proximity->new();            last SWITCH; };
+    $subCmd eq 'post'     && do { TGI::Mutpro::Main::Post->new();                 last SWITCH; };
+    $subCmd eq 'visual'   && do { TGI::Mutpro::Main::Visual->new();               last SWITCH; };
+    $subCmd eq 'cluster'  && do { TGI::Mutpro::Main::Cluster->new();              last SWITCH; };
+    $subCmd eq 'sigclus'  && do { TGI::Mutpro::Main::Significance->new();         last SWITCH; };
+    $subCmd eq 'summary'  && do { TGI::Mutpro::Main::Summary->new();              last SWITCH; };
+    $subCmd eq 'drugport' && do { TGI::Mutpro::Preprocess::Drugport->new();       last SWITCH; };
+    $subCmd eq 'uppro'    && do { TGI::Mutpro::Preprocess::Uppro->new();          last SWITCH; };
+    $subCmd eq 'calpro'   && do { TGI::Mutpro::Preprocess::Calpro->new();         last SWITCH; };
+    $subCmd eq 'calroi'   && do { TGI::Mutpro::Preprocess::Calroi->new();         last SWITCH; };
+    $subCmd eq 'statis'   && do { TGI::Mutpro::Preprocess::Statis->new();         last SWITCH; };
+    $subCmd eq 'anno'     && do { TGI::Mutpro::Preprocess::Anno->new();           last SWITCH; };
+    $subCmd eq 'trans'    && do { TGI::Mutpro::Preprocess::Trans->new();          last SWITCH; };
+    $subCmd eq 'homo'     && do { TGI::Mutpro::Preprocess::Homolog->new();        last SWITCH; };
+    $subCmd eq 'cosmic'   && do { TGI::Mutpro::Preprocess::Cosmic->new();         last SWITCH; };
+    $subCmd eq 'prior'    && do { TGI::Mutpro::Preprocess::Prior->new();          last SWITCH; };
+#    $subCmd eq 'prep'     && do { TGI::Mutpro::Preprocess::AllPreprocess->new();  last SWITCH; };
+    $subCmd eq 'help'     && do { die help_text();                                last SWITCH; };
 }
 sub help_text {
 	## Add module help here
@@ -71,6 +73,7 @@ Version: $VERSION
   Usage: hotspot3d <command> [options]
 
            Preprocessing
+              prep      --  Preprocessing steps 1-7
 
               drugport  --  0) Parse drugport database (OPTIONAL)
               uppro     --  1) Update proximity files

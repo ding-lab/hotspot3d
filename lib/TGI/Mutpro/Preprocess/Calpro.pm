@@ -101,7 +101,7 @@ sub process {
     unless(defined $this->{'uniprot_id'}) { warn 'You must provide a Uniprot ID !', "\n"; die $this->help_text(); }
     unless( $this->{'output_dir'} and (-e $this->{'output_dir'} ) ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); }
     unless( $this->{'pdb_file_dir'} and (-e $this->{'pdb_file_dir'}) ) { warn 'You must provide a PDB file directory ! ', "\n"; die $this->help_text(); }
-	if ( $this->{'distance_measure'} eq $MINDISTANCE or $this->{'distance_measure'} eq $AVGDISTANCE ) {
+	if ( $this->{'distance_measure'} ne $MINDISTANCE and $this->{'distance_measure'} ne $AVGDISTANCE ) {
 		warn "HotSpot3D::Calpro warning: measure not recognized, resetting to default = averageDistance\n";
 		$this->{'distance_measure'} = $AVGDISTANCE;
 	}
@@ -323,9 +323,9 @@ sub writeProximityFile {
                     # is not close to the amino acid at '$residuePosition' 
                     # of peptide chain '$uniprotChain'
 		    $aaObjRef = $$peptideRef{$chain}->getAminoAcidObject($position);
-			if ( $this->{'distance_measure'} == $MINDISTANCE ) {
+			if ( $this->{'distance_measure'} eq $MINDISTANCE ) {
 				$distanceBetweenResidues = $$aaObjRef->minDistance($uniprotAminoAcidRef);
-			} elsif ( $this->{'distance_measure'} == $AVGDISTANCE ) {
+			} elsif ( $this->{'distance_measure'} eq $AVGDISTANCE ) {
 				$distanceBetweenResidues = $$aaObjRef->averageDistance($uniprotAminoAcidRef);
 			} else {
 				$distanceBetweenResidues = $$aaObjRef->averageDistance($uniprotAminoAcidRef);
@@ -456,6 +456,7 @@ sub checkOffsets {
 	$aminoAcidA = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidA );
 	$aminoAcidB = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidB );
 	next if ( !defined $aminoAcidA || !defined $aminoAcidB );
+	#next unless ( TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidA ) and TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidB )
 	if ( defined $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} && $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} ne $aminoAcidA ) {
 	    print $coorfh "Inconsistent amino acids for $uniprotA position $positionA+$offsetA in $pdbId: '$pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA}' and $aminoAcidA \n";
 	}

@@ -77,7 +77,9 @@ sub addAminoAcid {
     # ref to AminoAcid object
     my $self = shift;
     my ($position, $aaRef) = @_;
-    ${$self->{AA}}{$position} = $aaRef;
+	if ( $aaRef->filterNonAA( $aaRef->name() ) ) {
+		${$self->{AA}}{$position} = $aaRef;
+	}
 }
 
 sub getAminoAcidObject {
@@ -106,5 +108,5 @@ sub aminoAcidPositionNumbers {
     return \@positions;
 }
 
-return 1;
+1;
 
