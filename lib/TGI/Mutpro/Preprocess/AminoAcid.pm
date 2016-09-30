@@ -153,25 +153,20 @@ sub minDistance {
     return $minDistance;
 }
 
-sub filterWater {
+sub isHOH {
 	my ( $this , $residue ) = @_;
-	if ( $residue ne "HOH" ) {
+	if ( $residue eq "HOH" ) {
 		return 1;
 	}
 	return 0;
 }
 
-sub filterNonAA {
-	my ( $this , $residue ) = @_;
-	return $this->checkAA( $residue );
+sub isAA {
+    my ( $this , $residue ) = @_;
+    if ( not exists $this->{ACCEPTED}->{$residue} ) {
+        return 0;
+    }
+    return 1;
 }
 
-sub checkAA {
-	my ( $this , $residue ) = @_;
-	if ( exists $this->{ACCEPTED}->{$residue} ) {
-		return 1;
-	}
-	return 0;
-}
-
-return 1;
+1;

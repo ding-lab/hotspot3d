@@ -315,19 +315,18 @@ sub proximitySearching {
             my ( $uid1, $chain1, $pdbcor1, $offset1, $residue1, $domain1, $cosmic1, 
                  $uid2, $chain2, $pdbcor2, $offset2, $residue2, $domain2, $cosmic2, 
                  $proximityinfor ) = @ta;
-			if ( $drugportref ) { 
-				unless ( $AA->filterWater( $residue1 ) and $AA->filterWater( $residue2 ) ) { next; }
-			} else {
-				unless ( $AA->filterNonAA( $residue1 ) and $AA->filterNonAA( $residue2 ) ) { 
-					print "bad AA pair: ".$residue1." - ".$residue2."\n"; next; }
-			}
-            my $uniprotcor1 = $pdbcor1 + $offset1; 
+			my $uniprotcor1 = $pdbcor1 + $offset1;
             my $uniprotcor2 = $pdbcor2 + $offset2;
             my $lineardis = undef;
             if ( $uid1 eq $uid2 ) { $lineardis = abs($uniprotcor1 - $uniprotcor2) } else { $lineardis = "N\/A"; }
             #print $a."\t".$uid2."\t".$uniprotcor1."\t".$uniprotcor2."\t".$lineardis."\n";
             if ( defined $mafHashref->{$a}->{$uniprotcor1} ) {
                 if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
+					warn "check AA - ".$residue1." - ".$residue2;
+					if ( !( $AA->isAA( $residue1 ) ) || !( $AA->isAA( $residue2 ) ) ) { 
+						warn " - bad AA pair"."\n";
+						next;
+					}
                     ## close each other
                     foreach my $c ( keys %{$mafHashref->{$a}->{$uniprotcor1}} ) {
                         foreach my $d ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
@@ -371,6 +370,10 @@ sub proximitySearching {
             }
             # drugport searching
 			if ( $drugportref ) {
+				if ( $AA->isHOH( $residue1 ) || $AA->isHOH( $residue2 ) ) {
+					warn "bad AA pair: ".$residue1." - ".$residue2."\n";
+					next;
+				}
 				my %pdbs_hash = map{ my @t0 = split / /, $_; ($t0[1], 1) } split /\|/, $proximityinfor;
 				my ( $real_chain1 ) = $chain1 =~ /\[(\w)\]/; my ( $real_chain2 ) = $chain2 =~ /\[(\w)\]/;
 				my ( $e, $iter ); 
