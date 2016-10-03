@@ -64,7 +64,7 @@ sub process {
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
 	if ( not defined $this->{'p_value_cutoff'} ) {
-        if ( not defined $this->{'3d_distance_cutoff'} ) {
+        if ( not defined $this->{'3d_distance_cutoff'} and not defined $this->{'pvalue_cutoff'} ) {
             warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
             $this->{'p_value_cutoff'} = $PVALUEDEFAULT;
             $this->{'3d_distance_cutoff'} = $MAXDISTANCE;
@@ -322,9 +322,9 @@ sub proximitySearching {
             #print $a."\t".$uid2."\t".$uniprotcor1."\t".$uniprotcor2."\t".$lineardis."\n";
             if ( defined $mafHashref->{$a}->{$uniprotcor1} ) {
                 if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
-					warn "check AA - ".$residue1." - ".$residue2;
+					#warn "check AA - ".$residue1." - ".$residue2;
 					if ( !( $AA->isAA( $residue1 ) ) || !( $AA->isAA( $residue2 ) ) ) { 
-						warn " - bad AA pair"."\n";
+						#warn " - bad AA pair"."\n";
 						next;
 					}
                     ## close each other
@@ -371,7 +371,7 @@ sub proximitySearching {
             # drugport searching
 			if ( $drugportref ) {
 				if ( $AA->isHOH( $residue1 ) || $AA->isHOH( $residue2 ) ) {
-					warn "bad AA pair: ".$residue1." - ".$residue2."\n";
+					#warn "bad AA pair: ".$residue1." - ".$residue2."\n";
 					next;
 				}
 				my %pdbs_hash = map{ my @t0 = split / /, $_; ($t0[1], 1) } split /\|/, $proximityinfor;
