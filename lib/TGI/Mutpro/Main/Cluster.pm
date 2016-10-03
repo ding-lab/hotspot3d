@@ -30,6 +30,8 @@ my $UNIQUE = "unique";
 my $PVALUEDEFAULT = 0.05;
 my $DISTANCEDEFAULT = 10;
 my $MAXDISTANCE = 100;
+my $AVERAGEDISTANCE = "average";
+my $CLOSESTDISTANCE = "closest";
 
 sub new {
     my $class = shift;
@@ -43,6 +45,7 @@ sub new {
     $this->{'linear_cutoff'} = 0;
 	$this->{'max_radius'} = 10;
 	$this->{'vertex_type'} = $RECURRENCE;
+	$this->{'distance_measure'} = $AVERAGEDISTANCE;
     $this->{'maf_file'} = undef;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
@@ -66,6 +69,7 @@ sub process {
         'linear-cutoff=f' => \$this->{'linear_cutoff'},
         'max-radius=f' => \$this->{'max_radius'},
         'vertex-type=s' => \$this->{'vertex_type'},
+        'distance-measure=s' => \$this->{'distance_measure'},
         'maf-file=s' => \$this->{'maf_file'},
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},		
@@ -105,9 +109,14 @@ sub process {
     unless( $this->{'pairwise_file'} ) { warn 'You must provide a pairwise file! ', "\n"; die $this->help_text(); }
     unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
 	if ( $this->{'vertex_type'} ne $RECURRENCE and $this->{'vertex_type'} ne $UNIQUE and $this->{'vertex_type'} ne $WEIGHT ) {
-		warn "vertex_type option not recognized as \'recurrence\', \'unique\', or \'weight\'\n";
-		warn "Using default vertex_type = \'recurrence\'\n";
+		warn "vertex-type option not recognized as \'recurrence\', \'unique\', or \'weight\'\n";
+		warn "Using default vertex-type = \'recurrence\'\n";
 		$this->{'vertex_type'} = $RECURRENCE;
+	}
+	if ( $this->{'distance_measure'} ne $AVERAGEDISTANCE and $this->{'distance_measure'} ne $CLOSESTDISTANCE ) {
+		warn "distance-measure option not recognized as \'closest\' or \'average\'\n";
+		warn "Using default distance-measure = \'average\'\n";
+		$this->{'distance_measure'} = $AVERAGEDISTANCE;
 	}
 	if ( $this->{'vertex_type'} ne $UNIQUE ) {
 		unless( $this->{'maf_file'} ) { warn 'You must provide a .maf file if not using unique vertex type! ', "\n"; die $this->help_text(); }
@@ -203,7 +212,7 @@ sub process {
 					push @mutations , $second; #@mus2;
 					my ( $dist , $pval ) = split ":" , $master{$first}{$second};
 					$this->AHC( $pval , $dist , \%clusterings , \@mutations );
-					if ( $pval < $this->{'p_value_cutoff'} or $dist < $this->{'3d_distance_cutoff'} ) {
+					if ( $this->checkPair( $dist , $pval ) ) {
 						$distance_matrix{$first}{$second} = $dist;
 						$distance_matrix{$second}{$first} = $dist;
 					}
@@ -218,11 +227,18 @@ sub process {
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	map {
-		my ( $gene1 , $chr1 , $start1 , $stop1 , $aa_1 , $loc_1 , $gene2 , $chr2 , $start2 , $stop2 , $aa_2 , $loc_2 ) = (split /\t/)[0..4,6,9..13,15];
-		$mut_chrpos{$gene1.":".$aa_1}{$chr1."_".$start1."_".$stop1} = 1;
-		$mut_chrpos{$gene2.":".$aa_2}{$chr2."_".$start2."_".$stop2} = 1;
+		my ( $gene1 , $chr1 , $start1 , $stop1 , $aa_1 , $loc_1 , 
+			 $gene2 , $chr2 , $start2 , $stop2 , $aa_2 , $loc_2 , 
+			 $infos ) = (split /\t/)[0..4,6,9..13,15,19];
+		my $gmu1 = $gene1.":".$aa_1;
+		my $gmu2 = $gene2.":".$aa_2;
+		$mut_chrpos{$gmu1}{$chr1."_".$start1."_".$stop1} = 1;
+		$mut_chrpos{$gmu2}{$chr2."_".$start2."_".$stop2} = 1;
 		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene1, $aa_1, $loc_1);
-		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene2, $aa_2, $loc_2);		
+		$this->redundant(\%pdb_loc, \%aa_map, \%locations , $gene2, $aa_2, $loc_2);
+		if ( $this->{'distance_measure'} eq $AVERAGEDISTANCE ) {
+			$this->getAverageDistance( $gmu1 , $gmu2 , \%distance_matrix , $infos );
+		}
 	} $fh->getlines;
 	$fh->close();
 	#Pick longest transcript representation of unique
@@ -273,7 +289,7 @@ sub process {
 				if ( ( grep{ $_ eq $mut1 } @{$aa_map{$gene1}} ) && ( grep{ $_ eq $mut2 } @{$aa_map{$gene2}} ) ) {
 					my $first = $gene1.":".$mut1;
 					my $second = $gene2.":".$mut2;
-					if ( $pval < $this->{'p_value_cutoff'} ) {
+					if ( $this->checkPair( $dist , $pval ) ) {
 						my @lindists = split /\,/ , $lindists;
 						my $lin_dist = $lindists[0];
 						if ( $lin_dist eq "N/A" ) {
@@ -316,10 +332,6 @@ sub process {
 #####
     ## SHAVE CLUSTERS TO CORE
     #use distance_matrix matrix
-    my %degree_connectivity = ();
-    foreach ( keys %distance_matrix ) {
-        $degree_connectivity{$_} = scalar keys %{$distance_matrix{$_}};
-    }
 	if ( $this->{'vertex_type'} ne $UNIQUE ) {
 		print STDOUT "\nPreparing to get recurrence or weight ...\n";
 		my %variants_from_pairs;
@@ -416,20 +428,22 @@ sub process {
 				push @outFilename , $this->{'drug_clean_file'};
 			}
 		}
-		push @outFilename , $this->{'linear_cutoff'};
+		push @outFilename , "l".$this->{'linear_cutoff'};
+		my $m = "a";
+		if ( $this->{'distance_measure'} eq $CLOSESTDISTANCE ) { $m = "c"; }
 		if ( $this->{'3d_distance_cutoff'} != $MAXDISTANCE ) {
             if ( $this->{'p_value_cutoff'} != 1 ) {
-                push @outFilename , $this->{'p_value_cutoff'};
-                push @outFilename , $this->{'3d_distance_cutoff'};
+                push @outFilename , "p".$this->{'p_value_cutoff'};
+                push @outFilename , $m."d".$this->{'3d_distance_cutoff'};
             } else {
-                push @outFilename , $this->{'3d_distance_cutoff'};
+                push @outFilename , $m."d".$this->{'3d_distance_cutoff'};
             }
         } else {
             if ( $this->{'p_value_cutoff'} != 1 ) {
-                push @outFilename , $this->{'p_value_cutoff'};
+                push @outFilename , "p".$this->{'p_value_cutoff'};
             }
         }
-		push @outFilename , $this->{'max_radius'};
+		push @outFilename , "r".$this->{'max_radius'};
 	}
 	push @outFilename , "clusters";
 	my $outFilename = join( "." , @outFilename );
@@ -444,7 +458,7 @@ sub process {
 	print STDOUT "Getting Cluster ID's & Centroids\n";
     foreach my $clus_num ( keys %clusterings ) {
 		my @clus_mut = @{$clusterings{$clus_num}};
-		$this->centroid(\%Variants,\%distance_matrix,\%degree_connectivity,$clus_num,\@clus_mut,$fh,0, 1 , \%transcripts);
+		$this->centroid(\%Variants,\%distance_matrix,$clus_num,\@clus_mut,$fh,0, 1 , \%transcripts);
     } #foreach cluster
     my $numclusters = scalar keys %clusterings;
     print STDOUT "Found $numclusters clusters\n";
@@ -455,7 +469,7 @@ sub process {
 #	sub functions
 #####
 sub centroid{
-		my ($this, $Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster,$counter , $transcripts )=@_;
+		my ($this, $Variants,$distance_matrix,$clus_num,$clus_mut,$fh,$recluster,$counter , $transcripts )=@_;
 		my %dist = ();
 		foreach my $mut1 ( @{$clus_mut} ) { #initialize geodesics
 			my @mu1 = split( ":" , $mut1 );
@@ -517,7 +531,7 @@ sub centroid{
 		if ( exists $dist{$centroid} ) {
 			foreach $other ( keys %{$dist{$centroid}} ) {
 				my $geodesic = $dist{$centroid}{$other};
-				my $degrees = $degree_connectivity->{$other};
+				my $degrees = scalar keys %{$dist{$other}};
 				my $closenesscentrality = $centrality{$clus_num}{$other};
 				my ( $gene , $mutation ) = split /\:/ , $other;
 				my ( $reportedTranscript , $altTranscript , 
@@ -563,7 +577,7 @@ sub centroid{
 		if ($recluster==1) {
 			$counter+=1;
 			#print STDOUT "$counter\n";
-			$this->centroid($Variants,$distance_matrix,$degree_connectivity,$clus_num,$clus_mut,$fh,$recluster, $counter , $transcripts);
+			$this->centroid($Variants,$distance_matrix,$clus_num,$clus_mut,$fh,$recluster, $counter , $transcripts);
 		}
 }
 
@@ -571,7 +585,7 @@ sub centroid{
 ## CLUSTERING FUNCTION - AGGLOMERATIVE HIERARCHICAL CLUSTERING (AHC)
 sub AHC {
     my ( $this, $pval , $dist , $clusterings , $mutations ) = @_;
-    if ( $pval < $this->{'p_value_cutoff'} or $dist < $this->{'3d_distance_cutoff'} ) { #meets desired significance
+    if ( $this->checkPair( $dist , $pval ) ) { #meets desired significance
         my ( @temp, @found, @combine ); 
         my ( @uniq, $c );
         foreach $c ( keys %{$clusterings} ) { #each cluster
@@ -663,12 +677,12 @@ sub getTranscriptInfo {
 	my ( $reportedTranscript , $altTranscript , $transcript );
 	my ( $chromosome , $start , $stop );
 	my ( $gene , $mu ) = split /\:/ , $other;
-	print $other." => ";
+	#print $other." => ";
 	foreach my $tranmu ( sort keys %{$transcripts->{$other}} ) {
-		print $tranmu." ==> ";
+		#print $tranmu." ==> ";
 		my ( $transcript , $mutation ) = split /\:/ , $tranmu;
 		my $css = $transcripts->{$other}->{$tranmu};
-		print $css." | \n";
+		#print $css." | \n";
 		( $chromosome , $start , $stop ) = split /\:/ , $css;
 		if ( $mu eq $mutation ) {
 			if ( not $reportedTranscript ) {
@@ -692,22 +706,42 @@ sub getTranscriptInfo {
 
 sub checkPair {
 	my ( $this , $dist , $pval ) = @_;
-	if ( $this->{'3d_distance_cutoff'} == $MAXDISTANCE ) {
+	#print "Checking ".$dist." < ".$this->{'3d_distance_cutoff'}." & ".$pval." < ".$this->{'p_value_cutoff'};
+	if ( $this->{'3d_distance_cutoff'} == $MAXDISTANCE ) { #3d-dist undef & p-val def
 		if ( $pval < $this->{'p_value_cutoff'} ) {
+			#print " - okay!\n";
 			return 1;
 		}
-	} elsif ( $this->{'p_value_cutoff'} == 1 ) {
+	} elsif ( $this->{'p_value_cutoff'} == 1 ) { #3d-dist def & p-val undef
 		if ( $dist < $this->{'3d_distance_cutoff'} ) {
+			#print " - okay!\n";
 			return 1;
 		}
-	} else {
+	} else { #3d-dist def & p-val def
 		if ( $dist < $this->{'3d_distance_cutoff'} and $pval < $this->{'p_value_cutoff'} ) {
+			#print " - okay!\n";
 			return 1;
 		}
 	}
+	#print " - bad!\n";
 	return 0;
 }
 
+sub getAverageDistance {
+	my ( $this , $gmu1 , $gmu2 , $distance_matrix , $infos ) = @_;
+	my @infos = split /\|/ , $infos;
+	my $avgDistance = 0;
+	foreach my $info ( @infos ) {
+		chomp( $info );
+		next unless ( $info );
+		my ( $distance , $pdbID , $pvalue ) = split / / , $info;
+		$avgDistance += $distance;
+	}
+	$avgDistance = $avgDistance / ( scalar @infos );
+	$distance_matrix->{$gmu1}->{$gmu2} = $avgDistance;
+	$distance_matrix->{$gmu2}->{$gmu1} = $avgDistance;
+	return;
+}
 
 sub help_text{
     my $this = shift;
@@ -726,9 +760,10 @@ Usage: hotspot3d cluster [options]
 --output-prefix              Output prefix, default: 3D_Proximity
 --p-value-cutoff             P_value cutoff (<), default: 0.05 (if 3d-distance-cutoff also not set)
 --3d-distance-cutoff         3D distance cutoff (<), default: 100 (if p-value-cutoff also not set)
---linear-cutoff              Linear distance cutoff (> peptides), default: 20
+--linear-cutoff              Linear distance cutoff (> peptides), default: 0
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
 --vertex-type                Graph vertex type (recurrence, unique, or weight), default: recurrence
+--distance-measure           Pair distance to use (closest or average), default: average
 --maf-file                   .maf file used in proximity search step (used if vertex-type = recurrence)
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name
 --amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 
