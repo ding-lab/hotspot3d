@@ -1,6 +1,7 @@
 ##### HotSpot3D Demo ############################# 
 # created by: Adam D. Scott (adamscott@wustl.edu)#
 # date: 2016*08*11                               #
+# last-update: 2016*10*04                        #
 ##################################################
 
 # The goal of this demo is to familiarize the user with HotSpot3D.
@@ -11,7 +12,8 @@
 # This is because the columns in the demo.maf are the minimum necessary columns needed to work with HotSpot3D.
 # For each step I have included standard out (1) and error (2) print outs, but these are optional.
 # In total, this demo can be run within an hour for most systems with LSF server capability.
-# Without the LSF server, you may try working with mutations from just one gene (grep SMAD2 demo.maf > small.demo.maf).
+# Without the LSF server, you may try working with mutations from just one gene:
+#     head -n1 demo.maf > small.demo.maf; grep SMAD2 demo.maf >> small.demo.maf
 # In addition without the LSF server, you will need to run calpro instead of uppro (see below).
 # Not included in preprocessing is the drugport step, but this can be run separately in the preprocessing stage.
 # Not included in analysis is the sigclus step due to very lengthy runtime.
@@ -26,12 +28,12 @@ mkdir -p prep/cosmic pdb
 # See the HotSpot3D README.md for details on the COSMIC download.
 # Put COSMIC annotation download into prep/cosmic/
 # Make sure COSMIC download has 6 columns:
-#1	gene_name
-#2	transcript_name
-#3	trv_type
-#4	amino_acid_change
-#5	domain
-#6	tissue_type
+#1  gene_name
+#2  transcript_name
+#3  trv_type
+#4  amino_acid_change
+#5  domain
+#6  tissue_type
 
 ## EXPECTED OUTPUT
 # If at any point you are unsure about the output, please inspect files in Expected/.
@@ -46,6 +48,13 @@ hotspot3d uppro --output-dir prep/ --pdb pdb/ --gene-file demo.maf --3d-distance
 # The uppro step launches jobs to an LSF server, and those jobs run calpro.
 # If you do not have an LSF server, you can skip uppro, and run calpro 'manually'.
 # To get help with calpro, simply enter the command, 'hotspot3d calpro'.
+
+
+# PREP (BETA)
+# The 'prep' command should be able to run all remaining preprocessing steps (calroi-prior).
+# If you use 'prep', you should not need to run the remaining preprocessing steps and can skip to the ANALYSIS steps beginning with search.
+hotspot3d prep --output-dir prep 1>demo.prep.out 2>demo.prep.err
+
 
 # Before running any additional steps, make sure that the uppro/calpro runs are finished.
 hotspot3d calroi --output-dir prep 1>demo.calroi.out 2>demo.calroi.err

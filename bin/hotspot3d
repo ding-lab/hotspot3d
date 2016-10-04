@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-our $VERSION = 'V0.6.1';
+our $VERSION = 'V0.6.2';
 
 use Carp;
 use FileHandle;
@@ -32,7 +32,7 @@ use TGI::Mutpro::Preprocess::Anno;
 use TGI::Mutpro::Preprocess::Cosmic;
 use TGI::Mutpro::Preprocess::Prior;
 use TGI::Mutpro::Preprocess::Homolog;
-#use TGI::Mutpro::Preprocess::AllPreprocess;
+use TGI::Mutpro::Preprocess::AllPreprocess;
 
 my $subCmd = shift;
 ## Add module option here
@@ -60,7 +60,7 @@ SWITCH:{
     $subCmd eq 'homo'     && do { TGI::Mutpro::Preprocess::Homolog->new();        last SWITCH; };
     $subCmd eq 'cosmic'   && do { TGI::Mutpro::Preprocess::Cosmic->new();         last SWITCH; };
     $subCmd eq 'prior'    && do { TGI::Mutpro::Preprocess::Prior->new();          last SWITCH; };
-#    $subCmd eq 'prep'     && do { TGI::Mutpro::Preprocess::AllPreprocess->new();  last SWITCH; };
+    $subCmd eq 'prep'     && do { TGI::Mutpro::Preprocess::AllPreprocess->new();  last SWITCH; };
     $subCmd eq 'help'     && do { die help_text();                                last SWITCH; };
 }
 sub help_text {
@@ -73,7 +73,7 @@ Version: $VERSION
   Usage: hotspot3d <command> [options]
 
            Preprocessing
-              prep      --  Preprocessing steps 1-7
+              prep      --  Run steps 2-7 of preprocessing
 
               drugport  --  0) Parse drugport database (OPTIONAL)
               uppro     --  1) Update proximity files

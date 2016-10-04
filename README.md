@@ -7,12 +7,13 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V0.6.1
+        Version:     V0.6.2
          Author:     Beifang Niu, John Wallis, Adam D Scott, & Sohini Sengupta
 
   Usage: hotspot3d <command> [options]
 
            Preprocessing
+             prep      --  Run preprocessing steps 2-7 (beta)
 
              drugport  --  0) Parse drugport database (OPTIONAL)
              uppro     --  1) Update proximity files
@@ -228,3 +229,7 @@ Clustering with different pairs data:
 		For intra+inter+DrugPort include a concatenated singleprotein and complex pairs file with the DrugPort pairs.
 
 	NOTE: that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter clustering.
+
+Clustering based on different distance measures:
+
+        There are some pairs found on multiple structures. In HotSpot3D versions v0.5.x and earlier, clustering only used the shortest distance among different structures (shortest structure distance, SSD). In HotSpot3D versions v0.6.x and later, clustering can be done using the average distance among different structures (average structure distance, ASD), and this is now default.
