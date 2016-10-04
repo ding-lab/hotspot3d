@@ -7,7 +7,7 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V0.6.2
+        Version:     V0.6.3
          Author:     Beifang Niu, John Wallis, Adam D Scott, & Sohini Sengupta
 
   Usage: hotspot3d <command> [options]
@@ -232,4 +232,4 @@ Clustering with different pairs data:
 
 Clustering based on different distance measures:
 
-        There are some pairs found on multiple structures. In HotSpot3D versions v0.5.x and earlier, clustering only used the shortest distance among different structures (shortest structure distance, SSD). In HotSpot3D versions v0.6.x and later, clustering can be done using the average distance among different structures (average structure distance, ASD), and this is now default.
+        There are some pairs found on multiple structures. In HotSpot3D versions v0.6.2 and earlier, clustering only used the shortest distance among different structures (shortest structure distance, SSD). In HotSpot3D versions v0.6.3 and later, clustering can be done using the average distance among different structures (average structure distance, ASD), and this is now default.
