@@ -1,0 +1,864 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"CU",
+				"CUTOFFSTARTDEFAULT"
+			],
+			[
+				"M",
+				"MINPTSDEFAULT"
+			],
+			[
+				"E",
+				"EPSILONDEFAULT"
+			],
+			[
+				"C",
+				"ClusterArray"
+			],
+			[
+				"c",
+				"characters"
+			],
+			[
+				"Cl",
+				"ClusterArray"
+			],
+			[
+				"Clu",
+				"ClusAvg"
+			],
+			[
+				"Clus",
+				"ClusterArray"
+			],
+			[
+				"Or",
+				"OrderedS"
+			],
+			[
+				"O",
+				"OrderedE"
+			],
+			[
+				"Co",
+				"counter"
+			],
+			[
+				"for",
+				"for\tLoop"
+			],
+			[
+				"fo",
+				"for\tLoop"
+			],
+			[
+				"D",
+				"DS"
+			],
+			[
+				"cl",
+				"clusters"
+			],
+			[
+				"te",
+				"tempE"
+			],
+			[
+				"p",
+				"push"
+			],
+			[
+				"U",
+				"US"
+			],
+			[
+				"St",
+				"SteepAreasHash"
+			],
+			[
+				"n",
+				"nc"
+			],
+			[
+				"S",
+				"SteepDPts"
+			],
+			[
+				"x",
+				"x"
+			],
+			[
+				"Orde",
+				"OrderedUstart"
+			],
+			[
+				"Order",
+				"OrderedDstart"
+			],
+			[
+				"Ste",
+				"SteepAreas"
+			],
+			[
+				"Steep",
+				"SteepAreas"
+			],
+			[
+				"Stee",
+				"SteepAreas"
+			],
+			[
+				"Ini",
+				"InitialSet"
+			],
+			[
+				"In",
+				"InitialSet"
+			],
+			[
+				"Ch",
+				"CheckMonotony"
+			],
+			[
+				"last",
+				"lastN"
+			],
+			[
+				"l",
+				"length"
+			],
+			[
+				"L",
+				"LoopStart"
+			],
+			[
+				"wo",
+				"word2"
+			],
+			[
+				"word",
+				"word1"
+			],
+			[
+				"co",
+				"counter"
+			],
+			[
+				"set",
+				"Set_ref"
+			],
+			[
+				"pr",
+				"print"
+			],
+			[
+				"SE",
+				"SetOfNodes"
+			],
+			[
+				"Ord",
+				"OrderedFile"
+			],
+			[
+				"nei",
+				"neighbors"
+			],
+			[
+				"has",
+				"hash_ref"
+			],
+			[
+				"G",
+				"GetNeighbors"
+			],
+			[
+				"Ge",
+				"GetCoreDistance"
+			],
+			[
+				"Se",
+				"SetOfNodes"
+			],
+			[
+				"fore",
+				"foreach"
+			],
+			[
+				"un",
+				"undef"
+			],
+			[
+				"Min",
+				"MinPts"
+			],
+			[
+				"key",
+				"keys"
+			],
+			[
+				"Test",
+				"TestHash"
+			],
+			[
+				"ne",
+				"neighbors"
+			],
+			[
+				"See",
+				"SeedKeys"
+			],
+			[
+				"Te",
+				"TestHash"
+			],
+			[
+				"ke",
+				"keys"
+			],
+			[
+				"se",
+				"SetOfNodes"
+			],
+			[
+				"pop",
+				"popref"
+			],
+			[
+				"loo",
+				"looks_like_number"
+			],
+			[
+				"s",
+				"sndEl"
+			],
+			[
+				"N",
+				"Number"
+			],
+			[
+				"_",
+				"_processInfo"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "/Users/aweerasi/DingLab/DingLab_AmilaUbuntu/PerlPractise/PerlTestMethods.pl",
+			"settings":
+			{
+				"buffer_size": 2432,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/Users/aweerasi/DingLab/OpticsAmila.pl",
+			"settings":
+			{
+				"buffer_size": 5189,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/Users/aweerasi/DingLab/XiClusters.pl",
+			"settings":
+			{
+				"buffer_size": 7208,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/Users/aweerasi/DingLab/BruteForceClusters.pl",
+			"settings":
+			{
+				"buffer_size": 2090,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/Users/aweerasi/DingLab/BruteForceAuto.pl",
+			"settings":
+			{
+				"buffer_size": 2304,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/Users/aweerasi/DingLab/BruteForceAutoClusters.pl",
+			"settings":
+			{
+				"buffer_size": 2948,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/Users/aweerasi/hotspot3d/bin/hotspot3d",
+			"settings":
+			{
+				"buffer_size": 4977,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "Visual.pm",
+			"settings":
+			{
+				"buffer_size": 14395,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "Cluster.pm",
+			"settings":
+			{
+				"buffer_size": 29600,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "/Users/aweerasi/DingLab/OpticsScripts/OpticsWithR.pl",
+			"settings":
+			{
+				"buffer_size": 4974,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "Density.pm",
+			"settings":
+			{
+				"buffer_size": 3399,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"file_history":
+	[
+		"/Users/aweerasi/DingLab/extract1.pl",
+		"/Users/aweerasi/DingLab/cl3.pl",
+		"/Users/aweerasi/DingLab/cl5.pl",
+		"/Users/aweerasi/DingLab/cl2.pl",
+		"/Users/aweerasi/DingLab/cl1.pl",
+		"/Users/aweerasi/DingLab/t5.pl",
+		"/Users/aweerasi/DingLab/t4.pl",
+		"/Users/aweerasi/DingLab/optics.pl",
+		"/Users/aweerasi/DingLab/t2Nodes.pl",
+		"/Users/aweerasi/DingLab/Nodes.pm",
+		"/Users/aweerasi/DingLab/DingLab_AmilaUbuntu/PerlPractise/ObjectPerson.pl",
+		"/Users/aweerasi/DingLab/DingLab_AmilaUbuntu/PerlPractise/Person.pm",
+		"/Users/aweerasi/DingLab/t1.pl",
+		"/Users/aweerasi/hotspot3d/lib/TGI/Mutpro/Preprocess/Uppro.pm",
+		"/Users/aweerasi/hotspot3d/lib/TGI/Mutpro/Preprocess/Calpro.pm",
+		"/Users/aweerasi/hotspot3d/lib/TGI/Mutpro/Main/Cluster.pm"
+	],
+	"find":
+	{
+		"height": 35.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"GetOptions",
+			"step",
+			"SteepAreas",
+			"OrderSeeds",
+			"${$",
+			"OrderSeeds",
+			"length",
+			"neigb",
+			"OrderedFile",
+			"Person",
+			"_index",
+			"firstName",
+			"f",
+			"firstName",
+			"_lastName",
+			"_firstName",
+			"self",
+			"getLinkage"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 9,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "/Users/aweerasi/DingLab/DingLab_AmilaUbuntu/PerlPractise/PerlTestMethods.pl",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2432,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1430,
+								1430
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 10,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "/Users/aweerasi/DingLab/OpticsAmila.pl",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 5189,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1376,
+								1376
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "/Users/aweerasi/DingLab/XiClusters.pl",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 7208,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								2108,
+								2108
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "/Users/aweerasi/DingLab/BruteForceClusters.pl",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2090,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1492,
+								1492
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 6,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "/Users/aweerasi/DingLab/BruteForceAuto.pl",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2304,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1749,
+								1749
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "/Users/aweerasi/DingLab/BruteForceAutoClusters.pl",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2948,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								2761,
+								2761
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 8,
+					"type": "text"
+				},
+				{
+					"buffer": 6,
+					"file": "/Users/aweerasi/hotspot3d/bin/hotspot3d",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 4977,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 7,
+					"type": "text"
+				},
+				{
+					"buffer": 7,
+					"file": "Visual.pm",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 14395,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								0,
+								0
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 9,
+					"type": "text"
+				},
+				{
+					"buffer": 8,
+					"file": "Cluster.pm",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 29600,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								9121,
+								9121
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 1555.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 9,
+					"file": "/Users/aweerasi/DingLab/OpticsScripts/OpticsWithR.pl",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 4974,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1031,
+								1031
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				}
+			]
+		},
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 10,
+					"file": "Density.pm",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 3399,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								2506,
+								2506
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Perl/Perl.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 252.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 23.0
+	},
+	"input":
+	{
+		"height": 0.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			],
+			[
+				1,
+				0,
+				2,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			0.5,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "",
+	"project": "",
+	"replace":
+	{
+		"height": 42.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 1,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 150.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
