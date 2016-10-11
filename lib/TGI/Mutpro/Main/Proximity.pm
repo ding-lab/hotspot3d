@@ -63,13 +63,13 @@ sub process {
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
-	if ( not defined $this->{'p_value_cutoff'} ) {
+	if ( not defined $this->{'pvalue_cutoff'} ) {
         if ( not defined $this->{'3d_distance_cutoff'} and not defined $this->{'pvalue_cutoff'} ) {
             warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
-            $this->{'p_value_cutoff'} = $PVALUEDEFAULT;
+            $this->{'pvalue_cutoff'} = $PVALUEDEFAULT;
             $this->{'3d_distance_cutoff'} = $MAXDISTANCE;
         } else {
-            $this->{'p_value_cutoff'} = 1;
+            $this->{'pvalue_cutoff'} = 1;
         }
     } else {
         if ( not defined $this->{'3d_distance_cutoff'} ) {
