@@ -24,6 +24,8 @@ use FileHandle;
 
 use Data::Dumper;
 
+use TGI::Mutpro::Main::Density;
+
 my $WEIGHT = "weight";
 my $RECURRENCE = "recurrence";
 my $UNIQUE = "unique";
@@ -774,7 +776,8 @@ Usage: hotspot3d cluster [options]
 --3d-distance-cutoff         3D distance cutoff (<), default: 100 (if p-value-cutoff also not set)
 --linear-cutoff              Linear distance cutoff (> peptides), default: 0
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
---vertex-type                Graph vertex type (recurrence, unique, or weight), default: recurrence
+--clustering                 Cluster using network or density-based methods (network or density), default: network
+--vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
 --distance-measure           Pair distance to use (closest or average), default: average
 --maf-file                   .maf file used in proximity search step (used if vertex-type = recurrence)
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name
