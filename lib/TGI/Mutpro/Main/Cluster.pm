@@ -87,6 +87,10 @@ sub process {
 	if ( not defined $this->{'clustering'} ) {
 		warn "HotSpot3D::Cluster warning: no clustering option given, setting to default network\n";
 	}
+	if ( $this->{'clustering'} eq $DENSITY ) {
+		TGI::Mutpro::Main::Density->new();
+		exit;
+	}
 	if ( not defined $this->{'p_value_cutoff'} ) {
 		if ( not defined $this->{'3d_distance_cutoff'} ) {
 			warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
@@ -127,10 +131,6 @@ sub process {
 		warn "distance-measure option not recognized as \'closest\' or \'average\'\n";
 		warn "Using default distance-measure = \'average\'\n";
 		$this->{'distance_measure'} = $AVERAGEDISTANCE;
-	}
-	if ( $this->{'clustering'} eq $DENSITY ) {
-		TGI::Mutpro::Main::Density->new();
-		exit;
 	}
 	if ( $this->{'vertex_type'} ne $UNIQUE ) {
 		unless( $this->{'maf_file'} ) { warn 'You must provide a .maf file if not using unique vertex type! ', "\n"; die $this->help_text(); }

@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-our $VERSION = 'V0.6.5';
+our $VERSION = 'V1.0.0';
 
 use Carp;
 use FileHandle;
@@ -22,7 +22,6 @@ use TGI::Mutpro::Main::Cluster;
 use TGI::Mutpro::Main::Significance;
 use TGI::Mutpro::Main::Summary;
 use TGI::Mutpro::Main::Visual;
-use TGI::Mutpro::Main::Cluster::Density;
 use TGI::Mutpro::Preprocess::Drugport;
 use TGI::Mutpro::Preprocess::Uppro;
 use TGI::Mutpro::Preprocess::Calpro;
@@ -37,7 +36,7 @@ use TGI::Mutpro::Preprocess::AllPreprocess;
 
 my $subCmd = shift;
 ## Add module option here
-my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep density help );
+my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep help );
 unless (defined $subCmd) { die help_text(); };
 unless (exists $cmds{$subCmd}) {
     warn ' Please give valid sub command ! ', "\n";
@@ -62,7 +61,6 @@ SWITCH:{
     $subCmd eq 'cosmic'   && do { TGI::Mutpro::Preprocess::Cosmic->new();         last SWITCH; };
     $subCmd eq 'prior'    && do { TGI::Mutpro::Preprocess::Prior->new();          last SWITCH; };
     $subCmd eq 'prep'     && do { TGI::Mutpro::Preprocess::AllPreprocess->new();  last SWITCH; };
-    $subCmd eq 'density'  && do { TGI::Mutpro::Main::Cluster::Density->new();     last SWITCH; };
     $subCmd eq 'help'     && do { die help_text();                                last SWITCH; };
 }
 sub help_text {
@@ -94,7 +92,6 @@ Version: $VERSION
               sigclus   --  3) Determine significance of clusters
               summary   --  4) Summarize clusters
               visual    --  5) Visulization of 3D proximity
-              density   --  6) Determine mutation-mutation and mutation-drug density-based clusters
 
            help      --  this message
 
