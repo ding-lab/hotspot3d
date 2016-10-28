@@ -1,0 +1,15 @@
+## HGNC download is from gene families site at HGNC, where gene is in the 2nd column & family name is in the 11th column
+## Protein kinase lists can be obtained from numerous sources. The format expected for use below is gene\tfamily
+## Drug class info can be obtained via DrugBank/DrugPort, NIH, and others. The format used below expects two columns drug\tclass
+## Ensembl .gtf was necessary for longest transcript calculation. Run determine_transcript_lengths.pl to get gene, transcript, length (gtl) data.
+# annotated .clusters with a variety of details. These simply append columns, and so they can accumulate.
+annotate_clusters_MAF.pl #expects gtl data and the .maf used for clustering
+annotate_clusters_PDB.pl #needs HotSpot3D data
+annotate_clusters_domains.pl #needs HotSpot3D data
+annotate_clusters_drug_class.pl #expects a drug class list
+annotate_clusters_HGNC_Kinase.pl #expects HGNC download & protein kinase list
+annotate_clusters_families.pl #expects HGNC download
+
+# determine cluster presence/representation for PDB structures associated with the gene
+clusterPDBPresence.drug.pl #for drug-mutation pairs/clusters
+clusterPDBPresence.pl #for mutation-mutation pairs/clusters

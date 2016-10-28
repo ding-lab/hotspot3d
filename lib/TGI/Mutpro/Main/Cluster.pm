@@ -24,6 +24,8 @@ use FileHandle;
 
 use Data::Dumper;
 
+use TGI::Mutpro::Main::Density;
+
 my $WEIGHT = "weight";
 my $RECURRENCE = "recurrence";
 my $UNIQUE = "unique";
@@ -32,6 +34,8 @@ my $DISTANCEDEFAULT = 10;
 my $MAXDISTANCE = 100;
 my $AVERAGEDISTANCE = "average";
 my $CLOSESTDISTANCE = "closest";
+my $NETWORK = "network";
+my $DENSITY = "density";
 
 sub new {
     my $class = shift;
@@ -50,6 +54,7 @@ sub new {
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
     $this->{'weight_header'} = $WEIGHT;
+    $this->{'clustering'} = undef;
     bless $this, $class;
     $this->process();
     return $this;
@@ -74,10 +79,18 @@ sub process {
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},		
         'weight-header=s' => \$this->{'weight_header'},		
+        'clustering=s' => \$this->{'clustering'},		
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
+	if ( not defined $this->{'clustering'} ) {
+		warn "HotSpot3D::Cluster warning: no clustering option given, setting to default network\n";
+	}
+	if ( $this->{'clustering'} eq $DENSITY ) {
+		TGI::Mutpro::Main::Density->new();
+		exit;
+	}
 	if ( not defined $this->{'p_value_cutoff'} ) {
 		if ( not defined $this->{'3d_distance_cutoff'} ) {
 			warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
@@ -91,6 +104,7 @@ sub process {
 			$this->{'3d_distance_cutoff'} = $MAXDISTANCE;
 		}
 	}
+	print STDOUT "p-value-cutoff = ".$this->{'p_value_cutoff'}." & 3d-distance-cutoff = ".$this->{'3d_distance_cutoff'}."\n";
     if ( ( not defined $this->{'collapsed_file'} ) and ( not defined $this->{'drug_clean_file'} ) ) {
 		warn 'You must provide a collapsed pairs file or drug pairs file! ', "\n";
 		die $this->help_text();
@@ -762,7 +776,8 @@ Usage: hotspot3d cluster [options]
 --3d-distance-cutoff         3D distance cutoff (<), default: 100 (if p-value-cutoff also not set)
 --linear-cutoff              Linear distance cutoff (> peptides), default: 0
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
---vertex-type                Graph vertex type (recurrence, unique, or weight), default: recurrence
+--clustering                 Cluster using network or density-based methods (network or density), default: network
+--vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
 --distance-measure           Pair distance to use (closest or average), default: average
 --maf-file                   .maf file used in proximity search step (used if vertex-type = recurrence)
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name

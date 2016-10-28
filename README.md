@@ -7,7 +7,7 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V0.6.3
+        Version:     V1.0.0
          Author:     Beifang Niu, John Wallis, Adam D Scott, & Sohini Sengupta
 
   Usage: hotspot3d <command> [options]
@@ -174,6 +174,17 @@ Example - Analysis
 6. Visualization (works with PyMol):
 
 		hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
+
+Annotations
+-----------
+
+Check out scripts/ for various annotation scripts to add more details to the .clusters file.
+
+HGNC download can be found here: http://www.genenames.org/cgi-bin/genefamilies/.
+
+Information on the Ensembl .gtf can be found here: http://useast.ensembl.org/info/website/upload/gff.html, and downloads can be found at the Ensembl ftp site, ftp://ftp.ensembl.org/pub/.
+
+See the scripts/README.annotations for more details.
 
 Tips
 ----
