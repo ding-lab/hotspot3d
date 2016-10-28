@@ -102,6 +102,19 @@ Install HotSpot3D package:
 	to: #!/usr/bin/perl)
 
 
+Configure Environment
+---------------------
+
+	It is helpful to add your perl5 lib directory, and to add your perl5 bin directory.
+
+	You can add these lines to your ~/.bashrc or ~/.bash_profile, or just run the two lines each time you open a terminal to update your environment.
+
+		export PERL5LIB=$PERL5LIB:~/perl5/lib/perl5/
+
+		export PATH=$PATH:~/perl5/bin/
+
+
+
 Example - Preprocessing
 -----------------------
 
@@ -133,7 +146,7 @@ Example - Preprocessing
 
 		mkdir preprocessing_dir/cosmic
 
-		cp COSMIc/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
+		cp COSMIC/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
 
 		cd ./preprocessing_dir/cosmic/ 
 
