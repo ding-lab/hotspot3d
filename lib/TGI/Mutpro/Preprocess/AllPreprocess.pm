@@ -72,17 +72,17 @@ sub process {
 sub steps {
 	my $this = shift;
 	if ( $this->{'start'} eq $CALROI ) {
-		$this->SUPER::TGI::Mutpro::Preprocess::Calroi::process();
+		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Calroi::process();
 	} elsif ( $this->{'start'} eq $STATIS ) {
-		$this->SUPER::TGI::Mutpro::Preprocess::Statis::process();
+		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Statis::process();
 	} elsif ( $this->{'start'} eq $ANNO ) {
-		$this->SUPER::TGI::Mutpro::Preprocess::Anno::process();
+		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Anno::process();
 	} elsif ( $this->{'start'} eq $TRANS ) {
-		$this->SUPER::TGI::Mutpro::Preprocess::Trans::process();
+		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Trans::process();
 	} elsif ( $this->{'start'} eq $COSMIC ) {
-		$this->SUPER::TGI::Mutpro::Preprocess::Cosmic::process();
+		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Cosmic::process();
 	} elsif ( $this->{'start'} eq $PRIOR ) {
-		$this->SUPER::TGI::Mutpro::Preprocess::Prior::process();
+		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Prior::process();
 	} else {
 		die "HotSpot3D::AllPreprocess error: desired starting step unclear.\n".$this->help_text();
 	}

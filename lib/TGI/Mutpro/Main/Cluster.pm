@@ -387,7 +387,7 @@ sub process {
 						$mafcols{$this->{"transcript_id_header"}},
 						$mafcols{$this->{"amino_acid_header"}} );
 		if ( $this->{'vertex_type'} eq $WEIGHT ) {
-			unless( defined( $mafcols{$this->{"weight_header"}} ) ) { die "\n"; };
+			unless( defined( $mafcols{$this->{"weight_header"}} ) ) { die "HotSpot3D::Cluster error: weight vertex-type chosen, but weight-header not recocgnized\n"; };
 			push @mafcols , $mafcols{$this->{"weight_header"}};
 		}
 		my %mutations;

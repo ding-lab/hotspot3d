@@ -22,6 +22,7 @@ use List::MoreUtils qw( uniq );
 
 use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
+use TGI::Mutpro::Files::MAF;
 
 my $MINDISTANCE = "minDistance";
 my $AVGDISTANCE = "averageDistance";
@@ -96,15 +97,10 @@ sub process {
 	my $hugogene_ref;
 	my ( %list , @fields );
 	if ( $this->{'genes'} ) { 
-		my $genesFH = new FileHandle;
-		unless( $genesFH->open( $this->{'genes'} , "r" ) ) { die "HotSpot3D Uppro Error: Could not open file with genes (".$this->{'genes'}.")"; }
-		map {
-			chomp;
-			@fields = split( "\t" , $_ );
-			$list{$fields[0]} = 1;
-		} $genesFH->getlines;
+		my $genesFH = new TGI::Mutpro::Files::List( $this->{'genes'} );
+		$genesFH->open();
+		my $list = $genesFH->getList( 0 );
 		$genesFH->close();
-		@fields = undef;
 	}
 	$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjects();
     foreach $hugo_id (sort keys %{$hugogene_ref}) {
