@@ -36,7 +36,7 @@ use TGI::Mutpro::Preprocess::AllPreprocess;
 
 my $subCmd = shift;
 ## Add module option here
-my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep help );
+my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep density help );
 unless (defined $subCmd) { die help_text(); };
 unless (exists $cmds{$subCmd}) {
     warn ' Please give valid sub command ! ', "\n";
