@@ -26,6 +26,6 @@ Output file name4: RD.$Epsilon.$MinPts.pairwise_file_name.clusters.shiny.R).
 Additional Softwares
 -----------------------------
 
-Install RStudio and thge R package shiny for better visualization of the reachability plot.
+Install RStudio and the R package "shiny" for better visualization of the reachability plot.
 
 
