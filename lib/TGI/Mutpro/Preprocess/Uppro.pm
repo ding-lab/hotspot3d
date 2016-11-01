@@ -22,7 +22,7 @@ use List::MoreUtils qw( uniq );
 
 use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
-use TGI::Mutpro::Files::MAF;
+use TGI::Files::MAF;
 
 my $MINDISTANCE = "minDistance";
 my $AVGDISTANCE = "averageDistance";
