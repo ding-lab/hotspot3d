@@ -87,6 +87,7 @@ sub doPrior {
     my %ss;
     while ( my $a = <$fhproximity> ) {
         next if ($a =~ /^WARNING:/);
+        next if ($a =~ /UniProt_ID1/);
         chomp($a);
         my @t = split /\t/, $a;
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
@@ -118,6 +119,11 @@ sub doPrior {
     unless( $fhout->open(">$outputf") ) { die "Could not open prioritization output file to write !\n" };
 	print STDOUT "Creating ".$outputf."\n";
     # write prioritization result into file 
+	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
+	$fhout->print( "Feature_Description1\tCOSMIC_Info1\t" );
+	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
+	$fhout->print( "Feature_Description2\tCOSMIC_Info2\t" );
+	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
     foreach my $a (keys %ss) {
         foreach my $b (keys %{$ss{$a}}) {
             print $fhout $a."\t".$b."\t";

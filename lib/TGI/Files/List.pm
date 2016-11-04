@@ -31,7 +31,7 @@ sub getList {
 	my $column = 0;
 	if ( @_ ) { $column = shift; }
 	print STDOUT "\nReading in ".$this->{'file_name'}."...\n";
-	if ( not defined openhandle( $this->{'handle'} ) ) {
+	if ( not $this->isOpen() ) {
 		$this->open();
 	}
 	seek( $this->{'handle'} , 0 , 0 );

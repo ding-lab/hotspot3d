@@ -91,6 +91,10 @@ sub addCosmic {
         next if ( ($t[2] =~ /N\/A/) or 
                   ($t[3] =~ /N\/A/) or 
                   ($t[8] =~ /N\/A/) or ($t[9] =~ /N\/A/));
+		$t[2] =~ s/\D*(\d+)\D*/$1/g;
+		$t[3] =~ s/\D*(\d+)\D*/$1/g;
+		$t[8] =~ s/\D*(\d+)\D*/$1/g;
+		$t[9] =~ s/\D*(\d+)\D*/$1/g;
         $uniprotCoorOneEnd = $t[2] + $t[3];
         $uniprotCoorTwoEnd = $t[8] + $t[9];
         #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";

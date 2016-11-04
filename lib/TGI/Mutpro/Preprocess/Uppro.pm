@@ -97,7 +97,7 @@ sub process {
 	my $hugogene_ref;
 	my ( %list , @fields );
 	if ( $this->{'genes'} ) { 
-		my $genesFH = new TGI::Mutpro::Files::List( $this->{'genes'} );
+		my $genesFH = new TGI::Files::List( $this->{'genes'} );
 		$genesFH->open();
 		my $list = $genesFH->getList( 0 );
 		$genesFH->close();

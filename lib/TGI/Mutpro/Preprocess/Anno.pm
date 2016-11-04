@@ -117,8 +117,12 @@ sub addAnnotation {
     unless( $fhout->open(">$outputf") ) { die "Could not open proximity file to add annotation information !\n" };
 	print STDOUT "Creating ".$outputf."\n";
 	my ( $coord , $offset );
+	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\tDomain1\t" );
+	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\tDomain2\t" );
+	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
     while ( my $a = $fhin->getline ) {
         next if ($a =~ /^WARNING:/);
+        next if ($a =~ /UniProt_ID1/);
         chomp($a);
         my @t = split /\t/, $a;
         next if ($t[0] !~ /^\w+$/);
@@ -143,7 +147,11 @@ sub addAnnotation {
         if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd} ) { $annoOneEnd = $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd}; }
         if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd} ) { $annoTwoEnd = $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd}; }
         # print STDERR $annoOneEnd."\t".$annoTwoEnd."\n";
-        foreach my $d (0..4) { print $fhout $t[$d]."\t"; }
+		$t[2] =~ s/\D*(\d+)\D*/$1/g;
+		$t[3] =~ s/\D*(\d+)\D*/$1/g;
+		$t[7] =~ s/\D*(\d+)\D*/$1/g;
+		$t[8] =~ s/\D*(\d+)\D*/$1/g;
+        foreach my $d (0..1) { print $fhout $t[$d]."\t"; }
         print $fhout $annoOneEnd."\t";
         foreach my $d (5..9) { print $fhout $t[$d]."\t"; }
         print $fhout $annoTwoEnd."\t";
