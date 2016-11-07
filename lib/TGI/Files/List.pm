@@ -38,9 +38,9 @@ sub getList {
 	my %items;
 	map {
 		chomp;
-		print $_."\n";
+		#print $_."\n";
 		my $item = (split /\t/)[$column];
-		print $item."\n";
+		#print $item."\n";
 		$items{$item} += 1;
 	} $this->getlines();
 	$this->close();

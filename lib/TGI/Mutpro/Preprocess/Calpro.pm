@@ -225,7 +225,7 @@ sub writeProximityFile {
 	# Download and parse PDB files
 	$fh->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
 	$fh->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
-	$fh->print( "Domain\tDistance\tPDB_ID\n" );
+	$fh->print( "Distance\tPDB_ID\n" );
 	foreach my $pdbId (keys %pdbIds) {
 		%allOffsets = ();
 		#$structureRef = TGI::Mutpro::Preprocess::PdbStructure->new( $pdbId );
@@ -295,6 +295,7 @@ sub writeProximityFile {
 			# Get AminoAcid object for residue in chain '$uniprotChain', 
 			# at position $position
 			$uniprotAminoAcidRef = $$peptideRef{$uniprotChain}->getAminoAcidObject( $residuePosition );
+			next if ( $uniprotAminoAcidRef->isAA() == 0 );
 			$uniprotAaName = $$uniprotAminoAcidRef->name();
 			#      120905  Don't tie this to Uniprot annotation
 			# See if this is in an annotated Uniprot domain.  
@@ -329,6 +330,8 @@ sub writeProximityFile {
 				## remove the positions with insertion code
 				my @tmp_array_positions = grep{ /\d+$/ } keys %{$allAaObjRef}; 
 				foreach $position ( sort {$a<=>$b} @tmp_array_positions ) {
+					$aaObjRef = $$peptideRef{$chain}->getAminoAcidObject($position);
+					next if ( $aaObjRef->isAA() == 0 );
 					if ( (defined $otherChainOffset) and ($otherChainOffset eq "N/A") ) { 
 						$correctedPosition = $position;
 					} else { 
@@ -339,7 +342,6 @@ sub writeProximityFile {
 					# Skip if the amino acid at '$position' of peptide chain '$chain' 
 					# is not close to the amino acid at '$residuePosition' 
 					# of peptide chain '$uniprotChain'
-					$aaObjRef = $$peptideRef{$chain}->getAminoAcidObject($position);
 					if ( $this->{'distance_measure'} eq $MINDISTANCE ) {
 						$distanceBetweenResidues = $$aaObjRef->minDistance($uniprotAminoAcidRef);
 					} elsif ( $this->{'distance_measure'} eq $AVGDISTANCE ) {
@@ -463,7 +465,7 @@ sub uniprotDomains {
 	return \%uniprotDomains;
 }
 
-	sub checkOffsets {
+sub checkOffsets {
 	my ( $this, $proximityFile, $coordFile, ) = @_;
 	my ( $line, 
 		 $uniprotA,
