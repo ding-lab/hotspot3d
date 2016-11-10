@@ -44,11 +44,11 @@ sub addPointToAminoAcid {
     # Make a new AminoAcid object if this position 
     # has not yet been added to peptide
     if (!defined ${$self->{AA}}{$position}) {
-	$aa = new TGI::Mutpro::Preprocess::AminoAcid;
-	$aa->name($name);
-	$aa->position($position);
-	$aa->chain($self->{NAME});
-	${$self->{AA}}{$position} = \$aa;
+		$aa = new TGI::Mutpro::Preprocess::AminoAcid;
+		$aa->name($name);
+		$aa->position($position);
+		$aa->chain($self->{NAME});
+		${$self->{AA}}{$position} = \$aa;
     }
     # Add point
     $aaRef = $self->getAminoAcidObject($position);

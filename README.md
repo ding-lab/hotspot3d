@@ -7,13 +7,13 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V1.0.2
+        Version:     V1.0.3
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
   Usage: hotspot3d <command> [options]
 
            Preprocessing
-             prep      --  Run preprocessing steps 2-7 (beta)
+             prep      --  Run preprocessing steps 2-7
 
              drugport  --  0) Parse drugport database (OPTIONAL)
              uppro     --  1) Update proximity files

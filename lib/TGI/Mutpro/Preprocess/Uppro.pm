@@ -23,6 +23,7 @@ use List::MoreUtils qw( uniq );
 use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
 use TGI::Files::MAF;
+use TGI::Files::List;
 
 my $MINDISTANCE = "minDistance";
 my $AVGDISTANCE = "averageDistance";
@@ -95,18 +96,18 @@ sub process {
 	print STDOUT "Creating ".$log_file."\n";
     my ($hugo_id, $alias_ref, $previous_ref, $alias_list, $uniprot_id, $uniprot_ref, $pdb_ref);
 	my $hugogene_ref;
-	my ( %list , @fields );
+	my ( $list , @fields );
 	if ( $this->{'genes'} ) { 
+		print STDOUT "Getting genes from ".$this->{'genes'}."\n";
 		my $genesFH = new TGI::Files::List( $this->{'genes'} );
 		$genesFH->open();
-		my $list = $genesFH->getList( 0 );
+		$list = $genesFH->getList( 0 );
 		$genesFH->close();
+		my $ngenes = scalar keys %{$list};
+		print STDOUT "Found ".$ngenes." (may include header)\n";
 	}
-	$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjects();
+	$hugogene_ref = TGI::Mutpro::Preprocess::HugoGeneMethods::makeHugoGeneObjects( $list );
     foreach $hugo_id (sort keys %{$hugogene_ref}) {
-		if ( scalar keys %list > 0 ) {
-			next unless( exists $list{$hugo_id} );
-		}
         print STDOUT 'HUGO: ', "$hugo_id\n";
         $alias_ref = $$hugogene_ref{$hugo_id}->getAllAliases();
         $previous_ref =  $$hugogene_ref{$hugo_id}->getAllPreviousSymbols();

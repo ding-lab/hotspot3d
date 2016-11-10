@@ -26,7 +26,6 @@ use TGI::Mutpro::Preprocess::Trans;
 use TGI::Mutpro::Preprocess::Cosmic;
 use TGI::Mutpro::Preprocess::Prior;
 
-our @ISA = qw( TGI::Mutpro::Preprocess::Calroi TGI::Mutpro::Preprocess::Statis TGI::Mutpro::Preprocess::Anno TGI::Mutpro::Preprocess::Trans TGI::Mutpro::Preprocess::Cosmic TGI::Mutpro::Preprocess::Prior );
 my $MINDISTANCE = "minDistance";
 my $AVGDISTANCE = "averageDistance";
 my $CALROI = "calroi";
@@ -39,9 +38,11 @@ my $PRIOR = "prior";
 sub new {
 	my $class = shift;
 	my $this = {};
+	$this->{'command'} = "";
 	$this->{'_OUTPUT_DIR'} = getcwd;
 	$this->{'_BLAT'} = "blat";
 	$this->{'max_3d_dis'} = 100;
+	$this->{'p_value_cutoff'} = 1;
 	$this->{'min_seq_dis'} = 0;
 	$this->{'start'} = $CALROI; 
 	bless $this, $class;
@@ -53,6 +54,7 @@ sub process {
 	my $this = shift;
 	my ($help, $options);
 	unless (@ARGV) { die $this->help_text(); }
+	$this->{'command'} = \@ARGV;
 	$options = GetOptions (
 		'output-dir=s'	=> \$this->{'_OUTPUT_DIR'},
 		'blat=s'   => \$this->{'_BLAT'},
@@ -69,20 +71,129 @@ sub process {
 	return;
 }
 
+sub command {
+	my $this = shift;
+	if ( @_ ) {
+		$this->{'command'} = \@_;
+	}
+	return $this->{'command'};
+}
+
+sub outputDir {
+	my $this = shift;
+	if ( @_ ) { $this->{'_OUTPUT_DIR'} = shift; }
+	return $this->{'_OUTPUT_DIR'};
+}
+
+sub blat {
+	my $this = shift;
+	if ( @_ ) { $this->{'_BLAT'} = shift; }
+	return $this->{'_BLAT'};
+}
+
+sub pvaluecutoff {
+	my $this = shift;
+	if ( @_ ) { $this->{'p_value_cutoff'} = shift; }
+	return $this->{'p_value_cutoff'};
+}
+
+sub max3ddis {
+	my $this = shift;
+	if ( @_ ) { $this->{'max_3d_dis'} = shift; }
+	return $this->{'max_3d_dis'};
+}
+
+sub minseqdis {
+	my $this = shift;
+	if ( @_ ) { $this->{'min_seq_dis'} = shift; }
+	return $this->{'min_seq_dis'};
+}
+
+sub start {
+	my $this = shift;
+	if ( @_ ) { $this->{'start'} = shift; }
+	return $this->{'start'};
+}
+
+sub calroi {
+	my $this = shift;
+	my $cmd = "hotspot3d calroi --output-dir ".$this->outputDir();
+	print STDOUT "running: ".$cmd."\n";
+	return system( $cmd );
+}
+
+sub statis {
+	my $this = shift;
+	my $cmd = "hotspot3d statis --output-dir ".$this->outputDir();
+	print STDOUT "running: ".$cmd."\n";
+	return system( $cmd );
+}
+
+sub anno {
+	my $this = shift;
+	my $cmd = "hotspot3d anno --output-dir ".$this->outputDir();
+	print STDOUT "running: ".$cmd."\n";
+	return system( $cmd );
+}
+
+sub trans {
+	my $this = shift;
+	my $cmd = "hotspot3d trans --output-dir ".$this->outputDir();
+	$cmd .= " --blat ".$this->blat();
+	print STDOUT "running: ".$cmd."\n";
+	return system( $cmd );
+}
+
+sub cosmic {
+	my $this = shift;
+	my $cmd = "hotspot3d cosmic --output-dir ".$this->outputDir();
+	print STDOUT "running: ".$cmd."\n";
+	return system( $cmd );
+}
+
+sub prior {
+	my $this = shift;
+	my $cmd = "hotspot3d prior --output-dir ".$this->outputDir();
+	$cmd .= " --p-value-cutoff ".$this->pvaluecutoff();
+	$cmd .= " --3d-distance-cutoff ".$this->max3ddis();
+	$cmd .= " --linear-cutoff ".$this->minseqdis();
+	print STDOUT "running: ".$cmd."\n";
+	return system( $cmd );
+}
+
 sub steps {
 	my $this = shift;
+	my $ok = 0;
+	#if ( $this->{'start'} eq $UPPRO ) {
+	#	fork 
+	#} elsif ( $this->{'start'} eq $CALROI ) {
 	if ( $this->{'start'} eq $CALROI ) {
-		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Calroi::process();
+		$this->calroi();
+		$this->statis();
+		$this->anno();
+		$this->trans();
+		$this->cosmic();
+		$this->prior();
 	} elsif ( $this->{'start'} eq $STATIS ) {
-		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Statis::process();
+		$this->statis();
+		$this->anno();
+		$this->trans();
+		$this->cosmic();
+		$this->prior();
 	} elsif ( $this->{'start'} eq $ANNO ) {
-		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Anno::process();
+		$this->anno();
+		$this->trans();
+		$this->cosmic();
+		$this->prior();
 	} elsif ( $this->{'start'} eq $TRANS ) {
-		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Trans::process();
+		$this->trans();
+		$this->cosmic();
+		$this->prior();
 	} elsif ( $this->{'start'} eq $COSMIC ) {
-		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Cosmic::process();
+		$this->cosmic();
+		$this->prior();
 	} elsif ( $this->{'start'} eq $PRIOR ) {
-		TGI::Mutpro::Preprocess::AllPreprocess->SUPER::TGI::Mutpro::Preprocess::Prior::process();
+		$this->prior();
 	} else {
 		die "HotSpot3D::AllPreprocess error: desired starting step unclear.\n".$this->help_text();
 	}
