@@ -65,7 +65,7 @@ sub process {
     unless( $options ) { die $this->help_text(); }
 	if ( not defined $this->{'pvalue_cutoff'} ) {
         if ( not defined $this->{'3d_distance_cutoff'} and not defined $this->{'pvalue_cutoff'} ) {
-            warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
+            warn "HotSpot3D Search Warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
             $this->{'pvalue_cutoff'} = $PVALUEDEFAULT;
             $this->{'3d_distance_cutoff'} = $MAXDISTANCE;
         } else {
@@ -311,6 +311,7 @@ sub proximitySearching {
         my $uniprotf = "$proximityOutPrefix\/$a.ProximityFile.csv";
         next unless( -e $uniprotf and $fh->open($uniprotf) ); 
         while ( my $b = <$fh> ) {
+			next if ( $b =~ /UniProt_ID/g );
             chomp( $b ); my @ta = split /\t/, $b;
             my ( $uid1, $chain1, $pdbcor1, $offset1, $residue1, $domain1, $cosmic1, 
                  $uid2, $chain2, $pdbcor2, $offset2, $residue2, $domain2, $cosmic2, 

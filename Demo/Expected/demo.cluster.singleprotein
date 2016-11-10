@@ -1,0 +1,30 @@
+HotSpot3D::Cluster warning: no clustering option given, setting to default network
+Use of uninitialized value in string eq at /gscuser/ascott/perl5/lib/perl5/TGI/Mutpro/Main/Cluster.pm line 90.
+HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05
+The input collapsed pairs file (3D_Proximity.pairwise.singleprotein.collapsed) does not exist! 
+
+Usage: hotspot3d cluster [options]
+
+                             REQUIRED
+--pairwise-file              3D pairwise data file
+
+                             AT LEAST ONE
+--collapsed-file             Either (or concatenated) pairwise.singleprotein.collapsed & pairwise.complex.collapsed data
+--drug-clean-file            Either (or concatenated) drugs.target.clean & drugs.nontarget.clean data
+
+                             OPTIONAL
+--output-prefix              Output prefix, default: 3D_Proximity
+--p-value-cutoff             P_value cutoff (<), default: 0.05 (if 3d-distance-cutoff also not set)
+--3d-distance-cutoff         3D distance cutoff (<), default: 100 (if p-value-cutoff also not set)
+--linear-cutoff              Linear distance cutoff (> peptides), default: 0
+--max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
+--clustering                 Cluster using network or density-based methods (network or density), default: network
+--vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
+--distance-measure           Pair distance to use (shortest or average), default: average
+--maf-file                   .maf file used in proximity search step (used if vertex-type = recurrence)
+--transcript-id-header       .maf file column header for transcript id's, default: transcript_name
+--amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 
+--weight-header              .maf file column header for mutation weight, default: weight (used if vertex-type = weight)
+
+--help                       this message
+
