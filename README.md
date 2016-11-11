@@ -7,22 +7,22 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V1.0.3
+        Version:     V1.0.4
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
   Usage: hotspot3d <command> [options]
 
            Preprocessing
-             prep      --  Run preprocessing steps 2-7
-
              drugport  --  0) Parse drugport database (OPTIONAL)
              uppro     --  1) Update proximity files
-             calroi    --  2) Generate region of interest (ROI) information
-             statis    --  3) Calculate p_values for pairs of mutations
-             anno      --  4) Add region of interest (ROI) annotation
-             trans     --  5) Add transcript annotation
-             cosmic    --  6) Add COSMIC annotation to proximity file
-             prior     --  7) Prioritization
+             prep      --  2) Run preprocessing steps 2-7
+
+             calroi    --  2a) Generate region of interest (ROI) information
+             statis    --  2b) Calculate p_values for pairs of mutations
+             anno      --  2c) Add region of interest (ROI) annotation
+             trans     --  2d) Add transcript annotation
+             cosmic    --  2e) Add COSMIC annotation to proximity file
+             prior     --  2f) Prioritization
 
            Analysis
 
