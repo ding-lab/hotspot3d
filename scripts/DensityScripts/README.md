@@ -23,6 +23,8 @@ Output file name4: RD.$Epsilon.$MinPts.pairwise_file_name.clusters.shiny.R).
 
 3) DensityVisual.pl : Writes a pymol script for visualization
 
+4) ClusterProbability.pl : Determines the membership probability of each variant in clusters.
+
 Additional Softwares
 -----------------------------
 
