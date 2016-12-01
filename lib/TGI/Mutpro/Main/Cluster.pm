@@ -56,6 +56,13 @@ sub new {
     $this->{'transcript_id_header'} = "transcript_name";
     $this->{'weight_header'} = $WEIGHT;
     $this->{'clustering'} = undef;
+
+    #$this->{'pairwise_file'} = '3D_Proximity.pairwise';
+    $this->{'Epsilon'} = undef;
+    $this->{'MinPts'} = undef;
+    $this->{'number_of_runs'} = undef;
+    $this->{'probability_cut_off'} = undef;
+
     bless $this, $class;
     $this->process();
     return $this;
@@ -115,17 +122,25 @@ sub setOptions {
         'weight-header=s' => \$this->{'weight_header'},		
         'clustering=s' => \$this->{'clustering'},		
         'help' => \$help,
+
+        'Epsilon=f' => \$this->{'Epsilon'},
+        'MinPts=f' => \$this->{'MinPts'},
+        'number-of-runs=f' => \$this->{'number_of_runs'},
+        'probability-cut-off=f' => \$this->{'probability_cut_off'},
     );
-    if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
 	if ( not defined $this->{'clustering'} ) {
 		$this->{'clustering'} = $NETWORK;
 		warn "HotSpot3D::Cluster warning: no clustering option given, setting to default network\n";
 	}
 	if ( $this->{'clustering'} eq $DENSITY ) {
-		TGI::Mutpro::Main::Density->new();
-		exit;
+		if ( $help ) { print STDERR density_help_text(); exit 0; }
+		else{
+			TGI::Mutpro::Main::Density->new($this);
+			exit;
+		}
 	}
+	if ( $help ) { print STDERR help_text(); exit 0; }
 	if ( not defined $this->{'p_value_cutoff'} ) {
 		if ( not defined $this->{'3d_distance_cutoff'} ) {
 			warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
@@ -907,6 +922,27 @@ sub getAverageDistance {
 	$distance_matrix->{$gmu1}->{$gmu2} = $avgDistance;
 	$distance_matrix->{$gmu2}->{$gmu1} = $avgDistance;
 	return;
+}
+
+sub density_help_text{
+    my $this = shift;
+        return <<HELP
+
+Usage: hotspot3d density [options]
+
+                             REQUIRED
+--pairwise-file              3D pairwise data file
+
+                             OPTIONAL
+--Epsilon                    Epsilon value, default: 10
+--MinPts                     MinPts, default: 4
+--number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
+--probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100 
+
+--help                       this message
+
+HELP
+
 }
 
 sub help_text{
