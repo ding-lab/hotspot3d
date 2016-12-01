@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-our $VERSION = 'V1.0.3';
+our $VERSION = 'V1.0.4';
 
 use Carp;
 use FileHandle;
@@ -68,7 +68,7 @@ sub help_text {
 	return <<HELP        
 Program: hotspot3d - 3D mutation proximity analysis program.
 Version: $VERSION
- Author: Beifang Niu, Adam D Scott, Sohini Sengupta, & John Wallis
+ Author: Beifang Niu, Adam D Scott, Sohini Sengupta, John Wallis & Amila Weerasinghe
 
   Usage: hotspot3d <command> [options]
 
