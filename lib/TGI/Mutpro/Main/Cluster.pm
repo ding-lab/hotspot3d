@@ -37,6 +37,9 @@ my $AVERAGEDISTANCE = "average";
 my $SHORTESTDISTANCE = "shortest";
 my $NETWORK = "network";
 my $DENSITY = "density";
+my $INDEPENDENT = "independent";
+my $DEPENDENT = "dependent";
+my $ANY = "any";
 
 sub new {
     my $class = shift;
@@ -56,6 +59,7 @@ sub new {
     $this->{'transcript_id_header'} = "transcript_name";
     $this->{'weight_header'} = $WEIGHT;
     $this->{'clustering'} = undef;
+    $this->{'structure_dependence'} = undef;
     bless $this, $class;
     $this->process();
     return $this;
@@ -114,6 +118,7 @@ sub setOptions {
         'transcript-id-header=s' => \$this->{'transcript_id_header'},		
         'weight-header=s' => \$this->{'weight_header'},		
         'clustering=s' => \$this->{'clustering'},		
+        'structure-dependence=s' => \$this->{'structure_dependence'},		
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
@@ -121,6 +126,10 @@ sub setOptions {
 	if ( not defined $this->{'clustering'} ) {
 		$this->{'clustering'} = $NETWORK;
 		warn "HotSpot3D::Cluster warning: no clustering option given, setting to default network\n";
+	}
+	if ( not defined $this->{'structure_dependence'} ) {
+		$this->{'structure_dependence'} = $INDEPENDENT;
+		warn "HotSpot3D::Cluster warning: no structure-dependence option given, setting to default independent\n";
 	}
 	if ( $this->{'clustering'} eq $DENSITY ) {
 		TGI::Mutpro::Main::Density->new();
@@ -292,6 +301,8 @@ sub readCollapsed{
 			my @mus1 = split /,/, $m1;
 			my @mus2 = split /,/, $m2;
 			my @gm1 = (); my @gm2 = ();
+			my $structure = $this->structureDependence( $pdb );
+			print "RC - ".$structure."\n";
 			for ( my $i = 0 ; $i < @mus1 ; $i++ ) { 
 				my $mut1 = $mus1[$i];
 				my $mut2 = $mus2[$i];
@@ -305,20 +316,20 @@ sub readCollapsed{
 						if ( $lin_dist eq "N/A" ) {
 							push @gm1 , ( $first ); #unique mutation
 							push @gm2 , ( $second ); #unique mutation
-							$distance_matrix->{$first}->{$second} = $dist;
-							$distance_matrix->{$second}->{$first} = $dist;
+							$distance_matrix->{$structure}->{$first}->{$second} = $dist;
+							$distance_matrix->{$structure}->{$second}->{$first} = $dist;
 						} elsif ( $lin_dist > $this->{'linear_cutoff'} ) {
 							push @gm1 , ( $first ); #unique mutation
 							push @gm2 , ( $second ); #unique mutation
-							$distance_matrix->{$first}->{$second} = $dist;
-							$distance_matrix->{$second}->{$first} = $dist;
+							$distance_matrix->{$structure}->{$first}->{$second} = $dist;
+							$distance_matrix->{$structure}->{$second}->{$first} = $dist;
 						} #if linear distance okay
 					} #if spatial significance okay
 				} #if okay transcript representations
 			} #foreach transcript representation of mutations
 			my @mutations = @gm1;
 			push @mutations , @gm2;
-			$this->AHC( $pval , $dist , $clusterings , \@mutations );
+			$this->AHC( $pval , $dist , $clusterings , \@mutations , $structure );
 		} $fh->getlines;
 		$fh->close();
 	} #if using collapsed pairs file
@@ -331,21 +342,24 @@ sub cleanUpClusters {
 	print STDOUT "HotSpot3D::Cluster clean up clusters\n";
     my $i = 0;
     ## REASSIGN CLUSTER IDS BY +1 INCREMENTS (REMOVE GAPS IN ID LIST)
-	foreach my $id ( sort {$a<=>$b} keys %{$clusterings} ) {
-		my $size = scalar @{$clusterings->{$id}};
-		if ( scalar @{$clusterings->{$id}} == 0 ) {
-			delete $clusterings->{$id};
+	foreach my $structure ( sort keys %{$clusterings} ) {
+		print "CUC - ".$structure."\n";
+		foreach my $id ( sort {$a<=>$b} keys %{$clusterings->{$structure}} ) {
+			my $size = scalar @{$clusterings->{$structure}->{$id}};
+			if ( scalar @{$clusterings->{$structure}->{$id}} < 2 ) {
+				delete $clusterings->{$structure}->{$id};
+			}
+		} #assure empty or singleton clusters (if any) are removed
+		my @keys = sort { $a <=> $b } keys %{$clusterings->{$structure}};
+		while ( $i < scalar keys %{$clusterings->{$structure}} ) {
+			if ( $keys[$i] != $i ) {
+				$clusterings->{$structure}->{$i} = $clusterings->{$structure}->{$keys[$i]};
+				delete $clusterings->{$structure}->{$keys[$i]};
+			}
+			$i++;
 		}
-	} #assure empty clusters (if any) are removed
-    my @keys = sort { $a <=> $b } keys %{$clusterings};
-    while ( $i < scalar keys %{$clusterings} ) {
-        if ( $keys[$i] != $i ) {
-            $clusterings->{$i} = $clusterings->{$keys[$i]};
-            delete $clusterings->{$keys[$i]};
-        }
-        $i++;
-    }
-    @keys = sort { $a <=> $b } keys %{$clusterings};
+		#@keys = sort { $a <=> $b } keys %{$clusterings->{$structure}};
+	}
 	return;
 }
 
@@ -363,17 +377,20 @@ sub getVariantWeight {
 		print STDOUT "Reading .maf to get ";
 		if ( $this->{'vertex_type'} eq $RECURRENCE ) { print "recurrence\n"; }
 		elsif ( $this->{'vertex_type'} eq $WEIGHT ) { print "weight\n"; }
-		foreach my $id ( keys %{$clusterings} ) {
-			foreach my $gene_mut ( @{$clusterings->{$id}} ) {
-				my ( $gene , $mutation ) = split /\:/ , $gene_mut;
-				if ( exists $mut_chrpos->{$gene_mut} ) {
-					foreach my $chr_start_stop ( keys %{$mut_chrpos->{$gene_mut}} ) {
-						my $variant = join( "_" , ( $gene , $mutation , $chr_start_stop ) );
-						$variants_from_pairs->{$variant} = 1;
-					}
-				}
-			}
-		}
+		foreach my $structure ( keys %{$clusterings} ) {
+			print "GVW - ".$structure."\n";
+			foreach my $id ( keys %{$clusterings->{$structure}} ) {
+				foreach my $gene_mut ( @{$clusterings->{$structure}->{$id}} ) {
+					my ( $gene , $mutation ) = split /\:/ , $gene_mut;
+					if ( exists $mut_chrpos->{$gene_mut} ) {
+						foreach my $chr_start_stop ( keys %{$mut_chrpos->{$gene_mut}} ) {
+							my $variant = join( "_" , ( $gene , $mutation , $chr_start_stop ) );
+							$variants_from_pairs->{$variant} = 1;
+						} #foreach chr_start_stop in mut_chrpos->gene_mut
+					} #if gene_mut in mut_chrpos
+				} #foreach gene_mut in clusterings->structure->id
+			} #foreach id in clusterings->structure
+		} #foreach structure in clusterings
 		##Mutation recurrence or weight from MAF
 		$this->readMAF( $variants_from_pairs , $Variants , 
 						$mutations , $transcripts );
@@ -457,22 +474,32 @@ sub writeOutput {
 	my $outFilename = $this->generateFilename();
 	print STDOUT "Creating cluster output file: ".$outFilename."\n";
 	my $fh = new FileHandle;
-    die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
-    $fh->print( join( "\t" , ( 	"Cluster" , "Gene/Drug" , "Mutation/Gene" , 
+	die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
+	$fh->print( join( "\t" , ( 	"Cluster" , "Gene/Drug" , "Mutation/Gene" , 
 								"Degree_Connectivity" , "Closeness_Centrality" , 
 								"Geodesic_From_Centroid" , "Recurrence" , 
-								"Chromosome" , "Start" , "Stop" , "Transcript" , "Alternative_Transcripts"
+								"Chromosome" , "Start" , "Stop" , 
+								"Transcript" , "Alternative_Transcripts"
 							 )
 					)."\n"
 			  );
 	print STDOUT "Getting Cluster ID's & Centroids\n";
-    foreach my $clus_num ( keys %{$clusterings} ) {
-		my @clus_mut = @{$clusterings->{$clus_num}};
-		$this->centroid( $Variants , $distance_matrix , $clus_num , 
-						 \@clus_mut , $fh , 0 , 1 , $transcripts);
-    } #foreach cluster
-    my $numclusters = scalar keys %{$clusterings};
-    print STDOUT "Found $numclusters clusters\n";
+	my $numstructures = scalar keys %{$clusterings};
+	my $numclusters = 0;
+	foreach my $structure ( keys %{$clusterings} ) {
+		$numclusters += scalar keys %{$clusterings->{$structure}};
+		foreach my $clus_num ( keys %{$clusterings->{$structure}} ) {
+			my @clus_mut = @{$clusterings->{$structure}->{$clus_num}};
+			print $structure."\t".$clus_num."\n";
+			$this->centroid( $Variants , $distance_matrix , $clus_num , 
+							 \@clus_mut , $fh , 0 , 1 , $transcripts , $structure );
+		} #foreach cluster
+	} #foreach structure
+	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
+		print STDOUT "Found ".$numclusters." super-clusters on ".$numstructures." structures\n";
+	} else {
+		print STDOUT "Found ".$numclusters." super-clusters\n";
+	}
 	return;
 }
 
@@ -579,7 +606,8 @@ sub readDrugClean {
 				my $first = $drug.":".$gene2;
 				my $second = $gene2.":".$m2;
 				my $info = $dist.":".$pval;
-				$master->{$first}->{$second} = $info; #store necessary pair info
+				my $structure = &checkStructureDependence( $pdb );
+				$master->{$structure}->{$first}->{$second} = $info; #store necessary pair info
 				$this->redundant($pdb_loc, $aa_map, $locations , $gene2, $m2, $loc); #filter transcripts
 		} $fh->getlines; 
 		$fh->close();
@@ -590,7 +618,7 @@ sub readDrugClean {
 sub getBestRepresentation {
 	#$this->getBestRepresentation( $aa_map , $locations );
 	my ( $this , $aa_map , $locations , $pdb_loc ) = @_;
-	print STDOUT "HotSpot3D Cluster::getBestRepresentation\n";
+	print STDOUT "HotSpot3D::Cluster::getBestRepresentation\n";
 	foreach my $gene ( keys %{$aa_map} ) {
 		foreach my $aa ( @{$aa_map->{$gene}} ) {
 			if ( $aa ne 'NA' ) {
@@ -626,40 +654,45 @@ sub getBestRepresentation {
 sub createDistanceMatrix {
 	#$this->createDistanceMatrix( $master , $aa_map );
 	my ( $this , $master , $aa_map , $clusterings ) = @_;
-	print STDOUT "HotSpot3D Cluster::createDistanceMatrix\n";
+	print STDOUT "HotSpot3D::Cluster::createDistanceMatrix\n";
 	my $distance_matrix = {};
-	foreach my $first ( keys %{$master} ) {
-		foreach my $second ( keys %{$master->{$first}} ) {
-			my ( $gene2 , $m2 ) = split ":" , $second;
-			if ( grep{ $_ eq $m2 } @{$aa_map->{$gene2}} ) { 
-				my @mutations = ();
-				push @mutations , $first;
-				if ( $this->{'vertex_type'} eq $UNIQUE ) { $m2 =~ s/\D+(\d+)\D+/$1/g; }
-				$second = $gene2.":".$m2;
-				push @mutations , $second; #@mus2;
-				my ( $dist , $pval ) = split ":" , $master->{$first}->{$second};
-				$this->AHC( $pval , $dist , $clusterings , \@mutations );
-				if ( $this->checkPair( $dist , $pval ) ) {
-					$distance_matrix->{$first}->{$second} = $dist;
-					$distance_matrix->{$second}->{$first} = $dist;
+	foreach my $structure ( keys %{$master} ) {
+		foreach my $first ( keys %{$master->{$structure}} ) {
+			foreach my $second ( keys %{$master->{$structure}->{$first}} ) {
+				my ( $gene2 , $m2 ) = split ":" , $second;
+				if ( grep{ $_ eq $m2 } @{$aa_map->{$gene2}} ) { 
+					my @mutations = ();
+					push @mutations , $first;
+					if ( $this->{'vertex_type'} eq $UNIQUE ) { $m2 =~ s/\D+(\d+)\D+/$1/g; }
+					$second = $gene2.":".$m2;
+					push @mutations , $second; #@mus2;
+					my ( $dist , $pval ) = split ":" , $master->{$structure}->{$first}->{$second};
+					$this->AHC( $pval , $dist , $clusterings->{$structure} , 
+								\@mutations , $structure );
+					if ( $this->checkPair( $dist , $pval ) ) {
+						$distance_matrix->{$structure}->{$first}->{$second} = $dist;
+						$distance_matrix->{$structure}->{$second}->{$first} = $dist;
+					}
 				}
-			}	
+			}
 		}
 	} #foreach in master
 	return;
 }
 
 sub centroid{
-	my ($this, $Variants,$distance_matrix,$clus_num,$clus_mut,$fh,$recluster,$counter , $transcripts )=@_;
-	my %dist = ();
+	my ( $this , $Variants , $distance_matrix , $clus_num , $clus_mut , 
+		 $fh , $recluster , $counter , $transcripts , $structure )=@_;
+	my %dist;
 	foreach my $mut1 ( @{$clus_mut} ) { #initialize geodesics
 		my @mu1 = split( ":" , $mut1 );
 		foreach my $mut2 ( @{$clus_mut} ) {
 			my @mu2 = split( ":" , $mut2 );
 			if ( $mu1[1] =~ /p\./ ) { $mu1[1] =~ s/\D//g; }
 			if ( $mu2[1] =~ /p\./ ) { $mu2[1] =~ s/\D//g; }
-			if ( exists $distance_matrix->{$mut1}->{$mut2} ) {
-				$dist{$mut1}{$mut2} = $distance_matrix->{$mut1}->{$mut2};
+			if ( exists $distance_matrix->{$structure}->{$mut1}->{$mut2} ) {
+				print join( "\t" , ( $structure , $mut1 , $mut2 , $distance_matrix->{$structure}->{$mut1}->{$mut2} ) )."\n";
+				$dist{$mut1}{$mut2} = $distance_matrix->{$structure}->{$mut1}->{$mut2};
 			} elsif ( ( $mu1[0] eq $mu2[0] ) && ( $mu1[1] eq $mu2[1] ) ) {
 				$dist{$mut1}{$mut2} = 0;
 			} else {
@@ -721,21 +754,29 @@ sub centroid{
 					$weight = $Variants->{$other};
 				}
 				$count+=1;
+				my $clusterID = $clus_num;
 				if ($recluster==1){
-					$fh->print( join( "\t" , ( "$clus_num.$counter" , $gene , $mutation , 
-												$degrees , $closenesscentrality , 
-												$geodesic , $weight ,
-												$chromosome , $start , $stop  ,
-												$reportedTranscript , $altTranscript 
+					if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
+						$clusterID = join( "." , ( $clus_num , $counter , $structure ) );
+					} else {
+						$clusterID = join( "." , ( $clus_num , $counter ) );
+					}
+					$fh->print( join( "\t" , ( $clusterID , $gene , $mutation , 
+											   $degrees , $closenesscentrality , 
+											   $geodesic , $weight ,
+											   $chromosome , $start , $stop  ,
+											   $reportedTranscript , $altTranscript 
 											 )
 									)."\n"
 							  );
 					my $index=0;
 					$index++ until $clus_mut->[$index] eq $other;
 					splice(@{$clus_mut}, $index, 1);
-				}
-				else {
-					$fh->print( join( "\t" , ( 	$clus_num , $gene , $mutation , $degrees , 
+				} else {
+					if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
+						$clusterID = join( "." , ( $clus_num , $structure ) );
+					}
+					$fh->print( join( "\t" , ( 	$clusterID , $gene , $mutation , $degrees , 
 												$closenesscentrality , $geodesic , $weight , 
 												$chromosome , $start , $stop  ,
 												$reportedTranscript , $altTranscript 
@@ -749,19 +790,21 @@ sub centroid{
 	if ($count<2) { return; }
 	if ($recluster==1) {
 		$counter+=1;
-		$this->centroid($Variants,$distance_matrix,$clus_num,$clus_mut,$fh,$recluster, $counter , $transcripts);
+		$this->centroid( $Variants , $distance_matrix , $clus_num , 
+						 $clus_mut , $fh , $recluster , $counter , 
+						 $transcripts , $structure );
 	}
 }
 
 ## CLUSTERING FUNCTION - AGGLOMERATIVE HIERARCHICAL CLUSTERING (AHC)
 sub AHC {
 	#$this->AHC( $pval , $dist , $clusterings , \@mutations );
-    my ( $this, $pval , $dist , $clusterings , $mutations ) = @_;
+    my ( $this, $pval , $dist , $clusterings , $mutations , $structure ) = @_;
     if ( $this->checkPair( $dist , $pval ) ) { #meets desired significance
         my ( @temp, @found, @combine ); 
         my ( @uniq, $c );
-        foreach $c ( keys %{$clusterings} ) { #each cluster
-            my @mus_in_cluster = @{$clusterings->{$c}};
+        foreach $c ( keys %{$clusterings->{$structure}} ) { #each cluster
+            my @mus_in_cluster = @{$clusterings->{$structure}->{$c}};
             foreach my $mu ( @{$mutations} ) {
 				foreach ( @mus_in_cluster ) {
 					if ( $mu eq $_ ) { push @combine , $c; }
@@ -773,21 +816,21 @@ sub AHC {
             my $collapse_to = min @uniqcombo; #cluster type
             my $j = 0; #iterator type
             while ( $j < scalar @uniqcombo ) {
-                push @{$clusterings->{$collapse_to}} , @{$clusterings->{$uniqcombo[$j]}}; #mutation types
-                push @{$clusterings->{$collapse_to}} , @{$mutations}; #
-                if ( $collapse_to ne $uniqcombo[$j] ) { delete $clusterings->{$uniqcombo[$j]}; }
+                push @{$clusterings->{$structure}->{$collapse_to}} , @{$clusterings->{$structure}->{$uniqcombo[$j]}}; #mutation types
+                push @{$clusterings->{$structure}->{$collapse_to}} , @{$mutations}; #
+                if ( $collapse_to ne $uniqcombo[$j] ) { delete $clusterings->{$structure}->{$uniqcombo[$j]}; }
                 $j++;
             }
-            @{$clusterings->{$collapse_to}} = uniq @{$clusterings->{$collapse_to}};
+            @{$clusterings->{$structure}->{$collapse_to}} = uniq @{$clusterings->{$structure}->{$collapse_to}};
         } else { #new cluster
-            if ( scalar keys %{$clusterings} > 0 ) {
-                $c = ( max keys %{$clusterings} ) + 1;
+            if ( scalar keys %{$clusterings->{$structure}} > 0 ) {
+                $c = ( max keys %{$clusterings->{$structure}} ) + 1;
             } else { $c = 0; }
             push @temp , @{$mutations};
             @uniq = uniq @temp; #mutation types
-            $clusterings->{$c} = \@uniq;
+            $clusterings->{$structure}->{$c} = \@uniq;
         }
-        $c = scalar keys %{$clusterings};
+        $c = scalar keys %{$clusterings->{$structure}};
     } #if pval significant
     return;
 }
@@ -896,17 +939,29 @@ sub checkPair {
 sub getAverageDistance {
 	my ( $this , $gmu1 , $gmu2 , $distance_matrix , $infos ) = @_;
 	my @infos = split /\|/ , $infos;
-	my $avgDistance = 0;
+	my $avgDistance = {};
 	foreach my $info ( @infos ) {
 		chomp( $info );
 		next unless ( $info );
 		my ( $distance , $pdbID , $pvalue ) = split / / , $info;
-		$avgDistance += $distance;
+		my $structure = $this->structureDependence( $pdbID );
+		$avgDistance->{$structure} += $distance;
 	}
-	$avgDistance = $avgDistance / ( scalar @infos );
-	$distance_matrix->{$gmu1}->{$gmu2} = $avgDistance;
-	$distance_matrix->{$gmu2}->{$gmu1} = $avgDistance;
+	foreach my $structure ( keys %{$avgDistance} ) {
+		$avgDistance->{$structure} = $avgDistance->{$structure}  / ( scalar @infos );
+		$distance_matrix->{$structure}->{$gmu1}->{$gmu2} = $avgDistance->{$structure};
+		$distance_matrix->{$structure}->{$gmu2}->{$gmu1} = $avgDistance->{$structure};
+	}
 	return;
+}
+
+sub structureDependence {
+	my $this = shift;
+	my $structure = shift;
+	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
+		return $structure;
+	}
+	return $ANY;
 }
 
 sub help_text{
@@ -931,6 +986,7 @@ Usage: hotspot3d cluster [options]
 --clustering                 Cluster using network or density-based methods (network or density), default: network
 --vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
 --distance-measure           Pair distance to use (shortest or average), default: average
+--structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent
 --maf-file                   .maf file used in proximity search step (used if vertex-type = recurrence)
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name
 --amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 

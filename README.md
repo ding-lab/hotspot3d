@@ -7,7 +7,7 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V1.0.4
+        Version:     V1.1.0
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
   Usage: hotspot3d <command> [options]
@@ -16,22 +16,21 @@ Usage
              drugport  --  0) Parse drugport database (OPTIONAL)
              uppro     --  1) Update proximity files
              prep      --  2) Run preprocessing steps 2-7
-
-             calroi    --  2a) Generate region of interest (ROI) information
-             statis    --  2b) Calculate p_values for pairs of mutations
-             anno      --  2c) Add region of interest (ROI) annotation
-             trans     --  2d) Add transcript annotation
-             cosmic    --  2e) Add COSMIC annotation to proximity file
-             prior     --  2f) Prioritization
+                 calroi    --  2a) Generate region of interest (ROI) information
+                 statis    --  2b) Calculate p_values for pairs of mutations
+                 anno      --  2c) Add region of interest (ROI) annotation
+                 trans     --  2d) Add transcript annotation
+                 cosmic    --  2e) Add COSMIC annotation to proximity file
+                 prior     --  2f) Prioritization
 
            Analysis
-
-             search    --  0) 3D mutation proximity searching
-             post      --  1) Post-processing of 3D proximity searching output
-             cluster   --  2) Determine mutation-mutation and mutation-drug clusters
-             sigclus   --  3) Determine significance of clusters (BETA/OPTIONAL)
-             summary   --  4) Summarize clusters (OPTIONAL)
-             visual    --  5) Visulization of 3D proximity (OPTIONAL)
+		     main      --  Run analysis steps a-f (beta)
+                 search    --  a) 3D mutation proximity searching
+                 post      --  b) Post-processing of 3D proximity searching output
+                 cluster   --  c) Determine mutation-mutation and mutation-drug clusters
+                 sigclus   --  d) Determine significance of clusters (BETA/OPTIONAL)
+                 summary   --  e) Summarize clusters (OPTIONAL)
+                 visual    --  f) Visulization of 3D proximity (OPTIONAL)
 
 Support
 -------
@@ -113,6 +112,15 @@ Configure Environment
 
 		export PATH=$PATH:~/perl5/bin/
 
+	Add cosmic v67 information to 3D proximity results :
+
+		mkdir preprocessing_dir/cosmic
+
+		cp COSMIC/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
+
+		cd ./preprocessing_dir/cosmic/ 
+
+		bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
 
 
 Example - Preprocessing
@@ -126,37 +134,9 @@ Example - Preprocessing
 
 		hotspot3d uppro --output-dir=preprocessing_dir --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file 1>hotspot3d.uppro.err 2>hotspot3d.uppro.out
 
-3. Calculate protein domain information for each UniProt ID (make sure all uppro jobs have finished!) : 
+3. Run automated preprocessing for other measurments and annotations (can alternatively run steps 2a-2f individually) :
 
-		hotspot3d calroi --output-dir=preprocessing_dir
-
-4. Significance determination calculation :  
-
-		hotspot3d statis --output-dir=preprocessing_dir
-
-5. Add protein domain annotation information to 3D proximity information :
-
-		hotspot3d anno --output-dir=preprocessing_dir
-
-6. Choose transcripts based on the alignment between Uniprot sequence and human peptides sequences :
-
-		hotspot3d trans --output-dir=preprocessing_dir
-
-7. Add cosmic v67 information to 3D proximity results :
-
-		mkdir preprocessing_dir/cosmic
-
-		cp COSMIC/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
-
-		cd ./preprocessing_dir/cosmic/ 
-
-		bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
-
-		hotspot3d cosmic --output-dir=preprocessing_dir
-
-8. Prioritization :
-
-		hotspot3d prior --output-dir=preprocessing_dir --p-value-cutoff=0.1 --3d-distance-cutoff=20 --linear-distance-cutoff=0.5
+		hotspot3d prep --output-dir=preprocessing_dir
 
 
 Example - Analysis
