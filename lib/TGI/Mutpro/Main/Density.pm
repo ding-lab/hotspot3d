@@ -40,16 +40,16 @@ sub new {
 
 sub process {
 	my $this = shift;
-    my ( $help, $options );
-    if ( $help ) { print STDERR $this->help_text(); exit 0; }
+    # my ( $help, $options );
+    # if ( $help ) { print STDERR $this->help_text(); exit 0; }
     unless( $this->{'pairwise_file'} ) { warn 'You must provide a pairwise file! ', "\n"; die $this->help_text(); }
     unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
     if ( not defined $this->{'Epsilon'} ) {
-    	warn "HotSpot3D::Cluster warning: no Epsilon value given, setting to default Epsilon value = 4\n";
+    	warn "HotSpot3D::Cluster warning: no Epsilon value given, setting to default Epsilon value = 10\n";
 			$this->{'Epsilon'} = $EPSILONDEFAULT;
     }
     if ( not defined $this->{'MinPts'} ) {
-    	warn "HotSpot3D::Cluster warning: no MinPts value given, setting to default MinPts value = 3\n";
+    	warn "HotSpot3D::Cluster warning: no MinPts value given, setting to default MinPts value = 4\n";
 			$this->{'MinPts'} = $MINPTSDEFAULT;
     }
     if ( not defined $this->{'number_of_runs'} ) {
@@ -137,9 +137,13 @@ sub MainOPTICS {
 
     my @SetOfCores;
     my @SetOfEdges;
+    my $CoreHash = {};
     foreach my $key ( keys %SetOfNodes ) {
-        if ( scalar keys %{$SetOfNodesRef->{$key}->{distances}} >= $MinPts ) {
+        my $neighborHashRef = GetNeighbors( $key, $Epsilon, \%SetOfNodes );
+        my $CoreDistance = GetCoreDistance( $neighborHashRef, $MinPts );
+        if ( defined $CoreDistance ) { # defined CD ==> it's a core
             push @SetOfCores, $key;
+            $CoreHash->{$key} = 0;
         }
         else {
             push @SetOfEdges, $key;
@@ -178,7 +182,7 @@ sub MainOPTICS {
                     my @SeedKeys = sort { $OrderSeeds{$a} <=> $OrderSeeds{$b} } keys %OrderSeeds;
                     my @SeedValues = @OrderSeeds{@SeedKeys};
                     #my $CurrentObject =  $SeedKeys[0]; # CurrentObject is the object having the least RD in OrderSeeds
-                    my $CurrentObject = GetCurrentObject(\@SeedValues, \@SeedKeys, $PrevObj);
+                    my $CurrentObject = GetCurrentObject(\@SeedValues, \@SeedKeys, $PrevObj, $CoreHash);
                     $PrevObj = $CurrentObject;
                     #print "\n\n current object= $CurrentObject\t neighbors=";
                     %neighbors = %{GetNeighbors($CurrentObject,$Epsilon,\%SetOfNodes)};
@@ -209,17 +213,17 @@ sub MainOPTICS {
     }
     $this->{"CurrentRDarray"} = \@OrderedNodes;
 
-    my $OrderedFile = "./RD.$Epsilon.$MinPts.$this->{pairwise_file_name_only}";
-    open (OUT, ">$OrderedFile");
-    foreach my $x (1...scalar keys %SetOfNodes) {
-        if (defined $OrderedNodes[$x-1][1]) {
-            print OUT "$OrderedNodes[$x-1][0]\t $OrderedNodes[$x-1][1]\n";
-        }
-        else {
-            print OUT "$OrderedNodes[$x-1][0]\t 10\n";
-        }
-    }
-    close (OUT);
+    # my $OrderedFile = "./RD.$Epsilon.$MinPts.$this->{pairwise_file_name_only}";
+    # open (OUT, ">$OrderedFile");
+    # foreach my $x (1...scalar keys %SetOfNodes) {
+    #     if (defined $OrderedNodes[$x-1][1]) {
+    #         print OUT "$OrderedNodes[$x-1][0]\t $OrderedNodes[$x-1][1]\n";
+    #     }
+    #     else {
+    #         print OUT "$OrderedNodes[$x-1][0]\t 10\n";
+    #     }
+    # }
+    # close (OUT);
 
     return $this;
 }
@@ -527,6 +531,17 @@ sub RunSuperClustersID {
     #print Dumper \@ClusterArray;
 
     ########################  Writing to files  ##############################
+
+    my $OrderedFile = "./RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}";
+    open (OUT, ">$OrderedFile");
+    for (my $i = 0; $i < scalar @{$this->{CurrentRDarray}}; $i++) {
+        my $ele1 = ${$this->{CurrentRDarray}}[$i][0];
+        my $ele2 = ${$this->{CurrentRDarray}}[$i][1];
+        print OUT "$ele1\t$ele2\n";
+    }
+    close (OUT);
+
+    ########################################
 
     my $OutFile1 = "RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.clusters.plot";
     open (OUT, ">$OutFile1");
