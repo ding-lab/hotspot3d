@@ -67,6 +67,28 @@ sub process {
     $this->GetFileName(); # just to get only the name from the pairwise file destination
     $this->setRWD(); # to retieve the path to TGI::Mutpro::Main. Used to call RScripts using perl
 
+    #####################################################
+
+    $this->CallDensityShortest();
+    print "SetOfNodes Hash =\n";
+    print Dumper $this->{InitialSet}->{RawSetOfNodesWithShortest};
+    
+}
+
+#####
+#   Functions
+#####
+
+sub CallDensityShortest { # calls everything if user wants to do clustering by the shortest distance
+    my $this = shift;
+
+    # name output files as *.shortest.*
+    $this->{pairwise_file_name_only} = "Shortest.$this->{pairwise_file_name_only}";
+
+    # get the shortest distances for each variants
+    $this->MakeInitialSetOfNodes();
+    $this->{"CurrentSetOfNodes"} = $this->{InitialSet}->{RawSetOfNodesWithShortest}; # set the current SetOfNodes
+
     ###### Reference run: start
     $this->MainOPTICS(); # perform OPTICS for the first time
     $this->RunSuperClustersID(); # perform Clustering for the reference run
@@ -77,37 +99,165 @@ sub process {
 
     print "\nProbability Calculation is Done.\n\n";
 
-    #####################################################
-    
 }
 
-#####
-#   Functions
-#####
-
-sub MainOPTICS {
+sub CallDensityAverage { # calls everything if user wants to do clustering by the average distance
     my $this = shift;
 
-    my $Epsilon = $this->{Epsilon};
-    my $MinPts = $this->{MinPts};
+    # name output files as *.average.*
+    $this->{pairwise_file_name_only} = "Average.$this->{pairwise_file_name_only}";
+
+    # get the shortest distances for each variants
+    $this->MakeInitialSetOfNodesAvg();
+    $this->{"CurrentSetOfNodes"} = $this->{InitialSet}->{RawSetOfNodesWithAvg};
+
+    ###### Reference run: start
+    $this->MainOPTICS(); # perform OPTICS for the first time
+    $this->RunSuperClustersID(); # perform Clustering for the reference run
+
+    print "Reference run: Done.\nStart probability calculation\n";
+
+    $this->getClusterProbabilities(); # perform cluster-membership probability calculation
+
+    print "\nProbability Calculation is Done.\n\n";
+
+}
+
+sub CallDensityStructurewise { # calls everything if user wants to do clustering by the structure
+    my $this = shift;
+
+    # get the distances for each variants in each structure 
+    $this->MakeInitialSetOfNodesStructurewise();
+
+    # store the original pairwise file name
+    my $pairwiseFN = $this->{pairwise_file_name_only};
+
+    foreach my $structure ( keys %{ $this->{InitialSet}->{RawSetOfNodesWithStructure} } ) { # run the density calculation for each available structure
+        # name output files as *.$pdbID.structure.*
+        $this->{pairwise_file_name_only} = "$structure.Structure.$pairwiseFN";
+
+        # call the SetOfNodes hash for each structure
+        $this->{"CurrentSetOfNodes"} = $this->{InitialSet}->{RawSetOfNodesWithStructure}->{$structure};
+
+        ###### Reference run: start
+        $this->MainOPTICS(); # perform OPTICS for the first time
+        $this->RunSuperClustersID(); # perform Clustering for the reference run
+
+        print "Reference run: Done.\nStart probability calculation\n";
+
+        $this->getClusterProbabilities(); # perform cluster-membership probability calculation
+
+        print "\nProbability Calculation is Done.\n\n";
+    }
+    my $numStructure = scalar keys %{ $this->{InitialSet}->{RawSetOfNodesWithStructure} };
+    print "\n Structure-wise clusters are being calculated for $numStructure structures.\n";
+}
+
+sub MakeInitialSetOfNodes {
+    my $this = shift;
 
     my %SetOfNodes;
-
     my $file = "$this->{pairwise_file}";
     open(IN, "<$file") || die "Can't open $file: $!";
 
     while (my $line = <IN>) {
         chomp $line;
         my @tabs = split(/\t/,$line);
-        my @char19 = split("",$tabs[19]);
-        my $dis = $char19[0].$char19[1].$char19[2].$char19[3].$char19[4];
+        my @infos = split /\|/ , $tabs[19]; #take the 19th tab
+        my $info = $infos[0]; # take the shortest distance
+        chomp( $info );
+        my ( $dis , $pdbID , $pvalue ) = split / / , $info;
+
         my $key1 = CombineWords($tabs[0],$tabs[4]);
         my $value1 = CombineWords($tabs[9],$tabs[13]);
 
-        $SetOfNodes{$key1}{distances}{$value1} = $dis;
-        $SetOfNodes{$value1}{distances}{$key1} = $dis;
+        if ( exists $SetOfNodes{$key1}{distances}{$value1} ) {
+            if ( $dis < $SetOfNodes{$key1}{distances}{$value1} ) {
+                $SetOfNodes{$key1}{distances}{$value1} = $dis;
+                $SetOfNodes{$value1}{distances}{$key1} = $dis;
+            }
+        }
+        else {
+            $SetOfNodes{$key1}{distances}{$value1} = $dis;
+            $SetOfNodes{$value1}{distances}{$key1} = $dis;
+        }
     }
     ###### For variants in the same residue and chain 
+    my $SetOfNodes_ref = PutZeroAtSameLocations( \%SetOfNodes ); 
+
+    $this->{"InitialSet"}->{"RawSetOfNodesWithShortest"} = $SetOfNodes_ref;
+}
+
+sub MakeInitialSetOfNodesAvg {
+    my $this = shift;
+
+    my %SetOfNodes;
+    my $file = "$this->{pairwise_file}";
+    open(IN, "<$file") || die "Can't open $file: $!";
+
+    while (my $line = <IN>) {
+        chomp $line;
+        my @tabs = split(/\t/,$line);
+        my @infos = split /\|/ , $tabs[19]; #take the 19th tab
+
+        my $avgDistance = 0;
+        foreach my $info ( @infos ) {
+            chomp( $info );
+            next unless ( $info );
+            my ( $dis , $pdbID , $pvalue ) = split / / , $info;
+            $avgDistance += $dis;
+        }
+        $avgDistance = $avgDistance / ( scalar @infos );
+
+        my $key1 = CombineWords($tabs[0],$tabs[4]);
+        my $value1 = CombineWords($tabs[9],$tabs[13]);
+
+        $SetOfNodes{$key1}{distances}{$value1} = $avgDistance;
+        $SetOfNodes{$value1}{distances}{$key1} = $avgDistance;
+    }
+    ###### For variants in the same residue and chain 
+    my $SetOfNodes_ref = PutZeroAtSameLocations( \%SetOfNodes ); 
+
+
+    $this->{"InitialSet"}->{"RawSetOfNodesWithAvg"} = $SetOfNodes_ref;
+}
+
+sub MakeInitialSetOfNodesStructurewise {
+    my $this = shift;
+
+    my %SetOfNodes;
+    my $file = "$this->{pairwise_file}";
+    open(IN, "<$file") || die "Can't open $file: $!";
+
+    while (my $line = <IN>) {
+        chomp $line;
+        my @tabs = split(/\t/,$line);
+        my @infos = split /\|/ , $tabs[19]; #take the 19th tab
+
+        my $key1 = CombineWords($tabs[0],$tabs[4]);
+        my $value1 = CombineWords($tabs[9],$tabs[13]);
+
+        foreach my $info ( @infos ) {
+            chomp( $info );
+            next unless ( $info );
+            my ( $dis , $pdbID , $pvalue ) = split / / , $info;
+            
+            $SetOfNodes{$pdbID}{$key1}{distances}{$value1} = $dis;
+            $SetOfNodes{$pdbID}{$value1}{distances}{$key1} = $dis;
+        }
+    }
+    ###### For variants in the same residue and chain, have to do this for each structure 
+    foreach my $structure ( keys %SetOfNodes ) {
+        my $SetOfNodes_ref = PutZeroAtSameLocations( $SetOfNodes{$structure} );
+        $SetOfNodes{$structure} = $SetOfNodes_ref;
+    }
+     
+    $this->{"InitialSet"}->{"RawSetOfNodesWithStructure"} = \%SetOfNodes;
+}
+
+sub PutZeroAtSameLocations { # put dis=0 for the variants at the same location, and set processInfo=0 for all nodes
+    my $HashRef = shift;
+    my %SetOfNodes = %{$HashRef};
 
     foreach my $key ( keys %SetOfNodes ) {
         #print "key= $key\n";
@@ -128,10 +278,27 @@ sub MainOPTICS {
         $SetOfNodes{$i}{processInfo} = "False";
     }
 
-    #print Dumper \%SetOfNodes;
-    # print "Number of Objects = ";
-    # print scalar keys %SetOfNodes;
-    # print "\n";
+    return \%SetOfNodes;
+}
+
+sub SetProcessInfoToFalse {
+    my $SetOfNodes_ref = shift;
+
+    foreach my $i (keys %{$SetOfNodes_ref}) {
+        $SetOfNodes_ref->{$i}->{processInfo} = "False";
+    }
+
+    return $SetOfNodes_ref;
+}
+
+sub MainOPTICS {
+    my $this = shift;
+
+    my $Epsilon = $this->{Epsilon};
+    my $MinPts = $this->{MinPts};
+
+    SetProcessInfoToFalse($this->{CurrentSetOfNodes}); # important in prob. runs; use the same set of nodes but start from the begining by setting processinfo to false
+    my %SetOfNodes = %{$this->{CurrentSetOfNodes}};
 
     my $SetOfNodesRef = \%SetOfNodes; # just because Mac and Linux compatibility
 
@@ -644,8 +811,8 @@ sub getClusterProbabilities{
     }
 
     ###############################################################################
-
-    #print Dumper \@InitialCuts;
+    # print "InitialCuts\n";
+    # print Dumper \@InitialCuts;
 
     for (my $i = 0; $i < scalar @InitialCuts; $i++) {
         $InitialCuts[$i][0] =~ /(\d+)\.(\d+)\.(\d+)/g;
@@ -675,6 +842,10 @@ sub getClusterProbabilities{
         $this->MainOPTICS(); # Generate a random ordred RD set (random OPTICS)
 
         $this->GetSuperClusters($this->{CurrentRDarray}); # Identify super clusters
+        # print "CurrentRDarray\n";
+        # print Dumper $this->{CurrentRDarray};
+        # print "CurrentSuperClusters\n";
+        # print Dumper $this->{"CurrentSuperClusters"};
         $this->GetSuperClusterMapping(); # Map new super clusters to the ones in run0
 
         $this->GetSubClusters($MinPts, $run); # Perform clustering at initial epsilon cuts
