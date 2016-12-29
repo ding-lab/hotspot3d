@@ -25,6 +25,11 @@ my $MINPTSDEFAULT = 4;
 my $NUMRUNSDEAFAULT = 10;
 my $PROBCUTOFFDEFAULT = 100;
 
+my $SHORTESTDISTANCE = "shortest";
+my $AVERAGEDISTANCE = "average";
+my $INDEPENDENT = "independent";
+my $DEPENDENT = "dependent";
+
 sub new {
     my $class = shift;
     my $this = shift;
@@ -69,10 +74,28 @@ sub process {
 
     #####################################################
 
-    $this->CallDensityShortest();
-    print "SetOfNodes Hash =\n";
-    print Dumper $this->{InitialSet}->{RawSetOfNodesWithShortest};
-    
+    if ( $this->{'structure_dependence'} eq $INDEPENDENT ) {
+        if ( $this->{'distance_measure'} ne $AVERAGEDISTANCE and $this->{'distance_measure'} ne $SHORTESTDISTANCE ) {
+            warn "distance-measure option not recognized as \'shortest\' or \'average\'\n";
+            warn "Using default distance-measure = \'average\'\n";
+            $this->{'distance_measure'} = $AVERAGEDISTANCE;
+        }
+        if ( $this->{'distance_measure'} eq $SHORTESTDISTANCE ) { # calling structure-independant shortest distances clustering
+            $this->CallDensityShortest();
+            # print "SetOfNodes Hash =\n";
+            # print Dumper $this->{InitialSet}->{RawSetOfNodesWithShortest};
+        }
+        if ( $this->{'distance_measure'} eq $AVERAGEDISTANCE ) { # calling structure-independant average distances clustering
+            $this->CallDensityAverage();
+            # print "SetOfNodes Hash =\n";
+            # print Dumper $this->{InitialSet}->{RawSetOfNodesWithAvg};
+        }
+    }
+    if ( $this->{'structure_dependence'} eq $DEPENDENT ) { # calling structure-dependant clustering
+        $this->CallDensityStructurewise();
+        # print "SetOfNodes Hash =\n";
+        # print Dumper $this->{InitialSet}->{RawSetOfNodesWithStructure};
+    }    
 }
 
 #####
@@ -133,6 +156,7 @@ sub CallDensityStructurewise { # calls everything if user wants to do clustering
     my $pairwiseFN = $this->{pairwise_file_name_only};
 
     foreach my $structure ( keys %{ $this->{InitialSet}->{RawSetOfNodesWithStructure} } ) { # run the density calculation for each available structure
+        #print "Structure= $structure\n";
         # name output files as *.$pdbID.structure.*
         $this->{pairwise_file_name_only} = "$structure.Structure.$pairwiseFN";
 
@@ -171,7 +195,7 @@ sub MakeInitialSetOfNodes {
         my $key1 = CombineWords($tabs[0],$tabs[4]);
         my $value1 = CombineWords($tabs[9],$tabs[13]);
 
-        if ( exists $SetOfNodes{$key1}{distances}{$value1} ) {
+        if ( exists $SetOfNodes{$key1}{distances}{$value1} ) { # this is necessary because sometimes pairwise file has multiple lines for the same pair of variants
             if ( $dis < $SetOfNodes{$key1}{distances}{$value1} ) {
                 $SetOfNodes{$key1}{distances}{$value1} = $dis;
                 $SetOfNodes{$value1}{distances}{$key1} = $dis;
@@ -192,6 +216,7 @@ sub MakeInitialSetOfNodesAvg {
     my $this = shift;
 
     my %SetOfNodes;
+    my %AverageHash; # to take care multiple lines in pairwise with the same pair. Store the number of structures
     my $file = "$this->{pairwise_file}";
     open(IN, "<$file") || die "Can't open $file: $!";
 
@@ -212,8 +237,21 @@ sub MakeInitialSetOfNodesAvg {
         my $key1 = CombineWords($tabs[0],$tabs[4]);
         my $value1 = CombineWords($tabs[9],$tabs[13]);
 
-        $SetOfNodes{$key1}{distances}{$value1} = $avgDistance;
-        $SetOfNodes{$value1}{distances}{$key1} = $avgDistance;
+        if ( not exists $AverageHash{$key1}{$value1} ) { # to take care of multiple line entries in pairwisefile for same pair of variants
+            $AverageHash{$key1}{$value1} = scalar @infos;
+            $AverageHash{$value1}{$key1} = scalar @infos;
+
+            $SetOfNodes{$key1}{distances}{$value1} = $avgDistance;
+            $SetOfNodes{$value1}{distances}{$key1} = $avgDistance;            
+        }
+        else {
+            $avgDistance = (($SetOfNodes{$key1}{distances}{$value1} * $AverageHash{$key1}{$value1}) + ($avgDistance * scalar @infos)) / ($AverageHash{$key1}{$value1} + scalar @infos);
+            $AverageHash{$key1}{$value1} = $AverageHash{$key1}{$value1} + scalar @infos;
+            $AverageHash{$value1}{$key1} = $AverageHash{$value1}{$key1} + scalar @infos;
+
+            $SetOfNodes{$key1}{distances}{$value1} = $avgDistance;
+            $SetOfNodes{$value1}{distances}{$key1} = $avgDistance;
+        }
     }
     ###### For variants in the same residue and chain 
     my $SetOfNodes_ref = PutZeroAtSameLocations( \%SetOfNodes ); 
@@ -888,7 +926,7 @@ sub getClusterProbabilities{
     # Data to generate the Cluster Membership Probability Plot
     my $FinalDataFile1 = "./ProbabilityData.$this->{'pairwise_file_name_only'}";
     open (OUT, ">$FinalDataFile1");
-        print OUT "Variant\tProbability\tClusterID\n";
+        print OUT "Variant\tProbability\tClusterID\tSuperClusterID\n";
 
         for (my $i = 0; $i < scalar @InitialRD; $i++) {
             my $variant1 = $InitialRD[$i][0];
@@ -899,7 +937,7 @@ sub getClusterProbabilities{
                         if (exists $this->{Memberships}->{$SCID}->{$levelID}->{$SubID}->{$variant1}) {
                             my $Occurance1 = $this->{Memberships}->{$SCID}->{$levelID}->{$SubID}->{$variant1};
                             $Occurance1 = $Occurance1/$NumRuns;
-                            print OUT "$variant1\t$Occurance1\t$SCID.$levelID.$SubID\n";
+                            print OUT "$variant1\t$Occurance1\t$SCID.$levelID.$SubID\t$SCID\n";
                         }
                     }
                 }
@@ -948,6 +986,10 @@ sub getClusterProbabilities{
 
     system ("Rscript $this->{'R_path'}/MembershipProbability.R $FinalDataFile1 $NumRuns $this->{'pairwise_file_name_only'}");
 
+    # clean-up : This is important because in structure-wise clustering these hash names will be re-used.
+    delete $this->{Memberships};
+    delete $this->{InitialCuts};
+    delete $this->{Variants};
     #print "Done.\n";
 }
 

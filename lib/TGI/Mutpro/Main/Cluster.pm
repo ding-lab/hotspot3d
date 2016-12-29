@@ -37,6 +37,8 @@ my $AVERAGEDISTANCE = "average";
 my $SHORTESTDISTANCE = "shortest";
 my $NETWORK = "network";
 my $DENSITY = "density";
+my $INDEPENDENT = "independent";
+my $DEPENDENT = "dependent";
 
 sub new {
     my $class = shift;
@@ -120,7 +122,8 @@ sub setOptions {
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},		
         'weight-header=s' => \$this->{'weight_header'},		
-        'clustering=s' => \$this->{'clustering'},		
+        'clustering=s' => \$this->{'clustering'},
+        'structure-dependence=s' => \$this->{'structure_dependence'},		
         'help' => \$help,
 
         'Epsilon=f' => \$this->{'Epsilon'},
@@ -132,6 +135,10 @@ sub setOptions {
 	if ( not defined $this->{'clustering'} ) {
 		$this->{'clustering'} = $NETWORK;
 		warn "HotSpot3D::Cluster warning: no clustering option given, setting to default network\n";
+	}
+	if ( not defined $this->{'structure_dependence'} ) {
+		$this->{'structure_dependence'} = $INDEPENDENT;
+		warn "HotSpot3D::Cluster warning: no structure-dependence option given, setting to default independent\n";
 	}
 	if ( $this->{'clustering'} eq $DENSITY ) {
 		if ( $help ) { print STDERR density_help_text(); exit 0; }
