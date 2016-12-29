@@ -7,12 +7,10 @@ Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-<<<<<<< HEAD
+
         Version:     V1.1.1
-=======
-        Version:     V1.1.0
->>>>>>> dd764bdacc29bfc6ce40fb1cdfdbe3615cd0563f
-         Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
+        
+        Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
   Usage: hotspot3d <command> [options]
 
