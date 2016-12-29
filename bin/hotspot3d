@@ -8,7 +8,11 @@
 use strict;
 use warnings;
 
+<<<<<<< HEAD
 our $VERSION = 'V1.1.1';
+=======
+our $VERSION = 'V1.1.0';
+>>>>>>> dd764bdacc29bfc6ce40fb1cdfdbe3615cd0563f
 
 use Carp;
 use FileHandle;
@@ -22,6 +26,7 @@ use TGI::Mutpro::Main::Cluster;
 use TGI::Mutpro::Main::Significance;
 use TGI::Mutpro::Main::Summary;
 use TGI::Mutpro::Main::Visual;
+use TGI::Mutpro::Main::AllMain;
 use TGI::Mutpro::Preprocess::Drugport;
 use TGI::Mutpro::Preprocess::Uppro;
 use TGI::Mutpro::Preprocess::Calpro;
@@ -36,7 +41,7 @@ use TGI::Mutpro::Preprocess::AllPreprocess;
 
 my $subCmd = shift;
 ## Add module option here
-my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep density help );
+my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep main density help );
 unless (defined $subCmd) { die help_text(); };
 unless (exists $cmds{$subCmd}) {
     warn ' Please give valid sub command ! ', "\n";
@@ -61,6 +66,7 @@ SWITCH:{
     $subCmd eq 'cosmic'   && do { TGI::Mutpro::Preprocess::Cosmic->new();         last SWITCH; };
     $subCmd eq 'prior'    && do { TGI::Mutpro::Preprocess::Prior->new();          last SWITCH; };
     $subCmd eq 'prep'     && do { TGI::Mutpro::Preprocess::AllPreprocess->new();  last SWITCH; };
+    $subCmd eq 'main'     && do { TGI::Mutpro::Main::AllMain->new();  last SWITCH; };
     $subCmd eq 'help'     && do { die help_text();                                last SWITCH; };
 }
 sub help_text {
@@ -73,25 +79,25 @@ Version: $VERSION
   Usage: hotspot3d <command> [options]
 
            Preprocessing
-              prep      --  Run steps 2-7 of preprocessing
-
               drugport  --  0) Parse drugport database (OPTIONAL)
               uppro     --  1) Update proximity files
-              calroi    --  2) Generate region of interest (ROI) information
-              statis    --  3) Calculate p_values for pairs of mutations
-              anno      --  4) Add region of interest (ROI) annotation
-              trans     --  5) Add transcript annotation 
-              cosmic    --  6) Add COSMIC annotation to proximity file
-              prior     --  7) Prioritization
+              prep      --  2) Run steps 2a-2f of preprocessing
+                  calroi    --  2a) Generate region of interest (ROI) information
+                  statis    --  2b) Calculate p_values for pairs of mutations
+                  anno      --  2c) Add region of interest (ROI) annotation
+                  trans     --  2d) Add transcript annotation 
+                  cosmic    --  2e) Add COSMIC annotation to proximity file
+                  prior     --  2f) Prioritization
 
            Analysis
 
-              search    --  0) 3D mutation proximity searching
-              post      --  1) Post-processing of 3D proximity searching output 
-              cluster   --  2) Determine mutation-mutation and mutation-drug clusters
-              sigclus   --  3) Determine significance of clusters
-              summary   --  4) Summarize clusters
-              visual    --  5) Visulization of 3D proximity
+              main      --  0) Run steps a-f of analysis (BETA)
+                  search    --  a) 3D mutation proximity searching
+                  post      --  b) Post-processing of 3D proximity searching output 
+                  cluster   --  c) Determine mutation-mutation and mutation-drug clusters
+                  sigclus   --  d) Determine significance of clusters (BETA)
+                  summary   --  e) Summarize clusters
+                  visual    --  f) Visulization of 3D proximity
 
            help      --  this message
 

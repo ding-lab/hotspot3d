@@ -25,13 +25,13 @@ my $MAXDISTANCE = 100;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'maf'} = undef;
+    $this->{'maf_file'} = undef;
     $this->{'skip_silent'} = undef;
     $this->{'missense_only'} = undef;
     $this->{'data_dir'} = undef;
     $this->{'drugport_file'} = undef;
     $this->{'output_prefix'} = '3D_Proximity';
-    $this->{'pvalue_cutoff'} = undef;
+    $this->{'p_value_cutoff'} = undef;
     $this->{'3d_distance_cutoff'} = undef;
     $this->{'linear_cutoff'} = 0;
     $this->{'stat'} = undef;
@@ -48,13 +48,13 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
-        'maf-file=s' => \$this->{'maf'},
+        'maf-file=s' => \$this->{'maf_file'},
         'prep-dir=s'    => \$this->{'data_dir'},
         'output-prefix=s' => \$this->{'output_prefix'},
         'drugport-file=s' => \$this->{'drugport_file'},
         'skip-silent' => \$this->{'skip_silent'},
         'missense-only' => \$this->{'missense_only'},
-        'p-value-cutoff=f' => \$this->{'pvalue_cutoff'},
+        'p-value-cutoff=f' => \$this->{'p_value_cutoff'},
         '3d-distance-cutoff=i' => \$this->{'3d_distance_cutoff'},
         'linear-cutoff=i' => \$this->{'linear_cutoff'},
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
@@ -63,13 +63,13 @@ sub process {
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
-	if ( not defined $this->{'pvalue_cutoff'} ) {
-        if ( not defined $this->{'3d_distance_cutoff'} and not defined $this->{'pvalue_cutoff'} ) {
+	if ( not defined $this->{'p_value_cutoff'} ) {
+        if ( not defined $this->{'3d_distance_cutoff'} and not defined $this->{'p_value_cutoff'} ) {
             warn "HotSpot3D Search Warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
-            $this->{'pvalue_cutoff'} = $PVALUEDEFAULT;
+            $this->{'p_value_cutoff'} = $PVALUEDEFAULT;
             $this->{'3d_distance_cutoff'} = $MAXDISTANCE;
         } else {
-            $this->{'pvalue_cutoff'} = 1;
+            $this->{'p_value_cutoff'} = 1;
         }
     } else {
         if ( not defined $this->{'3d_distance_cutoff'} ) {
@@ -78,8 +78,8 @@ sub process {
     }
     unless( $this->{'data_dir'} ) { warn 'You must provide a output directory ! ', "\n"; die help_text(); }
     unless( -d $this->{'data_dir'} ) { warn 'You must provide a valid data directory ! ', "\n"; die help_text(); }
-    unless( $this->{'maf'} and (-e $this->{'maf'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
-    if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
+    unless( $this->{'maf_file'} and (-e $this->{'maf_file'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
+    if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf_file'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
     my $uniprot_file = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
     unless( -e $uniprot_file ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
     my $prior_dir = "$this->{'data_dir'}\/prioritization";
@@ -108,7 +108,7 @@ sub process {
     $this->{'stat'}{'num_trans_with_uniprot'} = keys %$trans_to_uniprot;
     # parse drugport resuls file
     my $drugport_hash_ref = $this->getDrugportInfo( $this->{'drugport_file'} );
-    my $maf_hash_ref = $this->parseMaf( $this->{'maf'}, $trans_to_uniprot );
+    my $maf_hash_ref = $this->parseMaf( $this->{'maf_file'}, $trans_to_uniprot );
     $this->{'stat'}{'num_uniprot_involved'} = keys %$maf_hash_ref;
     my ( $pairoutref, $cosmicref, $roiref, $drugport_results_ref, $drugport_nonresults_ref ) = $this->proximitySearching( $maf_hash_ref, $prior_dir, $drugport_hash_ref );
     print STDOUT "searching done...\n";
@@ -331,7 +331,7 @@ sub proximitySearching {
                     ## close each other
                     foreach my $c ( keys %{$mafHashref->{$a}->{$uniprotcor1}} ) {
                         foreach my $d ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push( @pairResults, join("\t", $c, @ta[1,2,5,6], $d, @ta[8,9,12,13], $lineardis, $proximityinfor) );
                             }
                         }
@@ -341,12 +341,12 @@ sub proximitySearching {
                     map { 
                         my $t_item = join("\t", $_, @ta[1,2,5,6,8,9,12,13], $lineardis, $proximityinfor); 
                         if ( $domain2 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@roiclose, $t_item);
                             }
                         };
                         if ( $cosmic2 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@cosmicclose, $t_item); 
                             }
                         }; 
@@ -357,12 +357,12 @@ sub proximitySearching {
                     map {  
                         my $t_item = join("\t", $_, @ta[8,9,12,13,1,2,5,6], $lineardis, $proximityinfor); 
                         if ( $domain1 !~ /N\/A/ ) { 
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@roiclose, $t_item); 
                             }
                         }; 
                         if ( $cosmic1 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@cosmicclose, $t_item); 
                             }
                         } 
@@ -383,7 +383,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 							map { 
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_target_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) );
 								}
 							} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
@@ -392,7 +392,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
 						if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 							map { 
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_target_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
 								} 
 							} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
@@ -401,7 +401,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 							map {
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_nontarget_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) ); 
 								}
 							} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
@@ -410,7 +410,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
 						if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 							map {
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'linear_cutoff'}, $this->{'3d_distance_cutoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_nontarget_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
 								}
 							} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
@@ -496,13 +496,16 @@ sub drug_proximity_postprocessing {
 
 # get drugport database information
 sub cutFiltering {
-    my ( $this, $pvalue_cut, $linear_cut, $threed_cut, $linear_dis, $info_proximity ) = @_;
+    my ( $this, $linear_dis, $info_proximity ) = @_;
 	my @infos = split( /\|/ , $info_proximity );
     my ( $dis_3d, $pvalue ) = (split / /, $infos[0])[0,2];
     if ( $linear_dis =~ /N\/A/ ) {
-        return 1 if ( ($dis_3d <= $threed_cut) and ($pvalue <= $pvalue_cut) );
+        return 1 if ( ( $dis_3d <= $this->{'3d_distance_cutoff'} ) 
+				 and ( $pvalue <= $this->{'p_value_cutoff'} ) );
     } else {
-        return 1 if ( ($dis_3d <= $threed_cut) and ($linear_dis >= $linear_cut) and ($pvalue <= $pvalue_cut) );
+        return 1 if ( ( $dis_3d <= $this->{'3d_distance_cutoff'} ) 
+				 and ( $linear_dis >= $this->{'linear_cutoff'} ) 
+				 and ( $pvalue <= $this->{'p_value_cutoff'} ) );
     }
     return undef;
 }
