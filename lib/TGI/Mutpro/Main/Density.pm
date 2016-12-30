@@ -484,14 +484,25 @@ sub CombineWords {
 }
 
 sub GetCurrentObject { # To check whether variants are at the same location
-    my ($ValueSet, $KeySet, $PrevObj)=@_;
+    my ($ValueSet, $KeySet, $PrevObj, $CoreHash)=@_;
     my @SmallestKeys;
     for (my $i = 0; $i < scalar @$ValueSet; $i++) {
         if ($ValueSet->[$i] == $ValueSet->[0]) {
             push @SmallestKeys, $KeySet->[$i];
         }
     }
+
     if (scalar @SmallestKeys > 1) { # more than one variant has the smallest RD
+        # if exists a core, get it first
+        for (my $i = 0; $i < scalar @SmallestKeys; $i++) {
+            if ( exists $CoreHash->{$SmallestKeys[$i]} ) {
+                my $movingKey = $SmallestKeys[$i];
+                splice @SmallestKeys, $i, 1;
+                unshift @SmallestKeys, $movingKey;
+                last;
+            }
+        }
+        # if a variant at the same position get it even before that
         $PrevObj =~ /(\w+)\:\D\.(\D+\d+)\D/g;
         my $keyGene = $1;
         my $keyRes = $2;
@@ -1170,7 +1181,9 @@ Usage: hotspot3d density [options]
 --Epsilon                    Epsilon value, default: 10
 --MinPts                     MinPts, default: 4
 --number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
---probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100 
+--probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100
+--distance-measure           Pair distance to use (shortest or average), default: average
+--structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent 
 
 --help                       this message
 

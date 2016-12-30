@@ -990,7 +990,9 @@ Usage: hotspot3d density [options]
 --Epsilon                    Epsilon value, default: 10
 --MinPts                     MinPts, default: 4
 --number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
---probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100 
+--probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100
+--distance-measure           Pair distance to use (shortest or average), default: average
+--structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent 
 
 --help                       this message
 
