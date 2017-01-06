@@ -134,27 +134,29 @@ sub averageDistance {
     return $avgDistance;
 }
 
-sub minDistance {
+sub shortestDistance {
     # Input: ref to AminoAcid object
     # Return: shortest distance between any 
     #         two points in this amino acid
     #         and the input amino acid
     my $self = shift;
     my $aaRef = shift;
-    my ( $distance, $minDistance, $thisPointRef, $thatPointRef  );
-    $minDistance = 1e10;
+    my ( $distance, $shortestDistance, $thisPointRef, $thatPointRef  );
+    $shortestDistance = 1e10;
     foreach $thisPointRef ( $self->getPoints() ) {
 		foreach $thatPointRef ( $$aaRef->getPoints() ) {
 			$distance = $$thisPointRef->distance($thatPointRef);
-			if ( $distance < $minDistance ) { $minDistance = $distance; }
+			if ( $distance < $shortestDistance ) { $shortestDistance = $distance; }
 		}
     }
-    ($minDistance < 1e10) || confess "Did not get any distance values";
-    return $minDistance;
+    ($shortestDistance < 1e10) || confess "Did not get any distance values";
+    return $shortestDistance;
 }
 
 sub isHOH {
-	my ( $this , $residue ) = @_;
+    my $this = shift;
+	my $residue;
+	if ( @_ ) { $residue = shift; } else { $residue = $this->name(); }
 	if ( $residue eq "HOH" ) {
 		return 1;
 	}
@@ -162,7 +164,9 @@ sub isHOH {
 }
 
 sub isAA {
-    my ( $this , $residue ) = @_;
+    my $this = shift;
+	my $residue;
+	if ( @_ ) { $residue = shift; } else { $residue = $this->name(); }
     if ( not exists $this->{ACCEPTED}->{$residue} ) {
         return 0;
     }

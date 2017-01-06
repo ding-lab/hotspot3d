@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-our $VERSION = 'V1.1.1';
+our $VERSION = 'V1.1.2';
 
 use Carp;
 use FileHandle;

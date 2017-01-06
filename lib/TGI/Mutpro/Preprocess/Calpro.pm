@@ -59,7 +59,7 @@ use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::PdbStructure;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
 
-my $MINDISTANCE = "minDistance";
+my $SHORTESTDISTANCE = "shortestDistance";
 my $AVGDISTANCE = "averageDistance";
 
 sub new {
@@ -101,7 +101,7 @@ sub new {
 	unless(defined $this->{'uniprot_id'}) { warn 'You must provide a Uniprot ID !', "\n"; die $this->help_text(); }
 	unless( $this->{'output_dir'} and (-e $this->{'output_dir'} ) ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); }
 	unless( $this->{'pdb_file_dir'} and (-e $this->{'pdb_file_dir'}) ) { warn 'You must provide a PDB file directory ! ', "\n"; die $this->help_text(); }
-	if ( $this->{'distance_measure'} ne $MINDISTANCE and $this->{'distance_measure'} ne $AVGDISTANCE ) {
+	if ( $this->{'distance_measure'} ne $SHORTESTDISTANCE and $this->{'distance_measure'} ne $AVGDISTANCE ) {
 		warn "HotSpot3D::Calpro warning: measure not recognized, resetting to default = averageDistance\n";
 		$this->{'distance_measure'} = $AVGDISTANCE;
 	}
@@ -295,7 +295,7 @@ sub writeProximityFile {
 			# Get AminoAcid object for residue in chain '$uniprotChain', 
 			# at position $position
 			$uniprotAminoAcidRef = $$peptideRef{$uniprotChain}->getAminoAcidObject( $residuePosition );
-			next if ( $uniprotAminoAcidRef->isAA() == 0 );
+			next if ( $$uniprotAminoAcidRef->isAA() == 0 );
 			$uniprotAaName = $$uniprotAminoAcidRef->name();
 			#      120905  Don't tie this to Uniprot annotation
 			# See if this is in an annotated Uniprot domain.  
@@ -331,7 +331,7 @@ sub writeProximityFile {
 				my @tmp_array_positions = grep{ /\d+$/ } keys %{$allAaObjRef}; 
 				foreach $position ( sort {$a<=>$b} @tmp_array_positions ) {
 					$aaObjRef = $$peptideRef{$chain}->getAminoAcidObject($position);
-					next if ( $aaObjRef->isAA() == 0 );
+					next if ( $$aaObjRef->isAA() == 0 );
 					if ( (defined $otherChainOffset) and ($otherChainOffset eq "N/A") ) { 
 						$correctedPosition = $position;
 					} else { 
@@ -342,8 +342,8 @@ sub writeProximityFile {
 					# Skip if the amino acid at '$position' of peptide chain '$chain' 
 					# is not close to the amino acid at '$residuePosition' 
 					# of peptide chain '$uniprotChain'
-					if ( $this->{'distance_measure'} eq $MINDISTANCE ) {
-						$distanceBetweenResidues = $$aaObjRef->minDistance($uniprotAminoAcidRef);
+					if ( $this->{'distance_measure'} eq $SHORTESTDISTANCE ) {
+						$distanceBetweenResidues = $$aaObjRef->shortestDistance($uniprotAminoAcidRef);
 					} elsif ( $this->{'distance_measure'} eq $AVGDISTANCE ) {
 						$distanceBetweenResidues = $$aaObjRef->averageDistance($uniprotAminoAcidRef);
 					} else {
@@ -618,7 +618,7 @@ Usage: hotspot3d calpro [options]
                              OPTIONAL
 --3d-distance-cutoff         Maximum 3D distance (<= Angstroms), default: 100
 --linear-cutoff              Minimum linear distance (> peptides), default: 0
---measure                    Distance measurement between residues (minDistance or averageDistance), default: averageDistance
+--measure                    Distance measurement between residues (shortestDistance or averageDistance), default: averageDistance
 
 --help                       this message
 
