@@ -8,6 +8,10 @@
 use strict;
 use warnings;
 
+
+use lib '~/Projects/HotSpot3D/Clone_Ding_Lab/hotspot3d/lib/';
+
+
 our $VERSION = 'V1.1.2';
 
 use Carp;

@@ -15,9 +15,6 @@ use warnings;
 use Carp;
 use Getopt::Long;
 
-use List::MoreUtils qw( uniq );
-use List::Util qw( min max );
-
 use IO::File;
 use FileHandle;
 

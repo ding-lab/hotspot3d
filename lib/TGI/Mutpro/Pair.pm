@@ -24,7 +24,6 @@ use FileHandle;
 use Data::Dumper;
 
 use TGI::Variant;
-use TGI::Mutpro::Distance;
 
 sub new {
     my $class = shift;
@@ -62,15 +61,16 @@ sub print {
 			$p2s .= $pv2->transcript().":".$pv2->aminoAcidChange();
 		}
 		print $delim;
-		$distance->print();
+		#print $distance;
+		#print $delim;
 	}
 }
 
 sub set {
 	my $this = shift;
-	$this->variant1( shift );
-	$this->variant2( shift );
-	$this->distances( shift );
+	if ( @_ ) {	$this->variant1( shift ); }
+	if ( @_ ) { $this->variant2( shift ); }
+	if ( @_ ) { $this->distances( shift ); }
 	return $this;
 }
 

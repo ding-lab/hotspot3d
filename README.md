@@ -10,7 +10,7 @@ Usage
 
         Version:     V1.1.2
         
-        Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
+         Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
   Usage: hotspot3d <command> [options]
 
@@ -43,7 +43,7 @@ For user support please email adamscott@wustl.edu
 Update
 ------
 
-To reinstall code (in some cases, may need --sudo):
+To reinstall code of the same version (in some cases, may need --sudo):
 
 	cpanm --reinstall HotSpot3D-#.tar.gz
 
@@ -94,7 +94,7 @@ Install HotSpot3D package:
 	cpanm HotSpot3D-#.#.tar.gz
 
     
-	Installations under some organizations may use an internal perl version.
+	Note: Installations under some organizations may use an internal perl version.
     
 	To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
     

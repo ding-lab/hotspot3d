@@ -12,14 +12,6 @@ package TGI::Variant;
 use strict;
 use warnings;
 
-use Carp;
-use Getopt::Long;
-
-use List::MoreUtils qw( uniq );
-
-use IO::File;
-use FileHandle;
-
 use Data::Dumper;
 
 use TGI::ProteinVariant;
@@ -27,7 +19,7 @@ use TGI::ProteinVariant;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'hugo'} = "";
+    $this->{'gene'} = "";
     $this->{'chromosome'} = "";
     $this->{'start'} = "";
     $this->{'stop'} = "";
@@ -40,7 +32,7 @@ sub new {
 
 sub reset {
     my $this = shift;
-    $this->hugo( "" );
+    $this->gene( "" );
     $this->chromosome( "" );
     $this->start( "" );
     $this->stop( "" );
@@ -54,13 +46,13 @@ sub print {
 	my $this = shift;
 	my $delim = "\t";
 	if ( @_ ) { $delim = shift; }
-	print $this->hugo()." ".$this->hgvsg();
+	print $this->gene()." ".$this->hgvsg();
 }
 
-sub hugo {
+sub gene {
 	my $this = shift;
-	if ( @_ ) { $this->{'hugo'} = shift; }
-	return $this->{'hugo'};
+	if ( @_ ) { $this->{'gene'} = shift; }
+	return $this->{'gene'};
 }
 
 sub chromosome {
@@ -113,7 +105,7 @@ sub hgvsg {
 
 sub set {
 	my $this = shift;
-    $this->hugo( shift );
+    $this->gene( shift );
     $this->chromosome( shift );
     $this->start( shift );
     $this->stop( shift );
@@ -126,6 +118,17 @@ sub addProteinVariant {
 	my $this = shift;
 	if ( @_ ) { push @{$this->{'proteinVariants'}} , shift; }
 	return $this;
+}
+
+sub proteinVariant {
+	my $this = shift;
+	if ( @_ ) { 
+		my $i = shift;
+		if ( scalar @{$this->{'proteinVariants'}} > $i ) {
+			return $this->{'proteinVariants'}->[$i];
+		}
+	}
+	return $this->{'proteinVariants'}->[0];
 }
 
 sub proteinVariants {

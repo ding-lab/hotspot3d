@@ -20,11 +20,14 @@ use FileHandle;
 
 use Data::Dumper;
 
+use TGI::Mutpro::Pair;
+
 my $ABSURD = 10000;
 
 sub new {
     my $class = shift;
     my $this = {};
+	$this->{'pair'} = undef;
     $this->{'pdb'} = "";
     $this->{'chain1'} = "";
     $this->{'chain2'} = "";
@@ -55,13 +58,20 @@ sub print {
 
 sub set {
 	my $this = shift;
-	$this->pdb( shift );
-	$this->chain1( shift );
-	$this->chain2( shift );
-	$this->position1( shift );
-	$this->position2( shift );
-	$this->distance( shift );
+	if ( @_ ) { $this->pair( shift ); }
+	if ( @_ ) { $this->pdb( shift ); }
+	if ( @_ ) { $this->chain1( shift ); }
+	if ( @_ ) { $this->chain2( shift ); }
+	if ( @_ ) { $this->position1( shift ); }
+	if ( @_ ) { $this->position2( shift ); }
+	if ( @_ ) { $this->distance( shift ); }
 	return $this;
+}
+
+sub pair {
+	my $this = shift;
+	if ( @_ ) { $this->{'pair'} = shift; }
+	return $this->{'pair'};
 }
 
 sub pdb {
