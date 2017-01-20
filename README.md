@@ -53,56 +53,47 @@ To reinstall code of the same version (in some cases, may need --sudo):
 Install (Ubuntu 14.04.01)
 -------
 
-Prerequisites:
+Make sure that you have cpanm:
 
-In order to install HotSpot3D package, first install CPANM
+	cpan App::cpanminus
 
-(cpanm - get, unpack build and install modules from CPANM)
-
-NOTE: Some steps may require adding --force to install successfully.
-
-	sudo apt-get install cpanminus
-
-    Another way to install cpanminus is to just download it, as per the installer
-        
-		curl -LO http://xrl.us/cpanm
-    
-		chmod +x cpanm
-
-    Or by using cpan
-
-		cpan App::cpanminus
-
-Intall Perl5 local lib
+For configuration, we recommend using local::lib:
 
 	cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
 
-Intall LWP::Simple module
+Dependencies include the modules: LWP::Simple, Test::Most, List::Util, List::MoreUtils
 
-	sudo apt-get install libwww-perl
+	cpanm LWP::Simple
 
-Intall Test::Most module
-        
-	wget http://search.cpan.org/CPAN/authors/id/O/OV/OVID/Test-Most-0.34.tar.gz
-    
-	cpanm Test-Most-0.34.tar.gz
+	cpanm Test::Most
+
+	cpanm List::Util
+
+	cpanm List::MoreUtils
 
 Install HotSpot3D package: 
         
 	git clone https://github.com/ding-lab/hotspot3d
 
 	cd hotspot3d
-    
-	cpanm HotSpot3D-#.#.tar.gz
 
+For the latest stable version:
+
+	git checkout v0.6.0
     
-	Note: Installations under some organizations may use an internal perl version.
+	cpanm HotSpot3D-0.6.0.tar.gz
+
+For the latest beta version:
+
+	git checkout v1.1.1
     
-	To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
+	cpanm HotSpot3D-1.1.1.tar.gz
+
+Final note: Installations under some organizations may use an internal perl version. To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
     
 	from: #!/org/bin/perl
     
-	to: #!/usr/bin/perl)
+	to: #!/usr/bin/perl
 
 
 Configure Environment
@@ -114,7 +105,7 @@ Configure Environment
 
 		export PERL5LIB=$PERL5LIB:~/perl5/lib/perl5/
 
-		export PATH=$PATH:~/perl5/bin/
+		export PERL5BIN=$PERL5BIN:~/perl5/bin/
 
 	Add cosmic v67 information to 3D proximity results :
 

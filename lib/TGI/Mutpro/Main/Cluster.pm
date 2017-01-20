@@ -61,6 +61,10 @@ sub new {
     $this->{'weight_header'} = $WEIGHT;
     $this->{'clustering'} = undef;
     $this->{'structure_dependence'} = undef;
+	
+	$this->{'processed'} = undef;
+	$this->{'distance_matrix'} = undef;
+	$this->{'mutations'} = undef;
 
     $this->{'Epsilon'} = undef;
     $this->{'MinPts'} = undef;
@@ -78,11 +82,19 @@ sub process {
 	my $distance_matrix = {};
  	my $mutations = {};
 	my $WEIGHT = "weight";
+	$this->readMAF( $mutations );
+#	foreach my $mk ( sort keys %{$mutations} ) {
+#		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
+#			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
+#				print join( " -- " , ( $mk , $ra , $pk , $mutations->{$mk}->{$ra}->{$pk} ) )."\n";
+#			}
+#		}
+#	}
 	$this->getDrugMutationPairs( $distance_matrix );
 	$this->getMutationMutationPairs( $distance_matrix );
-	$this->readMAF( $mutations );
+	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
 	$this->link( $clusterings , $distance_matrix );
-	$this->finalize( $clusterings , $mutations , $distance_matrix );
+	$this->networkClustering( $clusterings , $mutations , $distance_matrix );
     return 1;
 }
 #####
@@ -207,6 +219,7 @@ sub readPairwise {
 	print STDOUT "\nReading in pairwise data ... \n";
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
+	my $pdbCount;
 	map {
 		my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aa_1 , $chain1 , $loc_1 , $domain1 , $cosmic1 , 
 			 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , $domain2 , $cosmic2 , 
@@ -230,13 +243,8 @@ sub readPairwise {
 		$mutation2->stop( $stop2 );
 		$proteinMutation->aminoAcidChange( $aa_2 );
 		$mutation2->addProteinVariant( $proteinMutation );
-		if ( $this->{'distance_measure'} eq $AVERAGEDISTANCE ) {
-			#print "get average distance\n";
-			$this->getAverageDistance( $mutation1 , $mutation2 , $chain1 , $chain2 , $infos , $distance_matrix );
-		} else {
-			#print "get shortest distance\n";
-			$this->getShortestDistance( $mutation1 , $mutation2 , $chain1 , $chain2 , $infos , $distance_matrix );
-		}
+		$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
+							$chain1 , $chain2 , $infos , $pdbCount );
 	} $fh->getlines;
 	$fh->close();
 	return;
@@ -303,8 +311,8 @@ sub readMAF{
 				$mutation->chromosome( $chromosome );
 				$mutation->start( $start );
 				$mutation->stop( $stop );
-				#$mutation->reference( $reference );
-				#$mutation->alternate( $alternate );
+				$mutation->reference( $reference );
+				$mutation->alternate( $alternate );
 				my $proteinMutation = TGI::ProteinVariant->new();
 				$proteinMutation->transcript( $transcript_name );
 				$proteinMutation->aminoAcidChange( $aachange );
@@ -320,30 +328,26 @@ sub readMAF{
 sub setMutation {
 	my ( $this , $mutations , $mutation , $barID , $weight ) = @_;
 	my $mutationKey = $this->makeMutationKey( $mutation );
+	my $refAlt = &combine( $mutation->reference() , $mutation->alternate() );
 	my $proteinKey = $this->makeProteinKey( $mutation );
-	#print "setMutation: ";
+	#print "setMutation: ".$refAlt."\n";
 	#print join( "\t" , ( $mutationKey , $proteinKey , $barID , $weight ) )." --- ";
-	if ( exists $mutations->{$mutationKey}->{$proteinKey} ) {
+	if ( exists $mutations->{$mutationKey}->{$refAlt}->{$proteinKey} ) {
 		#print "existing\t";
 		if ( $this->{'vertex_type'} ne $WEIGHT ) {
-			$mutations->{$mutationKey}->{$proteinKey}->{samples}->{$barID} += 1;
-			$mutations->{$mutationKey}->{$proteinKey}->{weight} += 1;
+			$mutations->{$mutationKey}->{$refAlt}->{$proteinKey} += 1;
 		} else {
-			$mutations->{$mutationKey}->{$proteinKey}->{samples}->{$barID} += 1;
-			$mutations->{$mutationKey}->{$proteinKey}->{weight} = $weight;
+			$mutations->{$mutationKey}->{$refAlt}->{$proteinKey} = $weight;
 		}
 	} else {
 		#print "new\t";
 		if ( $this->{'vertex_type'} eq $WEIGHT ) {
-			$mutations->{$mutationKey}->{$proteinKey}->{samples}->{$barID} += 1;
-			$mutations->{$mutationKey}->{$proteinKey}->{weight} = $weight;
+			$mutations->{$mutationKey}->{$refAlt}->{$proteinKey} = $weight;
 		} else {
-			$mutations->{$mutationKey}->{$proteinKey}->{samples}->{$barID} += 1;
-			$mutations->{$mutationKey}->{$proteinKey}->{weight} += 1;
+			$mutations->{$mutationKey}->{$refAlt}->{$proteinKey} += 1;
 		}
 	} #if mutation exists
-	my $w = $mutations->{$mutationKey}->{$proteinKey}->{weight};
-	my $n = scalar keys %{$mutations->{$mutationKey}->{$proteinKey}->{samples}};
+	#my $w = $mutations->{$mutationKey}->{$refAlt}->{$proteinKey};
 	#print $w."\t".$n."\n";
 	return;
 }
@@ -351,28 +355,20 @@ sub setMutation {
 sub getMutationInfo {
 	my ( $this , $mutations , $mutationKey ) = @_;
 	my $weights = {};
-	my $samples = {};
-	my $proteinAnnotations = {};
-	#my $nMutations = scalar keys %{$mutations};
-	#print "\n".$nMutations." mutations in total\n";
-	#print "getMutationInfo for ".$mutationKey."\n";
-	foreach my $proteinKey ( sort keys %{$mutations->{$mutationKey}} ) {
-		my ( $transcript , $aaChange ) = @{$this->splitProteinKey( $proteinKey )};
-		$aaChange =~ m/p\.(\D*)(\d+)(\D*)/;
-		$samples->{&combine( $1 , $3 )} = $mutations->{$mutationKey}->{$proteinKey}->{samples};
-		$weights->{&combine( $1 , $3 )} = $mutations->{$mutationKey}->{$proteinKey}->{weight};
-		#my $nsamples = scalar keys %{$mutations->{$mutationKey}->{$proteinKey}->{samples}};
-		#my $weight = $weights->{&combine( $1 , $3 )};
-		#print "weight of ".$mutationKey." :: ".$proteinKey."\t\tNsamples = ".$nsamples."\tweight = ".$weight."\n";
-		$proteinAnnotations->{&combine( $1 , $3 )}->{$proteinKey} = 1;
+	foreach my $refAlt ( sort keys %{$mutations->{$mutationKey}} ) {
+		foreach my $proteinKey ( sort keys %{$mutations->{$mutationKey}->{$refAlt}} ) {
+			my ( $transcript , $aaChange ) = @{$this->splitProteinKey( $proteinKey )};
+			$aaChange =~ m/p\.(\D*)(\d+)(\D*)/;
+			$weights->{$refAlt}->{$proteinKey} = $mutations->{$mutationKey}->{$refAlt}->{$proteinKey};
+		}
 	}
-	return ( $samples , $weights , $proteinAnnotations );
+	return $weights;
 }
 
-sub finalize {
+sub networkClustering {
 	#$this->finalize( $clusterings , $mutations , $distance_matrix );
 	my ( $this , $clusterings , $mutations , $distance_matrix ) = @_;
-	print STDOUT "HotSpot3D::Cluster::finalize\n";
+	print STDOUT "HotSpot3D::Cluster::networkClustering\n";
 	my $outFilename = $this->generateFilename();
 	print STDOUT "Creating cluster output file: ".$outFilename."\n";
 	my $fh = new FileHandle;
@@ -381,14 +377,20 @@ sub finalize {
 								"Degree_Connectivity" , "Closeness_Centrality" , 
 								"Geodesic_From_Centroid" , "Weight" , 
 								"Chromosome" , "Start" , "Stop" , 
+								"Reference" , "Alternate" ,
 								"Transcript" , "Alternative_Transcripts"
 							 )
 					)."\n"
 			  );
 	print STDOUT "Clustering\n";
-	my $initialCluster = 0;
-	$this->networkClustering( $mutations , $distance_matrix , $clusterings , 
-							  $fh , $initialCluster );
+	foreach my $structure ( sort keys %{$distance_matrix} ) {
+		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
+			my $subClusterID = 0;
+			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+					$fh , $structure , $superClusterID , $subClusterID );
+		}
+	}
+	$fh->close();
 	return;
 }
 
@@ -455,17 +457,17 @@ sub readDrugClean {
 						 "Stop" , "Amino_Acid_Change" , 
 						 "Mutation_Location_In_PDB" ,
 						 "3D_Distance_Information" );
-		unless(	defined( $drugcols{"Drug"} )										#0
-			and defined( $drugcols{"PDB_ID"} )										#2
-			and defined( $drugcols{"Chain1"} )										#2
-			and defined( $drugcols{"Gene"} )										#6
-			and defined( $drugcols{"Chromosome"} )									#7
-			and defined( $drugcols{"Start"} )										#8
-			and defined( $drugcols{"Stop"} )										#9
-			and defined( $drugcols{"Amino_Acid_Change"} )							#10
-			and defined( $drugcols{"Chain2"} )										#2
-			and defined( $drugcols{"Mutation_Location_In_PDB"} )					#12
-			and defined( $drugcols{"3D_Distance_Information"} ) ) {					#17
+		unless(	defined( $drugcols{"Drug"} )						#0
+			and defined( $drugcols{"PDB_ID"} )						#2
+			and defined( $drugcols{"Chain1"} )						#2
+			and defined( $drugcols{"Gene"} )						#6
+			and defined( $drugcols{"Chromosome"} )					#7
+			and defined( $drugcols{"Start"} )						#8
+			and defined( $drugcols{"Stop"} )						#9
+			and defined( $drugcols{"Amino_Acid_Change"} )			#10
+			and defined( $drugcols{"Chain2"} )						#2
+			and defined( $drugcols{"Mutation_Location_In_PDB"} )	#12
+			and defined( $drugcols{"3D_Distance_Information"} ) ) {	#17
 			die "not a valid drug-clean file\n";
 		}
 		my @wantrxcols = (	$drugcols{"Drug"} ,
@@ -479,14 +481,18 @@ sub readDrugClean {
 							$drugcols{"Chain2"} ,
 							$drugcols{"Mutation_Location_In_PDB"} ,
 							$drugcols{"3D_Distance_Information"} );
+		my $pdbCount = {};
 		map { 
 				chomp;
 				my @line = split /\t/; 
 				map{ $_ =~ s/"//g } @line;
-				my ( $drug, $pdb , $chain1 , $gene, $chromosome , $start , $stop , $aaChange , $chain2 , $loc, $infor_3d ) = @line[@wantrxcols];
-				my ( $dist, $pdb2, $pval ) = split / /, $infor_3d;
-				$pval =~ s/"//g;
-				my $structure = $this->structureDependent( $pdb , $chain1 , $chain2 );
+				my ( $drug, $pdb , $chain1 , $gene, 
+					 $chromosome , $start , $stop , $aaChange , $chain2 , 
+					 $loc, $infos ) = @line[@wantrxcols];
+				#my ( $dist, $pdb2, $pval ) = split / /, $infos;
+				$infos =~ s/"//g;
+				my $structure = $this->structureDependent( $pdb , 
+														   $chain1 , $chain2 );
 				my $proteinMutation = TGI::ProteinVariant->new();
 				my $mutation = TGI::Variant->new();
 				$mutation->gene( $gene );
@@ -502,229 +508,27 @@ sub readDrugClean {
 				$soCalledMutation->stop( $structure );
 				$proteinMutation->aminoAcidChange( $aaChange );
 				$soCalledMutation->addProteinVariant( $proteinMutation );
-				$this->setElement( $distance_matrix , $structure , $soCalledMutation , $mutation , $dist , $pval );
+				$this->setDistance( $distance_matrix , $soCalledMutation , 
+									$mutation , $chain1 , $chain2 , 
+									$infos , $pdbCount );
 		} $fh->getlines; 
 		$fh->close();
 	} #if drug pairs included
 	return;
 }
 
-## CLUSTERING FUNCTIONS - AGGLOMERATIVE HIERARCHICAL CLUSTERING
-sub initializeGeodesics {
-	my ( $this , $clusterings , $structure , $clus_num , $distance_matrix , $mutations ) = @_;
-	my %dist;
-	#print "initializeGeodesics: \n";
-	foreach my $mutationKey1 ( keys %{$clusterings->{$structure}->{$clus_num}} ) { #initialize geodesics
-		#print "mutationKey1 = ".$mutationKey1.": \n";
-		foreach my $mutationKey2 ( keys %{$clusterings->{$structure}->{$clus_num}} ) {
-			if ( not exists $dist{$mutationKey1}{$mutationKey2} ) {
-				#print "mutationKey2 = ".$mutationKey2.": \n";
-				my ( $distance , $pvalue ) = $this->getElementByKeys( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 );
-				if ( $distance != $MAXDISTANCE ) { #NOTE if amino acids are neighboring, then a distance is given
-					$dist{$mutationKey1}{$mutationKey2} = $distance;
-					$dist{$mutationKey2}{$mutationKey1} = $distance;
-					#print join( "\t" , ( "known" , $mutationKey1 , $mutationKey2 , $distance ) )."\n";
-				} else { #NOTE if no distance, then either amino acids are NOT neighbors, or they are the same position
-					$dist{$mutationKey1}{$mutationKey2} = $MAXDISTANCE;
-					$dist{$mutationKey2}{$mutationKey1} = $MAXDISTANCE;
-					#$mutations->{$mutationKey}->{$proteinKey}->{samples}->{$barID} 
-					if ( $this->determineIfSameMutation( $mutations , $mutationKey1 , $mutationKey2 ) ) {
-						#print "same mutations: ".$mutationKey1."\t".$mutationKey2."\n";
-						$dist{$mutationKey1}{$mutationKey2} = 0;
-						$dist{$mutationKey2}{$mutationKey1} = 0;
-						last;
-					}
-				} #if distance not known
-			} #if not exists dist between mutationKey1 & mutationKey2
-		} #foreach mutationKey2
-	} #foreach mutationKey1
-	return \%dist;
-}
-
-sub calculateClosenessCentrality {
-	my ( $this , $mutations , $dist , $superClusterID ) = @_;
-	my $centrality = {};
-	my $max=0;
-	my $centroid = "";
-	my ( $mutationKey1 , $mutationKey2 , $weight );
-	my $x = scalar keys %{$dist};
-	print "calculateClosenessCentrality: ".$x." by ";
-	foreach $mutationKey1 ( keys %{$dist} ) {
-		my $y = scalar keys %{$dist->{$mutationKey1}};
-		#print $y."\n";
-		#print "mutationKey1 = ".$mutationKey1."\t";
-		my ( $samples1 , $weights1 , undef ) = $this->getMutationInfo( $mutations , $mutationKey1 );
-		my $nAAchanges = scalar keys %{$weights1};
-		#print "nAAchanges of 1 = ".$nAAchanges."\t";
-		foreach my $aaChange1 ( keys %{$weights1} ) {
-			print $mutationKey1."|".$aaChange1."\n";
-			my $C = 0;
-			foreach $mutationKey2 ( keys %{$dist->{$mutationKey1}}) {
-				my ( $samples2 , $weights2 , undef ) = $this->getMutationInfo( $mutations , $mutationKey2 );
-				$nAAchanges = scalar keys %{$weights2};
-				#print "nAAchanges of 2 = ".$nAAchanges."\t";
-				foreach my $aaChange2 ( keys %{$weights2} ) {
-					print "\t".$mutationKey2."|".$aaChange2."\t";
-					#print "aaChange2 = ".$aaChange2."\n";
-					$weight = 1;
-					if ( $this->{'vertex_type'} ne $UNIQUE ) {
-						if ( exists $mutations->{$mutationKey2} ) {
-							$weight = $weights2->{$aaChange2};
-						}
-					}
-					print join( "\t" , ( $weight , $dist->{$mutationKey1}->{$mutationKey2} ) )."\t";
-					if ( $mutationKey1 ne $mutationKey2 ) {
-						if ( $dist->{$mutationKey1}->{$mutationKey2} <= $this->{'max_radius'} ) {
-							$C += $weight/( 2**$dist->{$mutationKey1}->{$mutationKey2} );
-						}
-					} else { #mutationKey1 is same as mutationKey2
-						if ( $this->{'vertex_type'} eq $WEIGHT ) { 
-							$C += $weight;
-						} else {
-							$C += $weight -1;
-						}
-					}
-					$centrality->{$superClusterID}->{$mutationKey1} = $C;
-					if ( $C > $max ) {
-						$max = $C;
-						$centroid = $mutationKey1;
-					}
-					print join( "\t" , ( $superClusterID , $centroid , $max , $C ) )."\n";
-				} #foreach aaChange2
-			} #foreach mutationKey2
-		} #foreach aaChange1
-	} #foreach mutationKey1
-	return ( $centroid , $centrality );
-}
-
-#sub determineCentroid {
-#	my ( $this , $centrality , $superClusterID ) = @_;
-#	my $max = 0;
-#	my $centroid = "";
-#	foreach my $mutationKey ( keys %{$centrality->{$superClusterID}} ) {
-#		my $C = $centrality->{$superClusterID}->{$mutationKey};
-#		if ( $C > $max ) {
-#			$max = $C;
-#			$centroid = $mutationKey1;
-#		}
-#	}
-#	return ( $centroid , $max );
-#}
-
-sub networkClustering {
-	my ( $this , $mutations , $distance_matrix , $clusterings , 
-		 $fh , $counter )=@_;
-	#$this->networkClustering( $mutations , $distance_matrix , $clusterings , 
-	#				  		   $fh , 1 );
-	my $numclusters = 0;
-	foreach my $structure ( sort {$a <=> $b} keys %{$clusterings} ) {
-		$numclusters += scalar keys %{$clusterings->{$structure}};
-		print "networkClustering (".$structure." with ".$numclusters." clusters): \n";
-		foreach my $superClusterID ( sort {$a <=> $b} keys %{$clusterings->{$structure}} ) {
-			$this->determineSubClusters( $mutations , $distance_matrix , 
-				$clusterings , $fh , $counter , $structure , $superClusterID );
-		}
-	}
-}
-
-sub determineSubClusters {
-	my ( $this , $mutations , $distance_matrix , $clusterings , 
-		 $fh , $counter , $structure , $superClusterID ) = @_;
-	print $structure."\t".$superClusterID."\n";
-	my $dist = $this->initializeGeodesics( $clusterings , $structure , $superClusterID , $distance_matrix , $mutations );
-	$this->floydwarshall( $dist ); #get geodesics
-	my ( $centroid , $centrality ) = $this->calculateClosenessCentrality( $mutations , $dist , $superClusterID );
-	print join( "\t" , ( "result from calculation: " , $centroid ) )."\n";
-	my $count = 0;
-	if ( exists $dist->{$centroid} ) {
-		$count = $this->writeCluster( $fh , $superClusterID , $counter , 
-									  $structure , $centroid , $centrality , 
-									  $dist , $mutations );
-	} #if dist for centroid
-	if ( $count < 2 ) { next; }
-	my $distsLeft = scalar keys %{$dist};
-	print join( "\t" , ( "recluster?" , $distsLeft , $counter , $structure ) );
-	if ( $distsLeft > 1 ) {
-		$counter += 1;
-		print " yes\n";
-		$this->determineSubClusters( $mutations , $distance_matrix , $clusterings , 
-						 $fh , $counter , $structure , $superClusterID );
-	} else {
-		print " no\n";
-	}
-	$fh->close();
-	my $numclusters = scalar keys %{$clusterings->{$structure}};
-	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
-		my $numstructures = scalar keys %{$clusterings};
-		print STDOUT "Found ".$numclusters." super-clusters on ".$numstructures." structures\n";
-	} else {
-		print STDOUT "Found ".$numclusters." super-clusters\n";
-	}
-}
-
-sub writeCluster {
-	my ( $this , $fh , $superClusterID , $counter , $structure ,
-		 $centroid , $centrality , $dist , $mutations ) = @_;
-	my $count = 0;
-	print "writeCluster (".$count.") : ";
-	foreach my $mutationKey2 ( keys %{$dist->{$centroid}} ) {
-		#$mutations->{$mutationKey}->{$proteinKey}->{samples}->{$barID} 
-		my $geodesic = $dist->{$centroid}->{$mutationKey2};
-		print $mutationKey2."\t".$geodesic;
-		if ( $geodesic <= $this->{'max_radius'} ) {
-			print "acceptable\n";
-			my $degrees = scalar keys %{$dist->{$mutationKey2}}; #TODO update to only count subcluster nodes
-			my $closenessCentrality = $centrality->{$superClusterID}->{$mutationKey2};
-			my ( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $mutationKey2 )};
-			my ( $samples , $weights , $proteinAnnotations ) = $this->getMutationInfo( $mutations , $mutationKey2 );
-			foreach my $aaChange ( keys %{$weights} ) {
-				my @proteinAnnotations = sort keys %{$proteinAnnotations->{$aaChange}};
-				my $reportedAnnotation = shift @proteinAnnotations;
-				my $alternateAnnotations = join( "|" , @proteinAnnotations );
-				my ( $reportedTranscript , $reportedAAChange ) = @{&uncombine( $reportedAnnotation )};
-				my $weight = $weights->{$aaChange};
-				my $clusterID = $superClusterID;
-				if ( $this->{'structure_dependence'} eq $DEPENDENT 
-					 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
-					$clusterID = join( "." , ( $superClusterID , $counter , $structure ) );
-				} else {
-					$clusterID = join( "." , ( $superClusterID , $counter ) );
-				}
-				$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-										   $degrees , $closenessCentrality , 
-										   $geodesic , $weight ,
-										   $chromosome , $start , $stop  ,
-										   $reportedTranscript , $alternateAnnotations
-										 )
-								)."\n"
-						  );
-			} #foreach aaChange
-			print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
-			delete $mutations->{$mutationKey2};
-			delete $dist->{$centroid}->{$mutationKey2};
-			delete $dist->{$mutationKey2}->{$centroid};
-		} else { #if geodesic shorter than radius
-			$count += 1;
-			print "unacceptable\n";
-		}
-	} #foreach other vertex in network
-	delete $mutations->{$centroid};
-	return $count;
-}
-
+## NETWORK CLUSTERING - AGGLOMERATIVE HIERARCHICAL CLUSTERING
 sub link {
 	#$this->link( $clusterings , $distance_matrix );
 	my ( $this, $clusterings , $distance_matrix ) = @_;
 	print "linking: \n";
 	foreach my $structure ( sort keys %{$distance_matrix} ) {
 		print $structure."\n";
-		foreach my $pairKey ( sort keys %{$distance_matrix->{$structure}} ) {
-			my ( $mutationKey1 , $mutationKey2 ) = split /_/ , $pairKey;
-			my $distance = $distance_matrix->{$structure}->{$pairKey}->{distance};
-			my $pvalue = $distance_matrix->{$structure}->{$pairKey}->{pvalue};
-			#print join( "\t" , ( $pairKey , $mutationKey1 , $mutationKey2 , $distance , $pvalue ) )."\n";
-			my @mutations = ( $mutationKey1 , $mutationKey2 );
-			if ( $this->checkPair( $distance , $pvalue ) ) { #meets desired significance
+		foreach my $mutationKey1 ( sort keys %{$distance_matrix->{$structure}} ) {
+			foreach my $mutationKey2 ( sort keys %{$distance_matrix->{$structure}->{$mutationKey1}} ) {
+				my $distance = $distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+				#print join( "\t" , ( $pairKey , $mutationKey1 , $mutationKey2 , $distance , $pvalue ) )."\n";
+				my @mutations = ( $mutationKey1 , $mutationKey2 );
 				my ( $combine1 , $combine2 , $id ); 
 				my @uniq;
 				my @combine;
@@ -769,90 +573,481 @@ sub link {
 					$clusterings->{$structure}->{$id}->{$mutationKey1} = 1;
 					$clusterings->{$structure}->{$id}->{$mutationKey2} = 1;
 				}
-			} #if pval significant
-		} #foreach pairKey
+			} #foreach mutation2
+		} #foreach mutation1
 		my $nsuper = scalar keys %{$clusterings->{$structure}};
 		print "there are ".$nsuper." superclusters in ".$structure."\n";
 	} #foreach structure
     return;
 }
 
-sub floydwarshall {
-	my ( $this , $dist ) = @_;
-	print "floydwarshall: \n";
-	foreach my $mu_k ( keys %{$dist} ) {
-		#print "\t".$mu_k."\n";
-		foreach my $mu_i ( keys %{$dist} ) {
-			#print "\t\t".$mu_i."\n";
-			foreach my $mu_j ( keys %{$dist} ) {
-				#print "\t\t\t".$mu_j."\n";
-				my $dist_ij = $dist->{$mu_i}->{$mu_j};
-				next if ( $dist_ij == 0 );
-				#print join( "\t" , ( $mu_i , $mu_j , $dist_ij ) )."\n";
-				my $dist_ik = $dist->{$mu_i}->{$mu_k};
-				my $dist_kj = $dist->{$mu_k}->{$mu_j};
-				if ( $dist_ij > $dist_ik + $dist_kj ) {
-					$dist->{$mu_i}->{$mu_j} = $dist_ik + $dist_kj;
-					#print join( " -- " , ( $mu_i , $mu_j , $dist_ij , $dist_ik , $dist_kj , $dist->{$mu_i}->{$mu_j} ) )."\n";
-				}
+sub initializeGeodesics {
+	my ( $this , $clusterings , $superClusterID , $structure , $distance_matrix , $mutations ) = @_;
+	print "initializeGeodesics: \n";
+	my $geodesics = {};
+	my $nInitialized = 0;
+	my $nMutations = scalar keys %{$clusterings->{$structure}->{$superClusterID}};
+	#print $nMutations." mutations to initialize geodesics\n";
+	foreach my $mutationKey1 ( sort keys %{$clusterings->{$structure}->{$superClusterID}} ) { #initialize geodesics
+		next if ( $this->hasBeenProcessed( $mutationKey1 ) );
+		#print "need to process mutationKey1 = ".$mutationKey1.": \n";
+		foreach my $mutationKey2 ( sort keys %{$clusterings->{$structure}->{$superClusterID}} ) {
+			next if ( $this->hasBeenProcessed( $mutationKey2 ) );
+			#next if ( exists $dist{$mutationKey1}{$mutationKey2} );
+			#print "need to process mutationKey2 = ".$mutationKey2.": \n";
+			my $distance = $this->getElementByKeys( $distance_matrix , 
+									$structure , $mutationKey1 , 
+									$mutationKey2 );
+			$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} = $distance;
+			$geodesics->{$structure}->{$mutationKey2}->{$mutationKey1} = $distance;
+#			if ( $mutationKey1 =~ /4859191/ or $mutationKey2 =~ /4859191/ ) {
+#				print "INITIALIZING FOR ".$mutationKey1." , ".$mutationKey2
+			if ( $distance != $MAXDISTANCE ) { #NOTE if amino acids are neighboring, then a distance is given
+				$nInitialized += 1;
+				#print join( "\t" , ( "known" , $mutationKey1 , $mutationKey2 , $distance ) )."\n";
+			} #if distance not known
+			if ( $this->isSameProteinPosition( $mutations , $mutationKey1 , $mutationKey2 ) == 1 ) {
+				print "same site: ".$mutationKey1."\t".$mutationKey2."\n";
+				$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} = 0;
+				$geodesics->{$structure}->{$mutationKey2}->{$mutationKey1} = 0;
+				$nInitialized += 1;
 			}
-		}
-	}
+		} #foreach mutationKey2
+	} #foreach mutationKey1
+	print "nInitialized = ".$nInitialized."\n";
+	return $geodesics;
 }
 
-## 
-sub determineIfSameMutation {
-	my ( $this , $mutations , $mutationKey1 , $mutationKey2 ) = @_;
-	#print join( "\t" , ( "begin" , $mutationKey1 , $mutationKey2 , $MAXDISTANCE ) )."\n";
-	if ( $mutationKey1 eq $mutationKey2 ) { return 1; }
-	foreach my $proteinKey1 ( keys %{$mutations->{$mutationKey1}} ) {
-		#print "proteinKey1: ".$proteinKey1."\n";
-		foreach my $proteinKey2 ( keys %{$mutations->{$mutationKey2}} ) {
-			#print "proteinKey2: ".$proteinKey2."\n";
-			my ( $transcript1 , $aaChange1 ) = @{$this->splitProteinKey( $proteinKey1 )};
-			#print join( "\t" , ( $transcript1 , $aaChange1 ) )."\t";
-			my ( $transcript2 , $aaChange2 ) = @{$this->splitProteinKey( $proteinKey2 )};
-			#print join( "\t" , ( $transcript2 , $aaChange2 ) )."\t";
-			my ( $aaReference1 , $aaPosition1 , $aaAlternate1 );
-			my ( $aaReference2 , $aaPosition2 , $aaAlternate2 );
-			if ( $aaChange1 =~ m/p\.(\D*)(\d+)(\D*)/ ) { #match is $1
-				$aaReference1 =  $1;
-				$aaPosition1 =  $2;
-				$aaAlternate1 =  $3;
-			} else {
-				next;
-			}
-			if ( $aaChange2 =~ m/p\.(\D*)(\d+)(\D*)/ ) { #match is $1
-				$aaReference2 =  $1;
-				$aaPosition2 =  $2;
-				$aaAlternate2 =  $3;
-			} else {
-				next;
-			}
-			#print join( "\t" , ( $aaPosition1 , $aaPosition2 ) )."\n";
-			my ( undef , $chromosome1 , $start1 , undef ) = &uncombine( $mutationKey1 );
-			next if ( !$start1 );
-			my ( undef , $chromosome2 , $start2 , undef ) = &uncombine( $mutationKey2 );
-			next if ( !$start2 );
-			my $diff = 3;
-			if ( $start1 < $start2 ) {
-				$diff = $start2 - $start1;
-			} else {
-				$diff = $start1 - $start2;
-			}
-			if ( $transcript1 eq $transcript2 and $aaPosition1 eq $aaPosition2 
-				 or ( $aaReference1 eq $aaReference2 
-				 and $aaAlternate1 eq $aaAlternate2 
-				 and $chromosome1 eq $chromosome2 
-				 and $diff <= 2 ) ) {
-				#print "^--same aaPosition\n";
-				return 1;
-			}
+sub isRadiusOkay {
+	my ( $this , $geodesics , $structure , $mutationKey1 , $mutationKey2 ) = @_;
+	print "isRadiusOkay of d(".$mutationKey1.",".$mutationKey2.") = ".$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2}.": ";
+	if ( $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} <= $this->{'max_radius'} ) {
+		print "OKAY\n";
+		return 1;
+	}
+	print "TOO LONG\n";
+	return 0;
+}
+
+sub calculateClosenessCentrality {
+	my ( $this , $mutations , $geodesics , $structure , $superClusterID , $subClusterID ) = @_;
+	my $centrality = {};
+	my $max=0;
+	my $centroid = "NULL";
+	my ( $mutationKey1 , $mutationKey2 , $weight );
+	my $x = scalar keys %{$geodesics->{$structure}};
+	print "calculateClosenessCentrality: ".$x." by ";
+	foreach $mutationKey1 ( keys %{$geodesics->{$structure}} ) {
+		my $y = scalar keys %{$geodesics->{$structure}->{$mutationKey1}};
+		print $y."\n";
+		#print "mutationKey1 = ".$mutationKey1."\t";
+#TODO if alternative transcripts have different proref & proalt, then double counted
+		foreach my $refAlt1 ( sort keys %{$mutations->{$mutationKey1}} ) {
+			#print $refAlt1."\n";
+			my $C = 0;
+			my @proteinKeys1 = sort keys %{$mutations->{$mutationKey1}->{$refAlt1}};
+			my $proteinKey1 = shift @proteinKeys1;
+			#print $mutationKey1."|".$proteinKey1."\n";
+			foreach $mutationKey2 ( keys %{$geodesics->{$structure}->{$mutationKey1}}) {
+#TODO take only contributions within radius of centroid
+				#next if ( not $this->isRadiusOkay( $geodesics , $structure , $mutationKey1 , $mutationKey2 ) );
+				foreach my $refAlt2 ( sort keys %{$mutations->{$mutationKey2}} ) {
+					#print $refAlt2."\n";
+					my @proteinKeys2 = sort keys %{$mutations->{$mutationKey2}->{$refAlt2}};
+					my $proteinKey2 = shift @proteinKeys2;
+					#print "\t".$mutationKey2."|".$proteinKey2."\t";
+					$weight = 1;
+					if ( $this->{'vertex_type'} ne $UNIQUE ) {
+						if ( exists $mutations->{$mutationKey2} ) {
+							$weight = $mutations->{$mutationKey2}->{$refAlt2}->{$proteinKey2};
+						}
+					}
+					#print join( "\t" , ( $weight , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\t";
+					if ( $mutationKey1 ne $mutationKey2 ) {
+						$C += $weight/( 2**$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
+					} else { #mutationKey1 is same as mutationKey2
+						if ( $this->{'vertex_type'} eq $WEIGHT ) { 
+							$C += $weight;
+						} else {
+							if ( $refAlt1 ne $refAlt2 ) {
+								$C += $weight;
+							} else {
+								$C += $weight - 1;
+							}
+						}
+					}
+					$centrality->{$superClusterID}->{$subClusterID}->{$mutationKey1} = $C;
+					if ( $C > $max ) {
+						$max = $C;
+						$centroid = $mutationKey1;
+					}
+					#print join( "\t" , ( "cid=".$superClusterID.".".$subClusterID , "cent=".$centroid , "maxCc=".$max , "Cc=".$C ) )."\n";
+				} #foreach refAlt2
+			} #foreach mutationKey2
+		} #foreach refAlt1
+	} #foreach mutationKey1
+	print join( "\t" , ( "result from calculation: " , $centroid , $max ) )."\n";
+	return ( $centroid , $centrality );
+}
+
+#sub determineCentroid {
+#	my ( $this , $centrality , $superClusterID ) = @_;
+#	my $max = 0;
+#	my $centroid = "";
+#	foreach my $mutationKey ( keys %{$centrality->{$superClusterID}} ) {
+#		my $C = $centrality->{$superClusterID}->{$mutationKey};
+#		if ( $C > $max ) {
+#			$max = $C;
+#			$centroid = $mutationKey1;
+#		}
+#	}
+#	return ( $centroid , $max );
+#}
+
+sub checkProcessedDistances {
+	my ( $this , $distance_matrix , $structure ) = @_;
+	my $count = 0;
+	print "CHECK PROCESSED: \n";
+	foreach my $mutationKey1 ( keys %{$distance_matrix->{$structure}} ) {
+		print "\t".$mutationKey1;
+		if ( not $this->hasBeenProcessed( $mutationKey1 ) ) {
+			print "no\n";
+			$count += 1;
+		} else {
+			print "yes\n";
+		}
+	}
+	return $count;
+}
+
+sub anyFiniteGeodesicsRemaining {
+	my ( $this , $mutations , $geodesics , $structure ) = @_;
+	foreach my $mutationKey1 ( keys %{$geodesics->{$structure}} ) {
+		next if ( $this->hasBeenProcessed( $mutationKey1 ) );
+		foreach my $mutationKey2 ( keys %{$geodesics->{$structure}->{$mutationKey1}} ) {
+			next if ( $this->hasBeenProcessed( $mutationKey2 ) 
+				and $this->isRadiusOkay( $geodesics , $structure , $mutationKey1 , $mutationKey2 ) );
+			return 1;
 		}
 	}
 	return 0;
 }
 
+sub determineStructureClusters {
+	my ( $this , $clusterings , $mutations , $distance_matrix ,
+		 $fh , $structure , $superClusterID , $subClusterID ) = @_;
+	print $structure."\t".$superClusterID.".".$subClusterID."\n";
+	my $geodesics = $this->initializeGeodesics( $clusterings , $superClusterID ,
+							$structure , $distance_matrix , $mutations );
+	if ( $this->anyFiniteGeodesicsRemaining( $mutations , $geodesics , $structure ) ) {
+		$this->floydWarshall( $geodesics , $structure );
+		my ( $centroid , $centrality ) = $this->calculateClosenessCentrality( 
+												$mutations , $geodesics , 
+												$structure , $superClusterID , 
+												$subClusterID );
+		#$this->carveOutSubCluster( $mutations , $geodesics , $structure ,
+		#		$centrality , $superClusterID , $subClusterID );
+		$this->writeCluster( $fh , $mutations , $geodesics , $structure , 
+				$superClusterID , $subClusterID , $centroid , $centrality );
+		
+		my $count = $this->checkProcessedDistances( $geodesics , $structure );
+		print join( "\t" , ( "recluster?" , $count , 
+				$superClusterID.".".$subClusterID , $structure ) );
+		if ( $count >= 2 ) {
+			$subClusterID += 1;
+			print " yes\n";
+			$this->determineStructureClusters( $clusterings , 
+						$mutations , $geodesics , $fh , $structure , 
+						$superClusterID , $subClusterID );
+		} else {
+			print " no\n";
+			return 0;
+		}
+	#	my $numstructures = scalar keys %{$distance_matrix->{$structure}};
+	#	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
+	#		print STDOUT "Found ".$numclusters." super-clusters on ".$numstructures." structures\n";
+	#	} else {
+	#		print STDOUT "Found ".$numclusters." super-clusters\n";
+	#	}
+	} 
+	return 1;
+}
+
+#TODO use this method to recalculate closeness centralities of acceptable region 
+#		or else closeness centralities must be described as measured for the remaining
+#		super cluster nodes within range
+sub carveOutSubCluster {
+	my ( $this , $mutations , $geodesics , $structure , $centroid ,
+			$centrality , $superClusterID , $subClusterID ) = @_;
+	#	$this->carveOutSubCluster( $mutations , $geodesics , $structure , $centroid ,
+	#			$centrality , $superClusterID , $subClusterID );
+	my $geods = {};
+	foreach my $mutationKey ( keys %{$geodesics->{$structure}->{$centroid}} ) {
+		$geods->{$structure}->{$centroid}->{$mutationKey} = $geodesics->{$structure}->{$centroid}->{$mutationKey};
+	}
+}
+
+sub setProcessStatus {
+	my ( $this , $mutationKey , $status ) = @_;
+	$this->{'processed'}->{$mutationKey} = $status;
+	return $this->{'processed'}->{$mutationKey};
+}
+
+sub hasBeenProcessed {
+	my ( $this , $mutationKey ) = @_;
+	if ( $this->{'processed'}->{$mutationKey} ) {
+		return 1;
+	}
+	return 0;
+}
+
+sub writeCluster {
+	#$this->writeCluster( $fh , $mutations , $geodesics , $structure , 
+	#		$superClusterID , $subClusterID , $centroid , $centrality );
+	my ( $this , $fh , $mutations , $geodesics , $structure ,
+		 $superClusterID , $subClusterID , $centroid , $centrality ) = @_;
+	print "writeCluster (".$subClusterID.") : ";
+	my $clusterID = $superClusterID;
+	if ( $this->{'structure_dependence'} eq $DEPENDENT 
+		 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
+		$clusterID = join( "." , ( $superClusterID , $subClusterID , $structure ) );
+	} else {
+		$clusterID = join( "." , ( $superClusterID , $subClusterID ) );
+	}
+	my $geodesic = 0;
+	my $degrees = scalar keys %{$geodesics->{$structure}->{$centroid}}; #TODO update to only count subcluster nodes
+	my $closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$centroid};
+	my ( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $centroid )};
+	my @alternateAnnotations;
+	my $proteinChanges = {};
+	my ( $reportedTranscript , $reportedAAChange );
+	my $weight; # = $weights->{$proteinKey};
+	foreach my $refAlt ( sort keys %{$mutations->{$centroid}} ) {
+#TODO make sure this works for in_frame_ins
+		my ( $reference , $alternate ) = @{&uncombine( $refAlt )};
+		@alternateAnnotations = sort keys %{$mutations->{$centroid}->{$refAlt}};
+		#print join( "," , ( @alternateAnnotations ) )."\n";
+		my $reported = shift @alternateAnnotations;
+		#print "\t".$reported."\n";
+		$weight = $mutations->{$centroid}->{$refAlt}->{$reported};
+		( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
+		my $alternateAnnotations = join( "|" , @alternateAnnotations );
+		$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
+								   $degrees , $closenessCentrality , 
+								   $geodesic , $weight ,
+								   $chromosome , $start , $stop ,
+								   $reference , $alternate ,
+								   $reportedTranscript , $alternateAnnotations
+								 )
+						)."\n"
+				  );
+	} #foreach refAlt
+	$this->setProcessStatus( $centroid , 1 );
+	foreach my $mutationKey2 ( sort keys %{$geodesics->{$structure}->{$centroid}} ) {
+		next if ( $this->hasBeenProcessed( $mutationKey2 ) );
+		$geodesic = $geodesics->{$structure}->{$centroid}->{$mutationKey2};
+		next if ( $geodesic > $this->{'max_radius'} ); 
+		print $centroid." geodesic to ".$mutationKey2."\t".$geodesic."\n";
+		$degrees = scalar keys %{$geodesics->{$structure}->{$mutationKey2}}; #TODO update to only count subcluster nodes
+		$closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$mutationKey2};
+		( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $mutationKey2 )};
+		@alternateAnnotations;
+		$proteinChanges = {};
+		( $reportedTranscript , $reportedAAChange );
+		$weight; # = $weights->{$proteinKey};
+		foreach my $refAlt ( sort keys %{$mutations->{$mutationKey2}} ) {
+#TODO make sure this works for in_frame_ins
+			my ( $reference , $alternate ) = @{&uncombine( $refAlt )};
+			@alternateAnnotations = sort keys %{$mutations->{$mutationKey2}->{$refAlt}};
+			#print join( "," , ( @alternateAnnotations ) )."\n";
+			my $reported = shift @alternateAnnotations;
+			#print "\t".$reported."\n";
+			$weight = $mutations->{$mutationKey2}->{$refAlt}->{$reported};
+			( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
+			my $alternateAnnotations = join( "|" , @alternateAnnotations );
+			$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
+									   $degrees , $closenessCentrality , 
+									   $geodesic , $weight ,
+									   $chromosome , $start , $stop ,
+									   $reference , $alternate ,
+									   $reportedTranscript , $alternateAnnotations
+									 )
+							)."\n"
+					  );
+		} #foreach refAlt
+		print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
+		$this->setProcessStatus( $mutationKey2 , 1 );
+	} #foreach other vertex in network
+	return;
+}
+
+sub floydWarshall {
+	my ( $this , $geodesics , $structure ) = @_;
+	print "floydWarshall: \n";
+	foreach my $mu_k ( keys %{$geodesics->{$structure}} ) {
+		#print "\t".$mu_k."\n";
+		foreach my $mu_i ( keys %{$geodesics->{$structure}} ) {
+			#print "\t\t".$mu_i."\n";
+			my ( $dist_ik , $dist_ij , $dist_kj );
+			if ( exists $geodesics->{$structure}->{$mu_i}->{$mu_k} ) {
+				$dist_ik = $geodesics->{$structure}->{$mu_i}->{$mu_k};
+			} else {
+				$dist_ik = $MAXDISTANCE;
+			}
+			foreach my $mu_j ( keys %{$geodesics->{$structure}} ) {
+				if ( exists $geodesics->{$structure}->{$mu_i}->{$mu_j} ) {
+					$dist_ij = $geodesics->{$structure}->{$mu_i}->{$mu_j};
+				} else {
+					$dist_ij = $MAXDISTANCE;
+				}
+				next if ( $dist_ij == 0 );
+				if ( exists $geodesics->{$structure}->{$mu_k}->{$mu_j} ) {
+					$dist_kj = $geodesics->{$structure}->{$mu_k}->{$mu_j};
+				} else {
+					$dist_kj = $MAXDISTANCE;
+				}
+				if ( $dist_ij > $dist_ik + $dist_kj ) {
+					$geodesics->{$structure}->{$mu_i}->{$mu_j} = $dist_ik + $dist_kj;
+					$geodesics->{$structure}->{$mu_j}->{$mu_i} = $dist_ik + $dist_kj;
+#					print join( " -- " , ( $mu_i , $mu_j , 
+#							$dist_ij , $dist_ik , $dist_kj , 
+#							$geodesics->{$structure}->{$mu_i}->{$mu_j} 
+#							) )."\n";
+				}
+			}
+		}
+	}
+	return;
+}
+
+## MUTATIONS
+sub isSameProteinPosition {
+	my ( $this , $mutations , $mutationKey1 , $mutationKey2 ) = @_;
+	print join( "\t" , ( "begin" , $mutationKey1 , $mutationKey2 ) )."\n";
+	if ( $mutationKey1 eq $mutationKey2 ) { return 1; }
+	my ( undef , $chromosome1 , $start1 , undef ) = @{$this->splitMutationKey( $mutationKey1 )};
+	next if ( !$start1 );
+	my ( undef , $chromosome2 , $start2 , undef ) = @{$this->splitMutationKey( $mutationKey2 )};
+	next if ( !$start2 );
+	my $diff = 3;
+	if ( $start1 <= $start2 ) {
+		$diff = $start2 - $start1;
+	} else {
+		$diff = $start1 - $start2;
+	}
+	#print "\tdiff = ".$diff."\n";
+	foreach my $refAlt1 ( sort keys %{$mutations->{$mutationKey1}} ) {
+		foreach my $proteinKey1 ( sort keys %{$mutations->{$mutationKey1}->{$refAlt1}} ) {
+			my ( $transcript1 , $aaChange1 ) = @{$this->splitProteinKey( $proteinKey1 )};
+			my ( $aaReference1 , $aaPosition1 , $aaAlternate1 );
+			#print "\tproteinKey1: ".$proteinKey1;
+			if ( $aaChange1 =~ m/p\.\D\D*(\d+)\D*/ ) {
+				$aaPosition1 =  $1;
+			} else {
+				print "...next, no match aaChange1\n";
+				next;
+			}
+			foreach my $refAlt2 ( sort keys %{$mutations->{$mutationKey2}} ) {
+#TODO make sure this works for in_frame_ins
+				foreach my $proteinKey2 ( sort keys %{$mutations->{$mutationKey2}->{$refAlt2}} ) {
+					my ( $transcript2 , $aaChange2 ) = @{$this->splitProteinKey( $proteinKey2 )};
+					my ( $aaReference2 , $aaPosition2 , $aaAlternate2 );
+					#print "\tproteinKey2: ".$proteinKey2."\t";
+					if ( $aaChange2 =~ m/p\.\D\D*(\d+)\D*/ ) {
+						$aaPosition2 =  $1;
+					} else {
+						print "...next, no match aaChange2\n";
+						next;
+					}
+					#print join( "\t" , ( $aaPosition1 , $aaReference1 , $aaPosition2 , $aaReference2 ) )."\t";
+					if ( $transcript1 eq $transcript2 and $aaPosition1 eq $aaPosition2 ) {
+						print "<--same aaPosition\n";
+						return 1;
+					}
+#TODO may fail at splice sites
+					if ( $chromosome1 eq $chromosome2 
+						 and $diff <= 2 ) {
+#TODO make sure that the transcript details assure this works
+						print "<--same protein ref/alt ".$start2." - ".$start1." = ".$diff."\n";
+						return 1;
+					}
+				} #foreach proteinKey2
+			} #foreach refAlt2
+			#print "\n";
+		} #foreach proteinKey1
+	} #foreach refAlt1
+	return 0;
+}
+
+sub makeMutationKey {
+	my ( $this , $mutation ) = @_;
+	#my $proteinMutation = $mutation->proteinVariant( 0 );
+	#my $mutationKey = &combine( $mutation->gene() , $proteinMutation->transcript() );
+	#$mutationKey = &combine( $mutationKey , $proteinMutation->aminoAcidChange() );
+	#$mutationKey = &combine( $mutationKey , $mutation->chromosome() );
+	my $mutationKey = &combine( $mutation->gene() , $mutation->chromosome() );
+	$mutationKey = &combine( $mutationKey , $mutation->start() );
+	$mutationKey = &combine( $mutationKey , $mutation->stop() );
+	#if ( $mutation->reference() ) {
+	#	if ( $mutation->alternate() ) {
+	#		$mutationKey = &combine( $mutationKey , $mutation->reference() );
+	#		$mutationKey = &combine( $mutationKey , $mutation->alternate() );
+	#	}
+	#}
+	return $mutationKey;
+}
+
+sub makeRefAltKey {
+	my ( $this , $mutation ) = @_;
+	return &combine( $mutation->reference() , $mutation->alternate() );
+}
+
+sub makePairKey {
+	my ( $this , $mutation1 , $mutation2 ) = @_;
+	my $mutationKey1 = $this->makeMutationKey( $mutation1 );
+	my $mutationKey2 = $this->makeMutationKey( $mutation2 );
+	return $mutationKey1."_".$mutationKey2;
+}
+
+sub makeProteinKey {
+	my ( $this , $mutation ) = @_;
+	#print "makeProteinKey: ";
+	#print $this->makeMutationKey( $mutation ).": ";
+	my $proteinVariant = $mutation->proteinVariant();
+	my $proteinKey = &combine( $proteinVariant->transcript() , $proteinVariant->aminoAcidChange() );
+	#print $proteinKey."\n";
+	return $proteinKey;
+}
+
+sub splitMutationKey {
+	my ( $this , $mutationKey ) = @_;
+	return &uncombine( $mutationKey );
+}
+
+sub splitRefAltKey {
+	my ( $this , $refAlt ) = @_;
+	return &uncombine( $refAlt );
+}
+
+sub splitPairKey {
+	my ( $this , $pairKey ) = @_;
+	return (split /_/ , $pairKey);
+}
+
+sub splitProteinKey {
+	my ( $this , $proteinKey ) = @_;
+	my @split = @{&uncombine( $proteinKey )};
+	return \@split;
+}
+
+sub getPairKeys {
+	my ( $this , $mutation1 , $mutation2 ) = @_;
+	my $pairKeyA = $this->makePairKey( $mutation1 , $mutation2 );
+	my $pairKeyB = $this->makePairKey( $mutation2 , $mutation1 );
+	return ( $pairKeyA , $pairKeyB );
+}
+
+## DISTANCE MATRIX
 sub checkPair {
 	my ( $this , $dist , $pval ) = @_;
 	if ( $this->{'3d_distance_cutoff'} == $MAXDISTANCE ) { #3d-dist undef & p-val def
@@ -871,139 +1066,118 @@ sub checkPair {
 	return 0;
 }
 
-sub getShortestDistance {
-	#$this->getShortestDistance( $gmu1 , $gmu2 , $chain1 , $chain2 , $infos , $distance_matrix );
-	my ( $this , $mutation1 , $mutation2 , $chain1 , $chain2 , $infos , $distance_matrix ) = @_;
+sub setShortestDistance {
+	my ( $this , $distance_matrix , $mutation1 , $mutation2 , $chain1 , $chain2 , $infos ) = @_;
 	my @infos = split /\|/ , $infos;
 	my $nStructures = scalar @infos;
 	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
 		foreach my $info ( @infos ) {
 			chomp( $info );
 			my ( $distance , $pdbID , $pvalue ) = split / / , $infos;
-			$this->setElement( $distance_matrix , $pdbID , $mutation1 , $mutation2 , $distance , $pvalue );
+#TODO corresponding to update in setAverageDistance
+			if ( $this->checkPair( $distance , $pvalue ) ) {
+				$this->setElement( $distance_matrix , $pdbID , $mutation1 , $mutation2 , $distance , $pvalue );
+			}
 		}
 	} else {
 		my ( $distance , $pdbID , $pvalue ) = split / / , $infos[0];
-		$this->setElement( $distance_matrix , $ANY , $mutation1 , $mutation2 , $distance , $pvalue );
+#TODO corresponding to update in setAverageDistance
+		if ( $this->checkPair( $distance , $pvalue ) ) {
+			$this->setElement( $distance_matrix , $ANY , $mutation1 , $mutation2 , $distance , $pvalue );
+		}
 	}
 	return;
 }
 
-sub getAverageDistance {
-	#$this->getAverageDistance( $gmu1 , $gmu2 , $chain1 , $chain2 , $infos , $distance_matrix );
-	my ( $this , $mutation1 , $mutation2 , $chain1 , $chain2 , $infos , $distance_matrix ) = @_;
+#TODO make sure set for average works as well as for shortest
+sub setAverageDistance {
+	my ( $this , $distance_matrix , $mutation1 , $mutation2 , $chain1 , $chain2 , $infos , $pdbCount ) = @_;
 	my @infos = split /\|/ , $infos;
-	my $avgDistance = {};
-	my $avgPvalue = {};
-	my $nStructures = scalar @infos;
+	my $sumDistances = {};
+	my $nStructures = {};
 	foreach my $info ( @infos ) {
 		chomp( $info );
 		next unless ( $info );
 		my ( $distance , $pdbID , $pvalue ) = split / / , $info;
-		my $structure = $this->structureDependent( $pdbID , $chain1 , $chain2 );
-		$avgDistance->{$structure} += $distance;
-		$avgPvalue->{$structure} += $pvalue;
+#TODO average over ALL pairs or just the ones satisfying conditions (leave checkPair here if latter)
+		if ( $this->checkPair( $distance , $pvalue ) ) {
+			my $structure = $this->structureDependent( $pdbID , $chain1 , $chain2 );
+			$sumDistances->{$structure} += $distance;
+			$nStructures->{$structure} += 1;
+		}
 	}
-	foreach my $structure ( keys %{$avgDistance} ) {
-		$avgDistance->{$structure} = $avgDistance->{$structure}  / $nStructures;
-		$avgPvalue->{$structure} = $avgPvalue->{$structure}  / $nStructures;
-		$this->setElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $avgDistance->{$structure} , $avgPvalue->{$structure} );
+	$this->calculateAverageDistance( $distance_matrix , $mutation1 , $mutation2 , $pdbCount , $sumDistances , $nStructures );
+	return;
+}
+
+sub calculateAverageDistance {
+	my ( $this , $distance_matrix , $mutation1 , $mutation2 , $pdbCount , $sumDistances , $nStructures ) = @_;
+	my $mutationKey1 = $this->makeMutationKey( $mutation1 );
+	my $mutationKey2 = $this->makeMutationKey( $mutation2 );
+	foreach my $structure ( keys %{$sumDistances} ) {
+		if ( exists $pdbCount->{$structure}->{$mutationKey1} ) {
+			if ( exists $pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2} ) { #have seen the pair on a prior line
+				my $count = $pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2};
+				my $oldDistance = $this->getElement( $distance_matrix , $structure , $mutation1 , $mutation2 );
+				$sumDistances->{$structure} += $count*$oldDistance;
+				$nStructures->{$structure} += $count;
+			} else {
+				$pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2} = $nStructures;
+			}
+		} else {
+			$pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2} = $nStructures;
+		}
+		my $finalDistance = $sumDistances->{$structure} / $nStructures->{$structure};
+		$this->setElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $finalDistance );
 	}
 	return;
 }
 
-sub makePairKey {
-	my ( $this , $mutation1 , $mutation2 ) = @_;
-	my $mutationKey1 = $this->makeMutationKey( $mutation1 );
-	my $mutationKey2 = $this->makeMutationKey( $mutation2 );
-	return $mutationKey1."_".$mutationKey2;
-}
-
-sub splitPairKey {
-	my ( $this , $pairKey ) = @_;
-	return (split /_/ , $pairKey);
-}
-
-sub getPairKeys {
-	my ( $this , $mutation1 , $mutation2 ) = @_;
-	my $pairKeyA = $this->makePairKey( $mutation1 , $mutation2 );
-	my $pairKeyB = $this->makePairKey( $mutation2 , $mutation1 );
-	return ( $pairKeyA , $pairKeyB );
-}
-
-sub makeMutationKey {
-	my ( $this , $mutation ) = @_;
-	#my $proteinMutation = $mutation->proteinVariant( 0 );
-	#my $mutationKey = &combine( $mutation->gene() , $proteinMutation->transcript() );
-	#$mutationKey = &combine( $mutationKey , $proteinMutation->aminoAcidChange() );
-	#$mutationKey = &combine( $mutationKey , $mutation->chromosome() );
-	my $mutationKey = &combine( $mutation->gene() , $mutation->chromosome() );
-	$mutationKey = &combine( $mutationKey , $mutation->start() );
-	$mutationKey = &combine( $mutationKey , $mutation->stop() );
-	if ( $mutation->reference() ) {
-		if ( $mutation->alternate() ) {
-			$mutationKey = &combine( $mutationKey , $mutation->reference() );
-			$mutationKey = &combine( $mutationKey , $mutation->alternate() );
-		}
+sub setDistance {
+	my ( $this , $distance_matrix , $mutation1 , $mutation2 , 
+		 $chain1 , $chain2 , $infos , $pdbCount ) = @_;
+	if ( $this->{'distance_measure'} eq $AVERAGEDISTANCE ) {
+		#print "get average distance\n";
+		$this->setAverageDistance( $distance_matrix , $mutation1 , $mutation2 , 
+								   $chain1 , $chain2 , $infos , $pdbCount );
+	} else {
+		#print "get shortest distance\n";
+		$this->setShortestDistance( $distance_matrix , $mutation1 , 
+									$mutation2 , $chain1 , $chain2 , $infos );
 	}
-	return $mutationKey;
-}
-
-sub splitMutationKey {
-	my ( $this , $mutationKey ) = @_;
-	return &uncombine( $mutationKey );
-}
-
-sub makeProteinKey {
-	my ( $this , $mutation ) = @_;
-	#print "makeProteinKey: ";
-	#print $this->makeMutationKey( $mutation ).": ";
-	my $proteinVariant = $mutation->proteinVariant();
-	my $proteinKey = &combine( $proteinVariant->transcript() , $proteinVariant->aminoAcidChange() );
-	#print $proteinKey."\n";
-	return $proteinKey;
-}
-
-sub makeProteinKeys {
-	my ( $this , $mutations , $mutation ) = @_;
-	my $proteinKeys = $mutation->proteinVariants;;
-	my $mutationKey = $this->makeMutationKey( $mutation );
-	#print "makeProteinKeys: ";
-	#print $mutationKey.": ";
-	my @proteinKeys;
-	foreach my $proteinVariant ( @{$mutation->proteinVariants()} ) {
-		push @proteinKeys , &combine( $proteinVariant->transcript() , $proteinVariant->aminoAcidChange() );
-	}
-	foreach my $proteinKey ( keys %{$mutations->{$mutationKey}} ) {
-		#print $proteinKey."; ";
-		push @{$proteinKeys} , $proteinKey;
-	}
-	#print "\n";
-	return $proteinKeys;
-}
-
-sub splitProteinKey {
-	my ( $this , $proteinKey ) = @_;
-	my @split = @{&uncombine( $proteinKey )};
-	return \@split;
+	return;
 }
 
 sub setElement {
-	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 , $distance , $pvalue ) = @_;
-	if ( $this->checkPair( $distance , $pvalue ) ) { #meets desired significance
-		my ( $pairKeyA , $pairKeyB ) = $this->getPairKeys( $mutation1 , $mutation2 );
-		if ( not exists $distance_matrix->{$structure}->{$pairKeyA} ) {
-			if ( not exists $distance_matrix->{$structure}->{$pairKeyB} ) {
-				$distance_matrix->{$structure}->{$pairKeyA}->{distance} = $distance;
-				$distance_matrix->{$structure}->{$pairKeyA}->{pvalue} = $pvalue;
-			} else {
-				$distance_matrix->{$structure}->{$pairKeyA}->{distance} = $distance;
-				$distance_matrix->{$structure}->{$pairKeyA}->{pvalue} = $pvalue;
+	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 , $distance ) = @_;
+#TODO corresponding to update in setAverageDistance
+	#if ( $this->checkPair( $distance , $pvalue ) ) { #meets desired significance
+		my $mutationKey1 = $this->makeMutationKey( $mutation1 );
+		my $mutationKey2 = $this->makeMutationKey( $mutation2 );
+		if ( not exists $distance_matrix->{$structure}->{$mutationKey1} ) {
+			if ( not exists $distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} ) {
+				$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $distance;
+				$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = $distance;
 			}
-		} else {
-			$distance_matrix->{$structure}->{$pairKeyA}->{distance} = $distance;
-			$distance_matrix->{$structure}->{$pairKeyA}->{pvalue} = $pvalue;
-#TODO make sure set for average works as well as for shortest
+		}
+		$this->setProcessStatus( $mutationKey1 , 0 );
+		$this->setProcessStatus( $mutationKey2 , 0 );
+	#}
+	return;
+}
+
+sub initializeSameSiteDistancesToZero {
+	my ( $this , $distance_matrix , $mutations ) = @_;
+	foreach my $structure ( keys %{$distance_matrix} ) {
+		foreach my $mutationKey1 ( keys %{$distance_matrix->{$structure}} ) {
+			foreach my $mutationKey2 ( keys %{$distance_matrix->{$structure}} ) {
+#TODO if mutationKeys are equal, but protein change is different
+				next if ( $mutationKey1 eq $mutationKey2 );
+				if ( $this->isSameProteinPosition( $mutationKey1 , $mutationKey2 ) ) {
+					$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = 0;
+					$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = 0;
+				}
+			}
 		}
 	}
 }
@@ -1017,19 +1191,18 @@ sub getElement {
 
 sub getElementByKeys {
 	my ( $this , $distance_matrix , $structure , $mutationKey1 , $mutationKey2 ) = @_;
-	my $pairKeyA = $mutationKey1."_".$mutationKey2;
-	my $pairKeyB = $mutationKey2."_".$mutationKey1;
 	my $distance = $MAXDISTANCE;
-	my $pvalue = 1;
-	if ( exists $distance_matrix->{$structure}->{$pairKeyA} ) {
-		$distance = $distance_matrix->{$structure}->{$pairKeyA}->{distance};
-		$pvalue = $distance_matrix->{$structure}->{$pairKeyA}->{pvalue};
+	if ( exists $distance_matrix->{$structure}->{$mutationKey1} ) {
+		if ( exists $distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} ) {
+			$distance = $distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+		}
+	} elsif ( exists $distance_matrix->{$structure}->{$mutationKey2} ) {
+		print STDERR "ASYMMETRIC DISTANCE MATRIX\n";
+		if ( exists $distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} ) {
+			$distance = $distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
+		}
 	}
-	if ( exists $distance_matrix->{$structure}->{$pairKeyB} ) {
-		$distance = $distance_matrix->{$structure}->{$pairKeyB}->{distance};
-		$pvalue = $distance_matrix->{$structure}->{$pairKeyB}->{pvalue};
-	}
-	return ( $distance , $pvalue );
+	return $distance;
 }
 
 sub structureDependent {
@@ -1059,6 +1232,8 @@ sub subunitDependence {
 	return $ANY;
 }
 
+
+## MISCELLANEOUS METHODS
 sub numSort {
 	my ( $list ) = @_;
 	if ( scalar @{$list} > 0 ) {
