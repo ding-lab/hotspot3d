@@ -125,7 +125,7 @@ sub setOptions {
     unless( $options ) { die $this->help_text(); }
 	if ( not defined $this->{'clustering'} ) {
 		$this->{'clustering'} = $NETWORK;
-		warn "HotSpot3D::Cluster warning: no clustering option given, setting to default network\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no clustering option given, setting to default network\n";
 	}
 	if ( $this->{'clustering'} eq $DENSITY ) {
 		if ( $help ) {
@@ -139,15 +139,15 @@ sub setOptions {
 	if ( $help ) { print STDERR help_text(); exit 0; }
 	if ( not defined $this->{'structure_dependence'} ) {
 		$this->{'structure_dependence'} = $INDEPENDENT;
-		warn "HotSpot3D::Cluster warning: no structure-dependence option given, setting to default independent\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no structure-dependence option given, setting to default independent\n";
 	}
 	if ( not defined $this->{'subunit_dependence'} ) {
 		$this->{'subunit_dependence'} = $INDEPENDENT;
-		warn "HotSpot3D::Cluster warning: no subunit-dependence option given, setting to default independent\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no subunit-dependence option given, setting to default independent\n";
 	}
 	if ( not defined $this->{'p_value_cutoff'} ) {
 		if ( not defined $this->{'3d_distance_cutoff'} ) {
-			warn "HotSpot3D::Cluster warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
+			warn "HotSpot3D::Cluster::setOptions warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
 			$this->{'p_value_cutoff'} = $PVALUEDEFAULT;
 			$this->{'3d_distance_cutoff'} = $MAXDISTANCE;
 		} else {
@@ -166,15 +166,15 @@ sub setOptions {
 			die $this->help_text();
 		}
 	} else {
-		warn "HotSpot3D::Cluster::setOptions warning: no drug-clean-file included (cannot produce drug-mutation clusters)!\n";
+		warn "HotSpot3D::Cluster::setOptions::setOptions warning: no drug-clean-file included (cannot produce drug-mutation clusters)!\n";
 	}
     if ( defined $this->{'pairwise_file'} ) {
 		if ( not -e $this->{'pairwise_file'} ) { 
-			warn "HotSpot3D::Cluster error: the input pairwise file (".$this->{'pairwise_file'}.") does not exist!\n";
+			warn "HotSpot3D::Cluster::setOptions error: the input pairwise file (".$this->{'pairwise_file'}.") does not exist!\n";
 			die $this->help_text();
 		}
 	} else {
-		warn "HotSpot3D::Cluster error: must provide a pairwise-file!\n";
+		warn "HotSpot3D::Cluster::setOptions error: must provide a pairwise-file!\n";
 		die $this->help_text();
 	}
 	if ( $this->{'vertex_type'} ne $RECURRENCE
@@ -206,7 +206,7 @@ sub setOptions {
 sub getMutationMutationPairs {
 	#$this->getMutationMutationPairs( $distance_matrix );
 	my ( $this , $distance_matrix ) = @_;
-	print STDOUT "HotSpot3D::Cluster getting pairwise data\n";
+	print STDOUT "HotSpot3D::Cluster::getMutationMutationPairs\n";
 	$this->readPairwise( $distance_matrix );
 	return;
 }
@@ -214,7 +214,7 @@ sub getMutationMutationPairs {
 sub readPairwise {
 	#$this->readPairwise( $distance_matrix );
 	my ( $this , $distance_matrix ) = @_;
-	print STDOUT "\nReading in pairwise data ... \n";
+	print STDOUT "Reading in pairwise data ... \n";
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	my $pdbCount;
@@ -251,7 +251,7 @@ sub readPairwise {
 sub readMAF{
 	#$this->readMAF( $mutations );
 	my ( $this , $mutations ) = @_;
-	print STDOUT "HotSpot3D::Cluster::readMaf\n";
+	print STDOUT "HotSpot3D::Cluster::readMAF\n";
 	my $fh = new FileHandle;
 	die "Could not open .maf file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
 	my $headline = $fh->getline(); chomp( $headline );
@@ -280,11 +280,11 @@ sub readMAF{
 					$mafcols{$this->{"amino_acid_header"}} );
 	if ( $this->{'vertex_type'} eq $WEIGHT ) {
 		unless( defined( $mafcols{$this->{"weight_header"}} ) ) {
-			die "HotSpot3D::Cluster error: weight vertex-type chosen, but weight-header not recocgnized\n";
+			die "HotSpot3D::Cluster::readMAF error: weight vertex-type chosen, but weight-header not recocgnized\n";
 		};
 		push @mafcols , $mafcols{$this->{"weight_header"}};
 	}
-	print STDOUT "\nReading in .maf ...\n";
+	print STDOUT "Reading in .maf ...\n";
 	map {
 		chomp;
 		my @line = split /\t/;
@@ -380,7 +380,7 @@ sub networkClustering {
 							 )
 					)."\n"
 			  );
-	print STDOUT "Clustering\n";
+	print STDOUT "\nClustering\n\n";
 	my $clusterings = {};
 	$this->link( $clusterings , $distance_matrix );
 	#$this->link( $distance_matrix );
@@ -437,7 +437,7 @@ sub generateFilename {
 sub getDrugMutationPairs {
 	#$this->getDrugMutationPairs( $distance_matrix );
 	my ( $this , $distance_matrix ) = shift;
-	print STDOUT "HotSpot3D::Cluster get drug mutation pairs\n";
+	print STDOUT "HotSpot3D::Cluster::getDrugMutationPairs\n";
 	$this->readDrugClean( $distance_matrix );
 	return;
 }
@@ -445,7 +445,7 @@ sub getDrugMutationPairs {
 sub readDrugClean {
 	#$this->readDrugClean( $distance_matrix );
 	my ( $this , $distance_matrix ) = shift;
-	print STDOUT "HotSpot3D::Cluster read drug clean\n";
+	print STDOUT "HotSpot3D::Cluster::readDrugClean\n";
     if ( $this->{'drug_clean_file'} ) { #if drug pairs included
 		my $fh = new FileHandle;
 		unless( $fh->open( $this->{'drug_clean_file'} , "r" ) ) {
@@ -522,9 +522,9 @@ sub readDrugClean {
 sub link {
 	#$this->link( $clusterings , $distance_matrix );
 	my ( $this, $clusterings , $distance_matrix , $mutations ) = @_;
-	print "linking: \n";
+	print STDOUT "HotSpot3D::Cluster::link\n";
 	foreach my $structure ( sort keys %{$distance_matrix} ) {
-		print $structure."\n";
+		print "\t".$structure."\n";
 		foreach my $mutationKey1 ( sort keys %{$distance_matrix->{$structure}} ) {
 			foreach my $mutationKey2 ( sort keys %{$distance_matrix->{$structure}} ) { #->{$mutationKey1}} ) {
 				my $distance;
@@ -590,7 +590,7 @@ sub link {
 
 sub initializeGeodesics {
 	my ( $this , $clusterings , $superClusterID , $structure , $distance_matrix , $mutations ) = @_;
-	print "initializeGeodesics: \n";
+	print STDOUT "HotSpot3D::Cluster::initializeGeodesics\n";
 	my $geodesics = {};
 	my $nInitialized = 0;
 	my $nMutations = scalar keys %{$clusterings->{$structure}->{$superClusterID}};
@@ -626,19 +626,19 @@ sub initializeGeodesics {
 			}
 		} #foreach mutationKey2
 	} #foreach mutationKey1
-	print "nInitialized = ".$nInitialized."\n";
+	print "\tnInitialized = ".$nInitialized."\n";
 	return $geodesics;
 	#return $distance_matrix;
 }
 
 sub isRadiusOkay {
 	my ( $this , $geodesics , $structure , $mutationKey1 , $mutationKey2 ) = @_;
-	print "isRadiusOkay of d(".$mutationKey1.",".$mutationKey2.") = ".$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2}.": ";
+	#print "isRadiusOkay of d(".$mutationKey1.",".$mutationKey2.") = ".$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2}.": ";
 	if ( $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} <= $this->{'max_radius'} ) {
-		print "OKAY\n";
+		#print "OKAY\n";
 		return 1;
 	}
-	print "TOO LONG\n";
+	#print "TOO LONG\n";
 	return 0;
 }
 
@@ -646,11 +646,11 @@ sub calculateClosenessCentrality {
 	my ( $this , $mutations , $geodesics , $structure , $superClusterID , $subClusterID ) = @_;
 	#my ( $this , $mutations , $geodesics , $structure ) = @_;
 	my $centrality = {};
+	print STDOUT "HotSpot3D::Cluster::calculateClosenessCentrality\n";#.$x." by ";
 	my $max=0;
 	my $centroid = "";
 	my ( $mutationKey1 , $mutationKey2 , $weight );
 	my $x = scalar keys %{$geodesics->{$structure}};
-	print "calculateClosenessCentrality ";#.$x." by ";
 	foreach $mutationKey1 ( keys %{$geodesics->{$structure}} ) {
 		my $y = scalar keys %{$geodesics->{$structure}->{$mutationKey1}};
 		#print $y."\n";
@@ -701,7 +701,7 @@ sub calculateClosenessCentrality {
 			} #foreach mutationKey2
 		} #foreach refAlt1
 	} #foreach mutationKey1
-	print join( "\t" , ( "result from calculation: " , $centroid , $max ) )."\n";
+	#print join( "\t" , ( "result from calculation: " , $centroid , $max ) )."\n";
 	return ( $centroid , $centrality );
 }
 
@@ -775,7 +775,8 @@ sub anyFiniteGeodesicsRemaining {
 sub determineStructureClusters {
 	my ( $this , $clusterings , $mutations , $distance_matrix ,
 		 $fh , $structure , $superClusterID , $subClusterID ) = @_;
-	print $structure."\t".$superClusterID.".".$subClusterID."\n";
+	print STDOUT "HotSpot3D::Cluster::determineStructureClusters\n";
+	#print "\t".$structure."\t".$superClusterID.".".$subClusterID."\n";
 	my $geodesics = $this->initializeGeodesics( $clusterings , $superClusterID ,
 							$structure , $distance_matrix , $mutations );
 	if ( $this->anyFiniteGeodesicsRemaining( $mutations , $geodesics , $structure ) ) {
@@ -791,16 +792,16 @@ sub determineStructureClusters {
 				$superClusterID , $subClusterID , $centroid , $centrality );
 		
 		my $count = $this->checkProcessedDistances( $geodesics , $structure );
-		print join( "\t" , ( "recluster?" , $count , 
-				$superClusterID.".".$subClusterID , $structure ) );
+		#print join( "\t" , ( "recluster?" , $count , 
+		#		$superClusterID.".".$subClusterID , $structure ) );
 		if ( $count >= 2 and $writtenLines ) {
 			$subClusterID += 1;
-			print " yes\n";
+			#print " yes\n";
 			$this->determineStructureClusters( $clusterings , 
 						$mutations , $geodesics , $fh , $structure , 
 							$superClusterID , $subClusterID );
 		} else {
-			print " no\n";
+			#print " no\n";
 			return 0;
 		}
 	#	my $numstructures = scalar keys %{$distance_matrix->{$structure}};
@@ -847,8 +848,8 @@ sub writeCluster {
 	my ( $this , $fh , $mutations , $geodesics , $structure ,
 		 $superClusterID , $subClusterID , $centroid , $centrality ) = @_;
 	my $writtenLines = 0;
-	print "writeCluster (".$subClusterID.") : ";
 	my $clusterID = $superClusterID;
+	print STDOUT "HotSpot3D::Cluster::writeCluster (".$clusterID.")\n";
 	if ( $this->{'structure_dependence'} eq $DEPENDENT 
 		 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
 		$clusterID = join( "." , ( $superClusterID , $subClusterID , $structure ) );
@@ -925,7 +926,7 @@ sub writeCluster {
 
 sub floydWarshall {
 	my ( $this , $geodesics , $structure ) = @_;
-	print "floydWarshall: \n";
+	print STDOUT "HotSpot3D::Cluster::floydWarshall: \n";
 	foreach my $mu_k ( keys %{$geodesics->{$structure}} ) {
 		#print "\t".$mu_k."\n";
 		foreach my $mu_i ( keys %{$geodesics->{$structure}} ) {
