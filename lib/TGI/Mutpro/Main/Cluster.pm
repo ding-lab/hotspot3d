@@ -536,7 +536,7 @@ sub link {
 						next;
 					}
 				}
-				print join( "\t" , ( $mutationKey1 , $mutationKey2 , $distance ) )."\n";
+				#print join( "\t" , ( $mutationKey1 , $mutationKey2 , $distance ) )."\n";
 				my @mutations = ( $mutationKey1 , $mutationKey2 );
 				my ( $combine1 , $combine2 , $id ); 
 				my @combine;
@@ -551,7 +551,7 @@ sub link {
 				&numSort( \@combine );
 				if ( scalar @combine > 0 ) { #collapse clusters into one
 					my $collapse_to = $combine[0]; #cluster type
-					print "collapsing to (".$collapse_to.") ".join( ", " , @combine )."\n";;
+					#print "collapsing to (".$collapse_to.") ".join( ", " , @combine )."\n";;
 					foreach my $otherClusters ( @combine ) {
 						if ( $otherClusters != $collapse_to ) {
 							foreach my $mutationKey ( keys %{$clusterings->{$structure}->{$otherClusters}} ) {
@@ -564,7 +564,7 @@ sub link {
 					$clusterings->{$structure}->{$collapse_to}->{$mutationKey1} = 1;
 					$clusterings->{$structure}->{$collapse_to}->{$mutationKey2} = 1;
 				} else { #new cluster
-					print "\tnew cluster\n";
+					#print "\tnew cluster\n";
 					my @ids = keys %{$clusterings->{$structure}};
 					if ( scalar @ids > 0 ) {
 						&numSort( \@ids );
@@ -578,13 +578,13 @@ sub link {
 #		my $nsuper = scalar keys %{$clusterings->{$structure}};
 #		print "there are ".$nsuper." superclusters in ".$structure."\n";
 	} #foreach structure
-	foreach my $s ( sort keys %{$clusterings} ) {
-		foreach my $id ( sort keys %{$clusterings->{$s}} ) {
-			foreach my $m ( sort keys %{$clusterings->{$s}->{$id}} ) {
-				print "clusterings: ".join( "\t" , ( $s , $id , $m ) )."\n";
-			}
-		}
-	}
+	#foreach my $s ( sort keys %{$clusterings} ) {
+	#	foreach my $id ( sort keys %{$clusterings->{$s}} ) {
+	#		foreach my $m ( sort keys %{$clusterings->{$s}->{$id}} ) {
+	#			print "clusterings: ".join( "\t" , ( $s , $id , $m ) )."\n";
+	#		}
+	#	}
+	#}
     return;
 }
 
@@ -765,7 +765,7 @@ sub anyFiniteGeodesicsRemaining {
 			#my $sumWeights1 = &sum( $this->mutationWeights( $mutations , $mutationKey1 ) );
 			#my $sumWeights2 = &sum( $this->mutationWeights( $mutations , $mutationKey2 ) );
 			#next if ( $sumWeights1 == 1 and $sumWeights2 == 1 );
-			print "FINITE: ".join( "..." , ( $mutationKey1 , $mutationKey2 , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\n";
+			#print "FINITE: ".join( "..." , ( $mutationKey1 , $mutationKey2 , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\n";
 			return 1;
 		}
 	}
@@ -816,16 +816,16 @@ sub determineStructureClusters {
 #TODO use this method to recalculate closeness centralities of acceptable region 
 #		or else closeness centralities must be described as measured for the remaining
 #		super cluster nodes within range
-sub carveOutSubCluster {
-	my ( $this , $mutations , $geodesics , $structure , $centroid ,
-			$centrality , $superClusterID , $subClusterID ) = @_;
-	#	$this->carveOutSubCluster( $mutations , $geodesics , $structure , $centroid ,
-	#			$centrality , $superClusterID , $subClusterID );
-	my $geods = {};
-	foreach my $mutationKey ( keys %{$geodesics->{$structure}->{$centroid}} ) {
-		$geods->{$structure}->{$centroid}->{$mutationKey} = $geodesics->{$structure}->{$centroid}->{$mutationKey};
-	}
-}
+#sub carveOutSubCluster {
+#	my ( $this , $mutations , $geodesics , $structure , $centroid ,
+#			$centrality , $superClusterID , $subClusterID ) = @_;
+#	#	$this->carveOutSubCluster( $mutations , $geodesics , $structure , $centroid ,
+#	#			$centrality , $superClusterID , $subClusterID );
+#	my $geods = {};
+#	foreach my $mutationKey ( keys %{$geodesics->{$structure}->{$centroid}} ) {
+#		$geods->{$structure}->{$centroid}->{$mutationKey} = $geodesics->{$structure}->{$centroid}->{$mutationKey};
+#	}
+#}
 
 sub setProcessStatus {
 	my ( $this , $mutationKey , $status ) = @_;
@@ -890,7 +890,7 @@ sub writeCluster {
 		next if ( $this->hasBeenProcessed( $mutationKey2 ) );
 		$geodesic = $geodesics->{$structure}->{$centroid}->{$mutationKey2};
 		next if ( $geodesic > $this->{'max_radius'} ); 
-		print $centroid." geodesic to ".$mutationKey2."\t".$geodesic."\n";
+		#print $centroid." geodesic to ".$mutationKey2."\t".$geodesic."\n";
 		$degrees = scalar keys %{$geodesics->{$structure}->{$mutationKey2}}; #TODO update to only count subcluster nodes
 		$closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$mutationKey2};
 		#$closenessCentrality = $centrality->{$mutationKey2};
@@ -917,7 +917,7 @@ sub writeCluster {
 					  );
 			$writtenLines += 1;
 		} #foreach refAlt
-		print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
+		#print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
 		$this->setProcessStatus( $mutationKey2 , 1 );
 	} #foreach other vertex in network
 	return $writtenLines;
@@ -957,19 +957,19 @@ sub floydWarshall {
 }
 
 ## MUTATIONS
-sub printForTranscript {
-	my ( $this , $mutations , $mutationKey , $transcript ) = @_;
-	my $str = $mutationKey."=";
-	foreach my $ra ( sort keys %{$mutations->{$mutationKey}} ) {
-		foreach my $pk ( sort keys %{$mutations->{$mutationKey}->{$ra}} ) {
-			if ( $pk =~ /$transcript/ ) {
-				$str .= $ra.":".join( "|" , ( sort keys %{$mutations->{$mutationKey}->{$ra}} ) );
-			}
-		}
-		$str .= ";";
-	}
-	print $str;
-}
+#sub printForTranscript {
+#	my ( $this , $mutations , $mutationKey , $transcript ) = @_;
+#	my $str = $mutationKey."=";
+#	foreach my $ra ( sort keys %{$mutations->{$mutationKey}} ) {
+#		foreach my $pk ( sort keys %{$mutations->{$mutationKey}->{$ra}} ) {
+#			if ( $pk =~ /$transcript/ ) {
+#				$str .= $ra.":".join( "|" , ( sort keys %{$mutations->{$mutationKey}->{$ra}} ) );
+#			}
+#		}
+#		$str .= ";";
+#	}
+#	print $str;
+#}
 
 sub isSameProteinPosition {
 	my ( $this , $mutations , $mutationKey1 , $mutationKey2 ) = @_;
@@ -1006,8 +1006,8 @@ sub isSameProteinPosition {
 						#$this->printForTranscript( $mutations , $mutationKey1 , $transcript1 );
 						#print "\n";
 						#$this->printForTranscript( $mutations , $mutationKey2 , $transcript1 );
-						print join( "  " , ( $mutationKey1 , $refAlt1 , $proteinKey1 , $mutationKey2 , $refAlt2 , $proteinKey2 ) );
-						print "\n^--same aaPosition\n";#diff = ".$diff."\n";
+						#print join( "  " , ( $mutationKey1 , $refAlt1 , $proteinKey1 , $mutationKey2 , $refAlt2 , $proteinKey2 ) );
+						#print "\n^--same aaPosition\n";#diff = ".$diff."\n";
 						return 1;
 					}
 				} #foreach proteinKey2
@@ -1046,8 +1046,8 @@ sub checkGenomicPositionNearby {
 	if ( $chromosome1 eq $chromosome2 
 		 and $diff <= 2 ) {
 #TODO make sure that the transcript details assure this works
-		print join( "  " , ( $mutationKey1 , $mutationKey2 ) );
-		print "<--same protein ref/alt ".$start2." - ".$start1." = ".$diff."\n";
+		#print join( "  " , ( $mutationKey1 , $mutationKey2 ) );
+		#print "<--same protein ref/alt ".$start2." - ".$start1." = ".$diff."\n";
 		return 1;
 	}
 	return 0;
