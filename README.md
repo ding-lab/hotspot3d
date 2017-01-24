@@ -30,11 +30,10 @@ Usage
            Analysis
 		     main      --  Run analysis steps a-f (beta)
                  search    --  a) 3D mutation proximity searching
-                 post      --  b) Post-processing of 3D proximity searching output
-                 cluster   --  c) Determine mutation-mutation and mutation-drug clusters
-                 sigclus   --  d) Determine significance of clusters (BETA/OPTIONAL)
-                 summary   --  e) Summarize clusters (OPTIONAL)
-                 visual    --  f) Visulization of 3D proximity (OPTIONAL)
+                 cluster   --  b) Determine mutation-mutation and mutation-drug clusters
+                 sigclus   --  c) Determine significance of clusters (BETA/OPTIONAL)
+                 summary   --  d) Summarize clusters (OPTIONAL)
+                 visual    --  e) Visulization of 3D proximity (OPTIONAL)
 
 Support
 -------
@@ -85,9 +84,9 @@ For the latest stable version:
 
 For the latest beta version:
 
-	git checkout v1.1.1
+	git checkout v1.1.2
     
-	cpanm HotSpot3D-1.1.1.tar.gz
+	cpanm HotSpot3D-1.1.2.tar.gz
 
 Final note: Installations under some organizations may use an internal perl version. To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
     
@@ -101,11 +100,13 @@ Configure Environment
 
 	It is helpful to add your perl5 lib directory, and to add your perl5 bin directory.
 
-	You can add these lines to your ~/.bashrc or ~/.bash_profile, or just run the two lines each time you open a terminal to update your environment.
+	You can add the following lines to your ~/.bash_profile. Then run 'source ~/.bash_profile'.
 
-		export PERL5LIB=$PERL5LIB:~/perl5/lib/perl5/
+		export PERL5LIB=~/perl5/lib/perl5/:${PERL5LIB}
 
-		export PERL5BIN=$PERL5BIN:~/perl5/bin/
+		export PERL5BIN=~/perl5/bin/:${PERL5BIN}
+
+		export PATH=~/perl5/bin/:${PATH}
 
 	Add cosmic v67 information to 3D proximity results :
 
@@ -143,23 +144,19 @@ Example - Analysis
 
 		hotspot3d search --maf-file=your.maf --prep-dir=preprocessing_dir
 
-2. Post-processing of pairwise data (required for cluster step):
+2. Cluster pairwise data:
 
-		hotspot3d post --maf-file=your.maf
+		hotspot3d cluster --pairwise-file=3D_Proximity.pairwise --maf-file=your.maf
 
-3. Cluster pairwise data:
-
-		hotspot3d cluster --collapsed-file=3D_Proximity.pairwise.singleprotein.collapsed --pairwise-file=3D_Proximity.pairwise --maf-file=your.maf
-
-4. Cluster significance calculation:
+3. Cluster significance calculation:
 
 		hotspot3d sigclus --prep-dir=preprocessing_dir --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
-5. Clustering Summary:
+4. Clustering Summary:
 
 		hotspot3d summary --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
-6. Visualization (works with PyMol):
+5. Visualization (works with PyMol):
 
 		hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
 
@@ -213,19 +210,15 @@ Current Annotation Support:
 
 Clustering with different pairs data:
 
-		For intra you need to include the singleprotein pairs without DrugPort results/pairs.
+		For intra you need to exclude pairs from separate proteins in the .pairwise file.
 
-		For inter you need complex pairs without DrugPort pairs.
+		For inter you need to exclude pairs from the same protein in the .pairwise file.
 
-		For DrugPort only, do not include singleprotein or complex pairs; include only DrugPort pairs.
+		For DrugPort only, do not input the .pairwise file; input only DrugPort pairs file.
 
-		For intra+inter you can concatenate the singleprotein and complex pairs without DrugPort pairs.
+		For intra+inter input the .pairwise file.
 
-		For intra+DrugPort include singleprotein pairs and DrugPort pairs.
-
-		For inter+DrugPort include complex pairs and DrugPort pairs.
-
-		For intra+inter+DrugPort include a concatenated singleprotein and complex pairs file with the DrugPort pairs.
+		For intra+inter+DrugPort include the .pairwise file with the DrugPort pairs file.
 
 	NOTE: that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter clustering.
 

@@ -25,8 +25,8 @@ use TGI::Mutpro::Preprocess::HugoGeneMethods;
 use TGI::Files::MAF;
 use TGI::Files::List;
 
-my $MINDISTANCE = "minDistance";
-my $AVGDISTANCE = "averageDistance";
+my $MINDISTANCE = "shortest";
+my $AVGDISTANCE = "average";
 
 sub new {
     my $class = shift;
@@ -86,7 +86,7 @@ sub process {
     unless (-e $pdbcor_dir) { mkdir($pdbcor_dir) || die "HotSpot3D Uppro Error: can not make $pdbcor_dir !\n"; }
     unless ( -e $log_dir ) { mkdir( $log_dir ) || die "HotSpot3D Uppro Error: can not make $log_dir !\n"; }
 	unless ( $measure eq $MINDISTANCE or $measure eq $AVGDISTANCE ) {
-		warn "HotSpot3D::Uppro warning: measure not recognized, resetting to default = averageDistance\n";
+		warn "HotSpot3D::Uppro warning: measure not recognized, resetting to default = average\n";
 	}
     my %uniprotid_toupdate;
     my $uniprot_to_structureref = $this->current_structures($log_file);
@@ -215,7 +215,7 @@ Usage: hotspot3d uppro [options]
 --gene-file                  File with HUGO gene names in the first column (like a .maf)
 --3d-distance-cutoff         Maximum 3D distance (<= Angstroms), defaul: 100
 --linear-distance-cutoff     Minimum linear distance (> peptides), default: 0
---measure                    Distance measure between residues (minDistance or averageDistance), default: averageDistance
+--measure                    Distance measure between residues (shortest or average), default: average
 --cmd-list-submit-file       Batch jobs file to run calpro step in parallel, default: cmd_list_submit_file
 --hold                       Do not submit batch jobs, just write cmd_list_submit_file, default: submits (takes no input)
 
