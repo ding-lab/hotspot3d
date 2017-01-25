@@ -10,7 +10,7 @@ Usage
 
          Stable:     v0.6.0 
 
-           Beta:     up to v1.1.2
+           Beta:     up to v1.1.3
         
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
@@ -84,11 +84,12 @@ For the latest stable version:
 
 For the latest beta version:
 
-	git checkout v1.1.2
+	git checkout v1.1.3
     
-	cpanm HotSpot3D-1.1.2.tar.gz
+	cpanm HotSpot3D-1.1.3.tar.gz
 
-Final note: Installations under some organizations may use an internal perl version. To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
+Final note: Installations under some organizations may use an internal perl version. 
+To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
     
 	from: #!/org/bin/perl
     
@@ -210,18 +211,28 @@ Current Annotation Support:
 
 Clustering with different pairs data:
 
-		For intra you need to exclude pairs from separate proteins in the .pairwise file.
+		For monomers, you need to include the option '--meric-type monomer'
 
-		For inter you need to exclude pairs from the same protein in the .pairwise file.
+		For homomers, you need to include the option '--meric-type homomer'
+
+		For heteromers, you need to include the option '--meric-type heteromer'
+
+		For both homomers & heteromers simultaneously, you need to include the option '--meric-type multimer'
+
+		For no regard to *mer status, you can include the option 
+		'--meric-type unspecified', although this is run by default without the option
 
 		For DrugPort only, do not input the .pairwise file; input only DrugPort pairs file.
 
-		For intra+inter input the .pairwise file.
-
-		For intra+inter+DrugPort include the .pairwise file with the DrugPort pairs file.
-
-	NOTE: that if concatenating pairs files, you should take care with removing the second header that will appear in the middle of the file. The .pairwise file contains both intra and inter pairs, so it can be used when involving intra or inter clustering.
+		For *mer+DrugPort include the .pairwise file with the DrugPort pairs file, 
+		and include the appropriate --meric-type as described above.
 
 Clustering based on different distance measures:
 
-        There are some pairs found on multiple structures. In HotSpot3D versions v0.6.2 and earlier, clustering only used the shortest distance among different structures (shortest structure distance, SSD). In HotSpot3D versions v0.6.3 and later, clustering can be done using the average distance among different structures (average structure distance, ASD), and this is now default.
+        There are some pairs found on multiple structures. 
+		In HotSpot3D versions v0.6.2 and earlier, 
+		clustering only used the shortest distance among different structures 
+		(shortest structure distance, SSD). 
+		In HotSpot3D versions v0.6.3 and later, 
+		clustering can be done using the average distance among different structures 
+		(average structure distance, ASD), and this is now default.

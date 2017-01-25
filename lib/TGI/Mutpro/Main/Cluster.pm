@@ -42,6 +42,11 @@ my $DENSITY = "density";
 my $INDEPENDENT = "independent";
 my $DEPENDENT = "dependent";
 my $ANY = "any";
+my $MULTIMER = "multimer";
+my $MONOMER = "monomer";
+my $HOMOMER = "homomer";
+my $HETEROMER = "heteromer";
+my $UNSPECIFIED = "unspecified";
 
 sub new {
     my $class = shift;
@@ -60,7 +65,11 @@ sub new {
     $this->{'transcript_id_header'} = "transcript_name";
     $this->{'weight_header'} = $WEIGHT;
     $this->{'clustering'} = undef;
+
     $this->{'structure_dependence'} = undef;
+    $this->{'subunit_dependence'} = undef;
+#TODO add meric based on protein or gene id, if protein, need hugo.uniprot.pdb.transcript.csv file
+    $this->{'meric_type'} = undef;
 	
 	$this->{'processed'} = undef;
 	$this->{'distance_matrix'} = undef;
@@ -120,6 +129,8 @@ sub setOptions {
         'weight-header=s' => \$this->{'weight_header'},
         'clustering=s' => \$this->{'clustering'},
         'structure-dependence=s' => \$this->{'structure_dependence'},
+        'subunit-dependence=s' => \$this->{'subunit_dependence'},
+        'meric-type=s' => \$this->{'meric_type'},
         'help' => \$help,
     );
     unless( $options ) { die $this->help_text(); }
@@ -145,6 +156,10 @@ sub setOptions {
 		$this->{'subunit_dependence'} = $INDEPENDENT;
 		warn "HotSpot3D::Cluster::setOptions warning: no subunit-dependence option given, setting to default independent\n";
 	}
+	if ( not defined $this->{'meric_type'} ) {
+		$this->{'meric_type'} = $UNSPECIFIED;
+		warn "HotSpot3D::Cluster::setOptions warning: no meric-type option given, setting to default unspecified\n";
+	}
 	if ( not defined $this->{'p_value_cutoff'} ) {
 		if ( not defined $this->{'3d_distance_cutoff'} ) {
 			warn "HotSpot3D::Cluster::setOptions warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
@@ -158,9 +173,6 @@ sub setOptions {
 			$this->{'3d_distance_cutoff'} = $MAXDISTANCE;
 		}
 	}
-	print STDOUT "p-value-cutoff = ".$this->{'p_value_cutoff'};
-	print STDOUT " & 3d-distance-cutoff = ".$this->{'3d_distance_cutoff'};
-	print STDOUT " & max-radius = ".$this->{'max_radius'}."\n";
 	if ( defined $this->{'drug_clean_file'} ) {
 		if ( not -e $this->{'drug_clean_file'} ) { 
 			warn "The input drug pairs file (".$this->{'drug_clean_file'}.") does not exist! ", "\n";
@@ -191,16 +203,22 @@ sub setOptions {
 		warn "Using default distance-measure = \'average\'\n";
 		$this->{'distance_measure'} = $AVERAGEDISTANCE;
 	}
-	if ( $this->{'vertex_type'} ne $UNIQUE ) {
-		unless( $this->{'maf_file'} ) {
-			warn 'You must provide a .maf file if not using unique vertex type! ', "\n";
-			die $this->help_text();
-		}
-		unless( -e $this->{'maf_file'} ) {
-			warn "The input .maf file )".$this->{'maf_file'}.") does not exist! ", "\n";
-			die $this->help_text();
-		}
+	unless( $this->{'maf_file'} ) {
+		warn 'You must provide a .maf file! ', "\n";
+		die $this->help_text();
 	}
+	unless( -e $this->{'maf_file'} ) {
+		warn "The input .maf file )".$this->{'maf_file'}.") does not exist! ", "\n";
+		die $this->help_text();
+	}
+	print STDOUT "p-value-cutoff = ".$this->{'p_value_cutoff'}."\n";
+	print STDOUT " & 3d-distance-cutoff = ".$this->{'3d_distance_cutoff'}."\n";
+	print STDOUT " & max-radius = ".$this->{'max_radius'}."\n";
+	print STDOUT " & vertex-type = ".$this->{'vertex_type'}."\n";
+	print STDOUT " & distance-measure = ".$this->{'distance_measure'}."\n";
+	print STDOUT " & structure-dependence = ".$this->{'structure_dependence'}."\n";
+	print STDOUT " & subunit-dependence = ".$this->{'subunit_dependence'}."\n";
+	print STDOUT " & meric-type = ".$this->{'meric_type'}."\n";
 	return;
 }
 
@@ -219,31 +237,34 @@ sub readPairwise {
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	my $pdbCount;
+	print $this->{'meric_type'}."\n";
 	map {
 		my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aa_1 , $chain1 , $loc_1 , $domain1 , $cosmic1 , 
 			 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , $domain2 , $cosmic2 , 
 			 $linearDistance , $infos ) = split /\t/ , $_;
-		#print $_."\n";
-		$chain1 =~ s/\[(\w)\]/$1/g;
-		$chain2 =~ s/\[(\w)\]/$1/g;
-		my $proteinMutation = TGI::ProteinVariant->new();
-		my $mutation1 = TGI::Variant->new();
-		$mutation1->gene( $gene1 );
-		$mutation1->chromosome( $chromosome1 );
-		$mutation1->start( $start1 );
-		$mutation1->stop( $stop1 );
-		$proteinMutation->aminoAcidChange( $aa_1 );
-		$mutation1->addProteinVariant( $proteinMutation );
+		if ( $this->checkMeric( $gene1 , $gene2 , $chain1 , $chain2 ) ) {
+			#print $_."\n";
+			$chain1 =~ s/\[(\w)\]/$1/g;
+			$chain2 =~ s/\[(\w)\]/$1/g;
+			my $proteinMutation = TGI::ProteinVariant->new();
+			my $mutation1 = TGI::Variant->new();
+			$mutation1->gene( $gene1 );
+			$mutation1->chromosome( $chromosome1 );
+			$mutation1->start( $start1 );
+			$mutation1->stop( $stop1 );
+			$proteinMutation->aminoAcidChange( $aa_1 );
+			$mutation1->addProteinVariant( $proteinMutation );
 
-		my $mutation2 = TGI::Variant->new();
-		$mutation2->gene( $gene2 );
-		$mutation2->chromosome( $chromosome2 );
-		$mutation2->start( $start2 );
-		$mutation2->stop( $stop2 );
-		$proteinMutation->aminoAcidChange( $aa_2 );
-		$mutation2->addProteinVariant( $proteinMutation );
-		$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
-							$chain1 , $chain2 , $infos , $pdbCount );
+			my $mutation2 = TGI::Variant->new();
+			$mutation2->gene( $gene2 );
+			$mutation2->chromosome( $chromosome2 );
+			$mutation2->start( $start2 );
+			$mutation2->stop( $stop2 );
+			$proteinMutation->aminoAcidChange( $aa_2 );
+			$mutation2->addProteinVariant( $proteinMutation );
+			$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
+								$chain1 , $chain2 , $infos , $pdbCount );
+		}
 	} $fh->getlines;
 	$fh->close();
 #	print "DISTANCE MATRIX\n";
@@ -255,6 +276,38 @@ sub readPairwise {
 #		}
 #	}
 	return;
+}
+
+sub checkMeric {
+	my ( $this , $gene1 , $gene2 , $chain1 , $chain2 ) = @_;
+	#print $gene1."  ".$gene2."  ";
+	if ( $this->{'meric_type'} eq $UNSPECIFIED ) {
+		#print "unspec okay\n";
+		return 1;
+	} elsif ( $this->{'meric_type'} eq $MONOMER ) {
+		if ( $chain1 eq $chain2 and $gene1 eq $gene2 ) {
+			#print "mono okay\n";
+			return 1;
+		}
+	} elsif ( $this->{'meric_type'} eq $MULTIMER ) {
+		if ( $chain1 ne $chain2 ) {
+			#print "multi okay\n";
+			return 1;
+		}
+	} elsif ( $this->{'meric_type'} eq $HOMOMER ) {
+		if ( $chain1 ne $chain2 and $gene1 eq $gene2 ) {
+			#print "homo okay\n";
+			return 1;
+		}
+	} elsif ( $this->{'meric_type'} eq $HETEROMER ) {
+		if ( $gene1 ne $gene2 ) {
+			#print "heter okay\n";
+			return 1;
+		}
+	} else {
+		return 0;
+	}
+	return 0;
 }
 
 sub readMAF{
@@ -1408,6 +1461,9 @@ Usage: hotspot3d cluster [options]
 --vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
 --distance-measure           Pair distance to use (shortest or average), default: average
 --structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent
+--subunit-dependence         Clusters for each subunit or across all subunits (dependent or independent), default: independent
+--meric-type                 Clusters for each monomer, homomer, heteromer, multimer (simultaneously homomer & heteromer), or any *mer 
+                                 (monomer, homomer, heteromer, multimer, or unspecified), default: unspecified
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name
 --amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 
 --weight-header              .maf file column header for mutation weight, default: weight (used if vertex-type = weight)
