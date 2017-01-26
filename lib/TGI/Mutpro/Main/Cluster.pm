@@ -47,6 +47,8 @@ my $MONOMER = "monomer";
 my $HOMOMER = "homomer";
 my $HETEROMER = "heteromer";
 my $UNSPECIFIED = "unspecified";
+my $INTRA = "intra";
+my $INTER = "inter";
 
 sub new {
     my $class = shift;
@@ -284,6 +286,16 @@ sub checkMeric {
 	if ( $this->{'meric_type'} eq $UNSPECIFIED ) {
 #		print "unspec okay\n";
 		return 1;
+	} elsif ( $this->{'meric_type'} eq $INTRA ) {
+		if ( $gene1 eq $gene2 ) {
+#			print "intra okay\n";
+			return 1;
+		}
+	} elsif ( $this->{'meric_type'} eq $INTER ) {
+		if ( $chain1 ne $chain2 and $gene1 ne $gene2 ) {
+#			print "inter okay\n";
+			return 1;
+		}
 	} elsif ( $this->{'meric_type'} eq $MONOMER ) {
 		if ( $chain1 eq $chain2 and $gene1 eq $gene2 ) {
 #			print "mono okay\n";
@@ -1466,8 +1478,9 @@ Usage: hotspot3d cluster [options]
 --distance-measure           Pair distance to use (shortest or average), default: average
 --structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent
 --subunit-dependence         Clusters for each subunit or across all subunits (dependent or independent), default: independent
---meric-type                 Clusters for each monomer, homomer, heteromer, multimer (simultaneously homomer & heteromer), or any *mer 
-                                 (monomer, homomer, heteromer, multimer, or unspecified), default: unspecified
+--meric-type                 Clusters for each intra-molecular (both monomers and homomers), monomer, homomer, 
+                                 inter-molecular (heteromers), heteromer, multimer (simultaneously homomer & heteromer), or any *mer 
+                                 (intra, monomer, homomer, inter, heteromer, multimer, or unspecified), default: unspecified
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name
 --amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 
 --weight-header              .maf file column header for mutation weight, default: weight (used if vertex-type = weight)
