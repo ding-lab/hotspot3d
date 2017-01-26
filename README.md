@@ -19,7 +19,7 @@ Usage
            Preprocessing
              drugport  --  0) Parse drugport database (OPTIONAL)
              uppro     --  1) Update proximity files
-             prep      --  2) Run preprocessing steps 2-7
+             prep      --  2) Run preprocessing steps 2a-2f
                  calroi    --  2a) Generate region of interest (ROI) information
                  statis    --  2b) Calculate p_values for pairs of mutations
                  anno      --  2c) Add region of interest (ROI) annotation

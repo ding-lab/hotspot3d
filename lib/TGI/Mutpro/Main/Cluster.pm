@@ -179,7 +179,7 @@ sub setOptions {
 			die $this->help_text();
 		}
 	} else {
-		warn "HotSpot3D::Cluster::setOptions::setOptions warning: no drug-clean-file included (cannot produce drug-mutation clusters)!\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no drug-clean-file included (cannot produce drug-mutation clusters)!\n";
 	}
     if ( defined $this->{'pairwise_file'} ) {
 		if ( not -e $this->{'pairwise_file'} ) { 
@@ -237,7 +237,6 @@ sub readPairwise {
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	my $pdbCount;
-	print $this->{'meric_type'}."\n";
 	map {
 		my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aa_1 , $chain1 , $loc_1 , $domain1 , $cosmic1 , 
 			 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , $domain2 , $cosmic2 , 
@@ -262,6 +261,7 @@ sub readPairwise {
 			$mutation2->stop( $stop2 );
 			$proteinMutation->aminoAcidChange( $aa_2 );
 			$mutation2->addProteinVariant( $proteinMutation );
+#			print "pair structures ".join( "  " , ( $infos , $chain1 , $chain2 ) )."\n";
 			$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
 								$chain1 , $chain2 , $infos , $pdbCount );
 		}
@@ -280,33 +280,35 @@ sub readPairwise {
 
 sub checkMeric {
 	my ( $this , $gene1 , $gene2 , $chain1 , $chain2 ) = @_;
-	#print $gene1."  ".$gene2."  ";
+#	print join( "  " , ( $gene1 , $chain1 , $gene2 , $chain2 , "" ) );
 	if ( $this->{'meric_type'} eq $UNSPECIFIED ) {
-		#print "unspec okay\n";
+#		print "unspec okay\n";
 		return 1;
 	} elsif ( $this->{'meric_type'} eq $MONOMER ) {
 		if ( $chain1 eq $chain2 and $gene1 eq $gene2 ) {
-			#print "mono okay\n";
+#			print "mono okay\n";
 			return 1;
 		}
 	} elsif ( $this->{'meric_type'} eq $MULTIMER ) {
 		if ( $chain1 ne $chain2 ) {
-			#print "multi okay\n";
+#			print "multi okay\n";
 			return 1;
 		}
 	} elsif ( $this->{'meric_type'} eq $HOMOMER ) {
 		if ( $chain1 ne $chain2 and $gene1 eq $gene2 ) {
-			#print "homo okay\n";
+#			print "homo okay\n";
 			return 1;
 		}
 	} elsif ( $this->{'meric_type'} eq $HETEROMER ) {
-		if ( $gene1 ne $gene2 ) {
-			#print "heter okay\n";
+		if ( $chain1 ne $chain2 and $gene1 ne $gene2 ) {
+#			print "heter okay\n";
 			return 1;
 		}
 	} else {
+#		print "not okay\n";
 		return 0;
 	}
+#	print "backup not okay\n";
 	return 0;
 }
 
@@ -387,7 +389,7 @@ sub readMAF{
 
 sub setMutation {
 	my ( $this , $mutations , $mutation , $barID , $weight ) = @_;
-	my $mutationKey = $this->makeMutationKey( $mutation );
+	my $mutationKey = $this->makeMutationKey( $mutation , "" );
 	my $refAlt = &combine( $mutation->reference() , $mutation->alternate() );
 	my $proteinKey = $this->makeProteinKey( $mutation );
 	#print "setMutation: ".$refAlt."\n";
@@ -554,7 +556,7 @@ sub readDrugClean {
 					 $loc, $infos ) = @line[@wantrxcols];
 				#my ( $dist, $pdb2, $pval ) = split / /, $infos;
 				$infos =~ s/"//g;
-				my $structure = $this->structureDependent( $pdb , 
+				my $structure = $this->makeStructureKey( $pdb , 
 														   $chain1 , $chain2 );
 				my $proteinMutation = TGI::ProteinVariant->new();
 				my $mutation = TGI::Variant->new();
@@ -1142,7 +1144,7 @@ sub checkGenomicPositionNearby {
 }
 
 sub makeMutationKey {
-	my ( $this , $mutation ) = @_;
+	my ( $this , $mutation , $chain ) = @_;
 	#my $proteinMutation = $mutation->proteinVariant( 0 );
 	#my $mutationKey = &combine( $mutation->gene() , $proteinMutation->transcript() );
 	#$mutationKey = &combine( $mutationKey , $proteinMutation->aminoAcidChange() );
@@ -1165,9 +1167,9 @@ sub makeRefAltKey {
 }
 
 sub makePairKey {
-	my ( $this , $mutation1 , $mutation2 ) = @_;
-	my $mutationKey1 = $this->makeMutationKey( $mutation1 );
-	my $mutationKey2 = $this->makeMutationKey( $mutation2 );
+	my ( $this , $mutation1 , $mutation2 , $chain1 , $chain2 ) = @_;
+	my $mutationKey1 = $this->makeMutationKey( $mutation1 , $chain1 );
+	my $mutationKey2 = $this->makeMutationKey( $mutation2 , $chain2 );
 	return $mutationKey1."_".$mutationKey2;
 }
 
@@ -1236,12 +1238,15 @@ sub setShortestDistance {
 	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
 		foreach my $info ( @infos ) {
 			chomp( $info );
-			my ( $distance , $pdbID , $pvalue ) = split / / , $infos;
+			next if ( $info eq "" ); 
+			my ( $distance , $pdbID , $pvalue ) = split / / , $info;
+			#print "info ".$info." == ( ".join( " " , ( $distance , $pdbID , $pvalue ) )." )\n";
 #TODO corresponding to update in setAverageDistance
 			if ( $this->checkPair( $distance , $pvalue ) ) {
-				my $oldDistance = $this->getElement( $distance_matrix , $pdbID , $mutation1 , $mutation2 );
+				my $structure = $this->makeStructureKey( $pdbID , $chain1 , $chain2 );
+				my $oldDistance = $this->getElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $chain1 , $chain2 );
 				if ( $distance < $oldDistance ) {
-					$this->setElement( $distance_matrix , $pdbID , $mutation1 , $mutation2 , $distance );
+					$this->setElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $distance );
 				}
 			}
 		}
@@ -1249,9 +1254,10 @@ sub setShortestDistance {
 		my ( $distance , $pdbID , $pvalue ) = split / / , $infos[0];
 #TODO corresponding to update in setAverageDistance
 		if ( $this->checkPair( $distance , $pvalue ) ) {
-			my $oldDistance = $this->getElement( $distance_matrix , $ANY , $mutation1 , $mutation2 );
+			my $structure = $this->makeStructureKey( $pdbID , $chain1 , $chain2 );
+			my $oldDistance = $this->getElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $chain1 , $chain2 );
 			if ( $distance < $oldDistance ) {
-				$this->setElement( $distance_matrix , $ANY , $mutation1 , $mutation2 , $distance );
+				$this->setElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $distance , $chain1 , $chain2 );
 			}
 		}
 	}
@@ -1270,7 +1276,7 @@ sub setAverageDistance {
 		my ( $distance , $pdbID , $pvalue ) = split / / , $info;
 #TODO average over ALL pairs or just the ones satisfying conditions (leave checkPair here if latter)
 		if ( $this->checkPair( $distance , $pvalue ) ) {
-			my $structure = $this->structureDependent( $pdbID , $chain1 , $chain2 );
+			my $structure = $this->makeStructureKey( $pdbID , $chain1 , $chain2 );
 			$sumDistances->{$structure} += $distance;
 			$nStructures->{$structure} += 1;
 		}
@@ -1280,14 +1286,14 @@ sub setAverageDistance {
 }
 
 sub calculateAverageDistance {
-	my ( $this , $distance_matrix , $mutation1 , $mutation2 , $pdbCount , $sumDistances , $nStructures ) = @_;
-	my $mutationKey1 = $this->makeMutationKey( $mutation1 );
-	my $mutationKey2 = $this->makeMutationKey( $mutation2 );
+	my ( $this , $distance_matrix , $mutation1 , $mutation2 , $pdbCount , $sumDistances , $nStructures , $chain1 , $chain2 ) = @_;
+	my $mutationKey1 = $this->makeMutationKey( $mutation1 , $chain1 );
+	my $mutationKey2 = $this->makeMutationKey( $mutation2 , $chain2 );
 	foreach my $structure ( keys %{$sumDistances} ) {
 		if ( exists $pdbCount->{$structure}->{$mutationKey1} ) {
 			if ( exists $pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2} ) { #have seen the pair on a prior line
 				my $count = $pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2};
-				my $oldDistance = $this->getElement( $distance_matrix , $structure , $mutation1 , $mutation2 );
+				my $oldDistance = $this->getElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $chain1 , $chain2 );
 				$sumDistances->{$structure} += $count*$oldDistance;
 				$nStructures->{$structure} += $count;
 			} else {
@@ -1297,7 +1303,7 @@ sub calculateAverageDistance {
 			$pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2} = $nStructures;
 		}
 		my $finalDistance = $sumDistances->{$structure} / $nStructures->{$structure};
-		$this->setElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $finalDistance );
+		$this->setElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $finalDistance , $chain1 , $chain2 );
 	}
 	return;
 }
@@ -1318,7 +1324,7 @@ sub setDistance {
 }
 
 sub setElement {
-	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 , $distance ) = @_;
+	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 , $distance , $chain1 , $chain2 ) = @_;
 #TODO corresponding to update in setAverageDistance
 	#if ( $this->checkPair( $distance , $pvalue ) ) { #meets desired significance
 		my $mutationKey1 = $this->makeMutationKey( $mutation1 );
@@ -1348,9 +1354,9 @@ sub initializeSameSiteDistancesToZero {
 }
 
 sub getElement {
-	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 ) = @_;
-	my $mutationKey1 = $this->makeMutationKey( $mutation1 );
-	my $mutationKey2 = $this->makeMutationKey( $mutation2 );
+	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 , $chain1 , $chain2 ) = @_;
+	my $mutationKey1 = $this->makeMutationKey( $mutation1 , $chain1 );
+	my $mutationKey2 = $this->makeMutationKey( $mutation2 , $chain2 );
 	return ( $this->getElementByKeys( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 ) );
 }
 
@@ -1362,7 +1368,7 @@ sub getElementByKeys {
 			$distance = $distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
 		}
 	} elsif ( exists $distance_matrix->{$structure}->{$mutationKey2} ) {
-		print STDERR "ASYMMETRIC DISTANCE MATRIX\n";
+		warn "ASYMMETRIC DISTANCE MATRIX ".$structure." ".$mutationKey1." ".$mutationKey2."\n";
 		if ( exists $distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} ) {
 			$distance = $distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
 		}
@@ -1370,31 +1376,29 @@ sub getElementByKeys {
 	return $distance;
 }
 
-sub structureDependent {
+sub makeStructureKey {
 	my ( $this , $structure , $chain1 , $chain2 ) = @_;
-	$structure = $this->structureDependence( $structure , $chain1 , $chain2 );
-	$structure = $this->subunitDependence( $structure , $chain1 , $chain2 );
-	return $structure;
-}
-
-sub structureDependence {
-	my ( $this , $structure , $chain1 , $chain2 ) = @_;
+	my @chains = sort( ( $chain1 , $chain2 ) );
+	print "makeStructureKey: ".join( "  " , ( $structure , $chain1 , $chain2 ) )."\n";
 	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
-		return $this->subunitDependence( $structure , $chain1 , $chain2 );
-	} elsif ( $this->{'subunit_dependence'} eq $DEPENDENT ) {
-		return $this->subunitDependence( $structure , $chain1 , $chain2 );
+		if ( $this->{'subunit_dependence'} eq $DEPENDENT ) {
+			print "\t".&combine( $structure , &combine( $chains[0] , $chains[1] ) )."\n";
+			return &combine( $structure , &combine( $chains[0] , $chains[1] ) );
+		} else {
+			print "\t".$structure."\n";
+			return $structure;
+		}
+	} else {
+		if ( $this->{'subunit_dependence'} eq $DEPENDENT ) {
+			print "\t".&combine( $structure , &combine( $chains[0] , $chains[1] ) )."\n";
+			return &combine( $structure , &combine( $chains[0] , $chains[1] ) );
+		} else {
+			print "\t".$ANY."\n";
+			return $ANY;
+		}
 	}
+	print "\tbackup ".$ANY."\n";
 	return $ANY;
-}
-
-sub subunitDependence {
-       my ( $this , $structure , $chain1 , $chain2 ) = @_;
-       if ( $this->{'subunit_dependence'} eq $DEPENDENT ) {
-               return &combine( &combine( $structure , $chain1 ) , $chain2 );
-       } elsif ( $this->{'structure_dependence'} eq $DEPENDENT ) {
-               return $structure;
-       }
-       return $ANY;
 }
 
 

@@ -12,7 +12,7 @@ use warnings;
 use lib '~/Projects/HotSpot3D/Clone_Ding_Lab/hotspot3d/lib/';
 
 
-our $VERSION = 'V1.1.2';
+our $VERSION = 'V1.1.3';
 
 use Carp;
 use FileHandle;
@@ -93,11 +93,10 @@ Version: $VERSION
 
               main      --  0) Run steps a-f of analysis (BETA)
                   search    --  a) 3D mutation proximity searching
-                  post      --  b) Post-processing of 3D proximity searching output 
-                  cluster   --  c) Determine mutation-mutation and mutation-drug clusters
-                  sigclus   --  d) Determine significance of clusters (BETA)
-                  summary   --  e) Summarize clusters
-                  visual    --  f) Visulization of 3D proximity
+                  cluster   --  b) Determine mutation-mutation and mutation-drug clusters
+                  sigclus   --  c) Determine significance of clusters (BETA)
+                  summary   --  d) Summarize clusters
+                  visual    --  e) Visulization of 3D proximity
 
            help      --  this message
 
