@@ -33,18 +33,40 @@ my $DEPENDENT = "dependent";
 sub new {
     my $class = shift;
     my $this = shift;
+
+    print "density new\n";
+    #my $distance_matrix = shift;
+    #my $mutations = shift;
     # $this->{'pairwise_file'} = '3D_Proximity.pairwise';
     # $this->{'Epsilon'} = undef;
     # $this->{'MinPts'} = undef;
     # $this->{'number_of_runs'} = undef;
     # $this->{'probability_cut_off'} = undef;
     bless $this, $class;
+    #bless $distance_matrix, $class;
+    #bless $mutations, $class;
+    
     $this->process();
     return $this;
 }
 
 sub process {
 	my $this = shift;
+
+    print "Density process\n";
+    #$this->setOptions();
+    my $distance_matrix = {};
+    my $mutations = {};
+
+    print Dumper $this;
+
+    $this->readMAF( $mutations );
+    $this->getDrugMutationPairs( $distance_matrix );
+    $this->getMutationMutationPairs( $distance_matrix );
+    #$this->initializeSameSiteDistancesToZero( $distance_matrix );
+    #$this->networkClustering( $mutations , $distance_matrix );
+    $this->setSameSiteDistancesToZero( $distance_matrix, $mutations );
+
     # my ( $help, $options );
     # if ( $help ) { print STDERR $this->help_text(); exit 0; }
     unless( $this->{'pairwise_file'} ) { warn 'You must provide a pairwise file! ', "\n"; die $this->help_text(); }
@@ -81,7 +103,15 @@ sub process {
             $this->{'distance_measure'} = $AVERAGEDISTANCE;
         }
         if ( $this->{'distance_measure'} eq $SHORTESTDISTANCE ) { # calling structure-independant shortest distances clustering
-            $this->CallDensityShortest();
+
+            print "Distane-matrix\n";
+            print Dumper $distance_matrix;
+            print "Mutations\n";
+            print Dumper $mutations;
+            print "Process Info\n";
+            print Dumper $this->{processed};
+            $this->CallDensityShortest( $distance_matrix, $mutations );
+
             # print "SetOfNodes Hash =\n";
             # print Dumper $this->{InitialSet}->{RawSetOfNodesWithShortest};
         }
@@ -105,22 +135,27 @@ sub process {
 sub CallDensityShortest { # calls everything if user wants to do clustering by the shortest distance
     my $this = shift;
 
+    my $distance_matrix = shift;
+    my $mutations = shift;
+
     # name output files as *.shortest.*
     $this->{pairwise_file_name_only} = "Shortest.$this->{pairwise_file_name_only}";
 
     # get the shortest distances for each variants
-    $this->MakeInitialSetOfNodes();
-    $this->{"CurrentSetOfNodes"} = $this->{InitialSet}->{RawSetOfNodesWithShortest}; # set the current SetOfNodes
+
+    #$this->MakeInitialSetOfNodes();
+
+    $this->{"CurrentSetOfNodes"} = $distance_matrix->{any}; # set the current SetOfNodes
 
     ###### Reference run: start
-    $this->MainOPTICS(); # perform OPTICS for the first time
+    $this->MainOPTICS( $distance_matrix, $mutations ); # perform OPTICS for the first time
     $this->RunSuperClustersID(); # perform Clustering for the reference run
 
-    print "Reference run: Done.\nStart probability calculation\n";
+    # print "Reference run: Done.\nStart probability calculation\n";
 
-    $this->getClusterProbabilities(); # perform cluster-membership probability calculation
+    # $this->getClusterProbabilities(); # perform cluster-membership probability calculation
 
-    print "\nProbability Calculation is Done.\n\n";
+    # print "\nProbability Calculation is Done.\n\n";
 
 }
 
@@ -320,33 +355,37 @@ sub PutZeroAtSameLocations { # put dis=0 for the variants at the same location, 
 }
 
 sub SetProcessInfoToFalse {
-    my $SetOfNodes_ref = shift;
+    my $SetOfNodes = shift;
+    my $this = shift;
 
-    foreach my $i (keys %{$SetOfNodes_ref}) {
-        $SetOfNodes_ref->{$i}->{processInfo} = "False";
+    foreach my $mutation_key ( keys %{$SetOfNodes} ) {
+        $this->{processed}->{$mutation_key} = "0";
     }
 
-    return $SetOfNodes_ref;
+    return $this;
 }
 
 sub MainOPTICS {
     my $this = shift;
 
+    my $distance_matrix = shift;
+    my $mutations = shift;
+
     my $Epsilon = $this->{Epsilon};
     my $MinPts = $this->{MinPts};
 
-    SetProcessInfoToFalse($this->{CurrentSetOfNodes}); # important in prob. runs; use the same set of nodes but start from the begining by setting processinfo to false
-    my %SetOfNodes = %{$this->{CurrentSetOfNodes}};
 
-    my $SetOfNodesRef = \%SetOfNodes; # just because Mac and Linux compatibility
+    SetProcessInfoToFalse($this->{CurrentSetOfNodes}, $this); # important in prob. runs; use the same set of nodes but start from the begining by setting processinfo to false
+    my $SetOfNodes = $this->{CurrentSetOfNodes};
+
+    #my $SetOfNodesRef = \%SetOfNodes; # just because Mac and Linux compatibility
 
     my @SetOfCores;
     my @SetOfEdges;
     my $CoreHash = {};
-    foreach my $key ( keys %SetOfNodes ) {
-        my $neighborHashRef = GetNeighbors( $key, $Epsilon, \%SetOfNodes );
-        my $CoreDistance = GetCoreDistance( $neighborHashRef, $MinPts );
-        if ( defined $CoreDistance ) { # defined CD ==> it's a core
+
+    foreach my $key ( keys %{$SetOfNodes} ) {
+        if ( isThisAcore( $key, $SetOfNodes, $mutations, $Epsilon, $MinPts ) ) { # 1-core, 0-edge
             push @SetOfCores, $key;
             $CoreHash->{$key} = 0;
         }
@@ -358,55 +397,70 @@ sub MainOPTICS {
     @SetOfEdges = shuffle @SetOfEdges;
     my @SetOfCoresThenEdges = ( @SetOfCores, @SetOfEdges );
 
+    print "Set of Cores\n";
+    print Dumper \@SetOfCores;
+
+    # my $neighbors1 = GetNeighbors( "SMAD4:18:48604788:48604788", $Epsilon, $SetOfNodes );
+    # print "neighbors\n";
+    # print Dumper $neighbors1;
+    # my $coredist1 = GetCoreDistance( "SMAD4:18:48604788:48604788", $neighbors1, $MinPts, $mutations );
+    # print "coredist = $coredist1\n";
+    # if ( isThisAcore("SMAD4:18:48604788:48604788", $SetOfNodes, $mutations, $Epsilon, $MinPts )) {
+    #     print "is a core\n";
+    # }
+    # else { print "not a core\n"};
+
     ###########################################################
 
     my @OrderedNodes;
 
     ################# Main OPTICS function ####################
 
-    foreach my $p ( @SetOfCoresThenEdges ) {
-        #print "first p=$p\n";
-        if ($SetOfNodes{$p}{processInfo} =~ "False") {
+    foreach my $p ( @SetOfCoresThenEdges ) { # p - a node(object)
+        print "first p=$p\n";
+        if ( not $this->hasBeenProcessed($p) ) { # not processed yet
             ########## Expand Cluster Order ###########
             my %neighbors; # is a hash with keys neigbor indices whose values are mutual separations
             my %OrderSeeds; # is a hash to add seeds
-            %neighbors = %{GetNeighbors($p,$Epsilon,\%SetOfNodes)};
-            $SetOfNodes{$p}{processInfo} = "True"; # set as processed
-            my $RD = undef;
-            my $CD;
-            $CD = GetCoreDistance(\%neighbors,$MinPts);
-            # print "p=$p and ";
-            # print "CD=$CD\n";
-            push @OrderedNodes, [$p,$RD,$CD]; # write to the file 
-            if (defined $CD) {
-                OrderSeedsUpdate(\%neighbors,$p,$CD, \%OrderSeeds, \%SetOfNodes);
-                # print "For p=$p, OrderSeeds= \n";
-                # print Dumper \%OrderSeeds;
+            %neighbors = %{GetNeighbors($p, $Epsilon, $SetOfNodes)};
+            $this->setProcessStatus($p, 1); # set as processed
+            my $RD = undef; # reachability distance
+            my $CD; # core distance
+            $CD = GetCoreDistance($p, \%neighbors, $MinPts, $mutations);
+             print "p=$p and ";
+             print "CD=$CD\n";
+            pushToOrderedNodesArray($p, $RD, $CD, $mutations, \@OrderedNodes); # write to the file 
+
+            if ( defined $CD ) {
+                OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
+                 print "For p=$p, OrderSeeds= \n";
+                 print Dumper \%OrderSeeds;
                 my $PrevObj = $p; # used to get the current obj. (To check whether variants are at the same location)
                 while (scalar keys %OrderSeeds != 0) {
                     my @SeedKeys = sort { $OrderSeeds{$a} <=> $OrderSeeds{$b} } keys %OrderSeeds;
                     my @SeedValues = @OrderSeeds{@SeedKeys};
                     #my $CurrentObject =  $SeedKeys[0]; # CurrentObject is the object having the least RD in OrderSeeds
-                    my $CurrentObject = GetCurrentObject(\@SeedValues, \@SeedKeys, $PrevObj, $CoreHash);
+
+                    my $CurrentObject = GetCurrentObject(\@SeedValues, \@SeedKeys, $PrevObj, $CoreHash, $this, $mutations);
                     $PrevObj = $CurrentObject;
-                    #print "\n\n current object= $CurrentObject\t neighbors=";
-                    %neighbors = %{GetNeighbors($CurrentObject,$Epsilon,\%SetOfNodes)};
-                    #print Dumper \%neighbors;
+                    print "\n\n current object= $CurrentObject\t neighbors=";
+                    %neighbors = %{GetNeighbors($CurrentObject, $Epsilon, $SetOfNodes)};
+                    print Dumper \%neighbors;
                     #print Dumper $SetOfNodes{$CurrentObject}{distances};
-                    $SetOfNodes{$CurrentObject}{processInfo} = "True"; # set as processed
+                    $this->setProcessStatus($CurrentObject, 1); # set as processed
                     $RD = $SeedValues[0];
-                    $CD = GetCoreDistance(\%neighbors,$MinPts);
-                    push @OrderedNodes, [$CurrentObject,$RD,$CD]; # write to the file 
+                    $CD = GetCoreDistance($CurrentObject, \%neighbors, $MinPts, $mutations);
+                    pushToOrderedNodesArray($CurrentObject, $RD, $CD, $mutations, \@OrderedNodes); # write to the file 
                     delete $OrderSeeds{$CurrentObject};
                     if (defined $CD) {
-                        #print "\tCurrent object is a core.(CD=$CD)\n Updated Order seeds list\n\t";
-                        OrderSeedsUpdate(\%neighbors,$CurrentObject,$CD, \%OrderSeeds, \%SetOfNodes);
-                        #print Dumper \%OrderSeeds;
+                        print "\tCurrent object is a core.(CD=$CD)\n Updated Order seeds list\n\t";
+                        OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
+                        print Dumper \%OrderSeeds;
                     }
                 }
             }
-            # print "p=$p,(undefined CD) OrderedNodes= \n";
-            # print Dumper \@OrderedNodes;
+             print "p=$p,(undefined CD) OrderedNodes= \n";
+             print Dumper \@OrderedNodes;
         }
     }
 
@@ -430,50 +484,86 @@ sub MainOPTICS {
     # }
     # close (OUT);
 
+
+    print "Process Info\n";
+    print Dumper $this->{processed};
+
     return $this;
 }
 
-sub GetNeighbors {
-    my ($Obj, $Epsilon, $Set_ref)=@_;
-    my %neighborHash;
-    foreach my $i (keys %{$Set_ref->{$Obj}->{distances}}) {
-        if ($Set_ref->{$Obj}->{distances}->{$i} <= $Epsilon) {
-            $neighborHash{$i} = $Set_ref->{$Obj}->{distances}->{$i};
+sub pushToOrderedNodesArray {
+    my ( $Obj, $RD, $CD, $mutations, $OrderedNodes ) = @_;
+
+    foreach my $RefAlt ( sort keys %{$mutations->{$Obj}} ) {
+        my $proteinKey = (sort keys %{$mutations->{$Obj}->{$RefAlt}})[0]; # take one of the keys, should be the same except transcripts
+        #print "To File: $proteinKey, $RD, $CD\n";
+        push @{$OrderedNodes}, [$proteinKey, $RD, $CD];
+    }
+}
+
+sub isThisAcore {
+    my ( $Obj, $SetOfNodes, $mutations, $Epsilon, $MinPts ) = @_;
+
+    my $neighbors = GetNeighbors( $Obj, $Epsilon, $SetOfNodes );
+    my $CoreDist = GetCoreDistance ( $Obj, $neighbors, $MinPts, $mutations );
+    if ( defined $CoreDist ) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+
+}
+
+sub GetNeighbors { # retrieves the epsilon-neighborhood
+    my ( $Obj, $Epsilon, $SetOfNodes ) = @_;
+    my $neighbors = {};
+    foreach my $mutation_key ( keys %{$SetOfNodes->{$Obj}} ) {
+        if ( $SetOfNodes->{$Obj}->{$mutation_key} <= $Epsilon ) {
+            $neighbors->{$mutation_key} = $SetOfNodes->{$Obj}->{$mutation_key};
         }
     }
-    return \%neighborHash;
+    return $neighbors;
 }
 
 sub GetCoreDistance {
-    my ($neighbors_ref, $MinPts)=@_;
-    my @keys = sort { $neighbors_ref->{$a} <=> $neighbors_ref->{$b} } keys %{$neighbors_ref}; # sort keys according to distances
-    my @vals = @{$neighbors_ref}{@keys};
-    my $CoreDist;
-    if (scalar keys %{$neighbors_ref} >= $MinPts){
-            $CoreDist = $vals[$MinPts-1]; # MinPt^th-distance
+    my ( $Obj, $neighbors, $MinPts, $mutations ) = @_;
+
+    $neighbors->{$Obj} = 0; # adding the object so that it's counted towards the MinPts
+    my $CoreDist = undef;
+    my $neighbors_count = 0;
+    my @keys = sort { $neighbors->{$a} <=> $neighbors->{$b} } keys %{$neighbors}; # sort keys according to distances
+    # print "keys=\n";
+    # print Dumper \@keys;
+
+    for (my $i = 0; $i < scalar @keys; $i++) {
+        # print "$keys[$i]\n";
+        # print "\tneighbors_count prev = $neighbors_count\n";
+        $neighbors_count = $neighbors_count + scalar keys %{$mutations->{$keys[$i]}}; # add the number of Ref:Alt for the key
+        #print "\tneighbors_count after = $neighbors_count\n";
+        if ( $neighbors_count >= $MinPts ) {
+            $CoreDist = $neighbors->{$keys[$i]};
+            #print "\tCore dist= $CoreDist\n";
+            last;
         }
-    else {
-        $CoreDist = undef;
     }
     return $CoreDist;
 }
 
 sub OrderSeedsUpdate {
-    my ($neighbors_ref, $CenterObject, $CD, $OrderSeeds_ref, $Set_ref) = @_;
-    my $c_dist = $CD; 
-    my %neighborsHash = % { $neighbors_ref };
-    my %OrderSeedsHash = % { $OrderSeeds_ref};
-    foreach my $q (keys %{$neighbors_ref}) {
-        if (${$Set_ref}{$q}{processInfo} =~ "False") {
-            my $new_r_dist = max ($c_dist,${$neighbors_ref}{$q});
-            if (exists ${$OrderSeeds_ref}{$q}) {
-                if ($new_r_dist < ${$OrderSeeds_ref}{$q}) {
-                    ${$OrderSeeds_ref}{$q}="$new_r_dist";
+    my ( $this, $neighbors, $CD, $OrderSeeds ) = @_;
+
+    foreach my $mutation_key ( keys %{$neighbors} ) {
+        if ( not $this->hasBeenProcessed( $mutation_key ) ) {
+            my $new_r_dist = max ( $CD, $neighbors->{$mutation_key} );
+            if ( exists $OrderSeeds->{$mutation_key} ) {
+                if ( $new_r_dist < $OrderSeeds->{$mutation_key} ) {
+                    $OrderSeeds->{$mutation_key} = $new_r_dist;
                 }
             }
             else {
-                    ${$OrderSeeds_ref}{$q}="$new_r_dist";
-                }
+                $OrderSeeds->{$mutation_key} = $new_r_dist;
+            }
         }
     }
 }
@@ -484,17 +574,17 @@ sub CombineWords {
 }
 
 sub GetCurrentObject { # To check whether variants are at the same location
-    my ($ValueSet, $KeySet, $PrevObj, $CoreHash)=@_;
+    my ( $ValueSet, $KeySet, $PrevObj, $CoreHash, $this, $mutations ) = @_;
     my @SmallestKeys;
-    for (my $i = 0; $i < scalar @$ValueSet; $i++) {
-        if ($ValueSet->[$i] == $ValueSet->[0]) {
+    for ( my $i = 0; $i < scalar @$ValueSet; $i++ ) {
+        if ( $ValueSet->[$i] == $ValueSet->[0] ) {
             push @SmallestKeys, $KeySet->[$i];
         }
     }
 
-    if (scalar @SmallestKeys > 1) { # more than one variant has the smallest RD
+    if ( scalar @SmallestKeys > 1 ) { # more than one variant has the smallest RD
         # if exists a core, get it first
-        for (my $i = 0; $i < scalar @SmallestKeys; $i++) {
+        for ( my $i = 0; $i < scalar @SmallestKeys; $i++ ) {
             if ( exists $CoreHash->{$SmallestKeys[$i]} ) {
                 my $movingKey = $SmallestKeys[$i];
                 splice @SmallestKeys, $i, 1;
@@ -502,14 +592,13 @@ sub GetCurrentObject { # To check whether variants are at the same location
                 last;
             }
         }
-        # if a variant at the same position get it even before that
-        $PrevObj =~ /(\w+)\:\D\.(\D+\d+)\D/g;
-        my $keyGene = $1;
-        my $keyRes = $2;
-        my @hits = grep(/$keyGene\:\D\.$keyRes\D/g, @SmallestKeys);
 
-        if (scalar @hits > 0) {
-            unshift @SmallestKeys, $hits[0];
+        # if there's a variant at the same position get it even before that
+        foreach my $mutation_key ( @SmallestKeys ) {
+            if ( $this->isSameProteinPosition( $mutations , $PrevObj , $mutation_key ) == 1 ) {
+                unshift @SmallestKeys, $mutation_key;
+                last;
+            }
         }
     }
     return shift @SmallestKeys;

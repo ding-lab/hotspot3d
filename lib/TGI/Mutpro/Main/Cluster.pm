@@ -42,6 +42,7 @@ my $DENSITY = "density";
 my $INDEPENDENT = "independent";
 my $DEPENDENT = "dependent";
 my $ANY = "any";
+
 my $MULTIMER = "multimer";
 my $MONOMER = "monomer";
 my $HOMOMER = "homomer";
@@ -68,6 +69,7 @@ sub new {
     $this->{'weight_header'} = $WEIGHT;
     $this->{'clustering'} = undef;
 
+
     $this->{'structure_dependence'} = undef;
     $this->{'subunit_dependence'} = undef;
 #TODO add meric based on protein or gene id, if protein, need hugo.uniprot.pdb.transcript.csv file
@@ -92,19 +94,21 @@ sub process {
 	my $distance_matrix = {};
  	my $mutations = {};
 	my $WEIGHT = "weight";
-	$this->readMAF( $mutations );
-#	foreach my $mk ( sort keys %{$mutations} ) {
-#		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
-#			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
-#				print join( " -- " , ( $mk , $ra , $pk , $mutations->{$mk}->{$ra}->{$pk} ) )."\n";
-#			}
-#		}
-#	}
-	$this->getDrugMutationPairs( $distance_matrix );
-	$this->getMutationMutationPairs( $distance_matrix );
-	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
-	$this->networkClustering( $mutations , $distance_matrix );
-    return 1;
+
+# 	$this->readMAF( $mutations );
+# #	foreach my $mk ( sort keys %{$mutations} ) {
+# #		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
+# #			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
+# #				print join( " -- " , ( $mk , $ra , $pk , $mutations->{$mk}->{$ra}->{$pk} ) )."\n";
+# #			}
+# #		}
+# #	}
+# 	$this->getDrugMutationPairs( $distance_matrix );
+# 	$this->getMutationMutationPairs( $distance_matrix );
+# 	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
+# 	$this->networkClustering( $mutations , $distance_matrix );
+
+#     return 1;
 }
 #####
 #	sub functions
@@ -133,21 +137,13 @@ sub setOptions {
         'structure-dependence=s' => \$this->{'structure_dependence'},
         'subunit-dependence=s' => \$this->{'subunit_dependence'},
         'meric-type=s' => \$this->{'meric_type'},
+
         'help' => \$help,
     );
     unless( $options ) { die $this->help_text(); }
 	if ( not defined $this->{'clustering'} ) {
 		$this->{'clustering'} = $NETWORK;
 		warn "HotSpot3D::Cluster::setOptions warning: no clustering option given, setting to default network\n";
-	}
-	if ( $this->{'clustering'} eq $DENSITY ) {
-		if ( $help ) {
-			die density_help_text();
-		}
-		else{
-			TGI::Mutpro::Main::Density->new($this);
-			exit;
-		}
 	}
 	if ( $help ) { print STDERR help_text(); exit 0; }
 	if ( not defined $this->{'structure_dependence'} ) {
@@ -221,6 +217,16 @@ sub setOptions {
 	print STDOUT " & structure-dependence = ".$this->{'structure_dependence'}."\n";
 	print STDOUT " & subunit-dependence = ".$this->{'subunit_dependence'}."\n";
 	print STDOUT " & meric-type = ".$this->{'meric_type'}."\n";
+
+	if ( $this->{'clustering'} eq $DENSITY ) {
+		if ( $help ) {
+			die density_help_text();
+		}
+		else{
+			TGI::Mutpro::Main::Density->new($this);
+			exit;
+		}
+	}
 	return;
 }
 
@@ -243,6 +249,7 @@ sub readPairwise {
 		my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aa_1 , $chain1 , $loc_1 , $domain1 , $cosmic1 , 
 			 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , $domain2 , $cosmic2 , 
 			 $linearDistance , $infos ) = split /\t/ , $_;
+
 		if ( $this->checkMeric( $gene1 , $gene2 , $chain1 , $chain2 ) ) {
 			#print $_."\n";
 			$chain1 =~ s/\[(\w)\]/$1/g;
@@ -401,11 +408,13 @@ sub readMAF{
 
 sub setMutation {
 	my ( $this , $mutations , $mutation , $barID , $weight ) = @_;
+
 	my $mutationKey = $this->makeMutationKey( $mutation , "" );
 	my $refAlt = &combine( $mutation->reference() , $mutation->alternate() );
 	my $proteinKey = $this->makeProteinKey( $mutation );
 	#print "setMutation: ".$refAlt."\n";
 	#print join( "\t" , ( $mutationKey , $proteinKey , $barID , $weight ) )."\n";
+
 	if ( exists $mutations->{$mutationKey}->{$refAlt}->{$proteinKey} ) {
 		#print "existing\t";
 		if ( $this->{'vertex_type'} ne $WEIGHT ) {
@@ -568,8 +577,8 @@ sub readDrugClean {
 					 $loc, $infos ) = @line[@wantrxcols];
 				#my ( $dist, $pdb2, $pval ) = split / /, $infos;
 				$infos =~ s/"//g;
-				my $structure = $this->makeStructureKey( $pdb , 
-														   $chain1 , $chain2 );
+
+				my $structure = $this->makeStructureKey( $pdb , $chain1 , $chain2 );
 				my $proteinMutation = TGI::ProteinVariant->new();
 				my $mutation = TGI::Variant->new();
 				$mutation->gene( $gene );
@@ -702,12 +711,14 @@ sub initializeGeodesics {
 			}
 		} #foreach mutationKey2
 	} #foreach mutationKey1
+
 #	print "GEODESICS\n";
 #	foreach my $mu1 ( sort keys %{$geodesics->{$structure}} ) {
 #		foreach my $mu2 ( sort keys %{$geodesics->{$structure}} ) {
 #			print "\t".join( "  " , ( $mu1 , $mu2 , $geodesics->{$structure}->{$mu1}->{$mu2} ) )."\n";
 #		}
 #	}
+
 	print "\tnInitialized = ".$nInitialized."\n";
 	return $geodesics;
 	#return $distance_matrix;
@@ -791,6 +802,7 @@ sub calculateClosenessCentrality {
 #			}
 #		}
 #	}
+
 	return ( $centroid , $centrality );
 }
 
@@ -1000,6 +1012,7 @@ sub writeCluster {
 			my $alternateAnnotations = join( "|" , @alternateAnnotations );
 			#$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
 			push @linesToWrite , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
+
 									   $degrees , $closenessCentrality , 
 									   $geodesic , $weight ,
 									   $chromosome , $start , $stop ,
@@ -1244,6 +1257,7 @@ sub checkPair {
 
 sub setShortestDistance {
 	my ( $this , $distance_matrix , $mutation1 , $mutation2 , $chain1 , $chain2 , $infos ) = @_;
+
 	my @infos = split /\|/ , $infos;
 	my $nStructures = scalar @infos;
 	print "HotSpot3D::Cluster::setShortestDistance\n";
@@ -1315,6 +1329,7 @@ sub calculateAverageDistance {
 			$pdbCount->{$structure}->{$mutationKey1}->{$mutationKey2} = $nStructures;
 		}
 		my $finalDistance = $sumDistances->{$structure} / $nStructures->{$structure};
+
 		$this->setElement( $distance_matrix , $structure , $mutation1 , $mutation2 , $finalDistance , $chain1 , $chain2 );
 	}
 	return;
@@ -1337,12 +1352,15 @@ sub setDistance {
 
 sub setElement {
 	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 , $distance , $chain1 , $chain2 ) = @_;
+
 #TODO corresponding to update in setAverageDistance
 	#if ( $this->checkPair( $distance , $pvalue ) ) { #meets desired significance
 		my $mutationKey1 = $this->makeMutationKey( $mutation1 );
 		my $mutationKey2 = $this->makeMutationKey( $mutation2 );
+
 		$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $distance;
 		$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = $distance;
+
 		$this->setProcessStatus( $mutationKey1 , 0 );
 		$this->setProcessStatus( $mutationKey2 , 0 );
 	#}
@@ -1369,6 +1387,7 @@ sub getElement {
 	my ( $this , $distance_matrix , $structure , $mutation1 , $mutation2 , $chain1 , $chain2 ) = @_;
 	my $mutationKey1 = $this->makeMutationKey( $mutation1 , $chain1 );
 	my $mutationKey2 = $this->makeMutationKey( $mutation2 , $chain2 );
+
 	return ( $this->getElementByKeys( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 ) );
 }
 
@@ -1413,6 +1432,21 @@ sub makeStructureKey {
 	return $ANY;
 }
 
+sub setSameSiteDistancesToZero {
+	my ( $this , $distance_matrix , $mutations ) = @_;
+
+	foreach my $structure ( sort keys %{$distance_matrix} ) {
+		#print "\t".$structure."\n";
+		foreach my $mutationKey1 ( sort keys %{$distance_matrix->{$structure}} ) {
+			foreach my $mutationKey2 ( sort keys %{$distance_matrix->{$structure}} ) { #->{$mutationKey1}} ) {
+				if ( $this->isSameProteinPosition( $mutations , $mutationKey1 , $mutationKey2 ) == 1 && $mutationKey1 ne $mutationKey2 ) {
+					$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = 0;
+					$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = 0;
+				}
+			}
+		}
+	}
+}
 
 ## MISCELLANEOUS METHODS
 sub numSort {
