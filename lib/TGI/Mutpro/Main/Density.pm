@@ -53,12 +53,8 @@ sub new {
 sub process {
 	my $this = shift;
 
-    print "Density process\n";
-    #$this->setOptions();
     my $distance_matrix = {};
     my $mutations = {};
-
-    print Dumper $this;
 
     $this->readMAF( $mutations );
     $this->getDrugMutationPairs( $distance_matrix );
@@ -96,263 +92,35 @@ sub process {
 
     #####################################################
 
-    if ( $this->{'structure_dependence'} eq $INDEPENDENT ) {
-        if ( $this->{'distance_measure'} ne $AVERAGEDISTANCE and $this->{'distance_measure'} ne $SHORTESTDISTANCE ) {
-            warn "distance-measure option not recognized as \'shortest\' or \'average\'\n";
-            warn "Using default distance-measure = \'average\'\n";
-            $this->{'distance_measure'} = $AVERAGEDISTANCE;
-        }
-        if ( $this->{'distance_measure'} eq $SHORTESTDISTANCE ) { # calling structure-independant shortest distances clustering
+    my $pairwiseFN = "$this->{'distance_measure'}.$this->{pairwise_file_name_only}"; 
 
-            print "Distane-matrix\n";
-            print Dumper $distance_matrix;
-            print "Mutations\n";
-            print Dumper $mutations;
-            print "Process Info\n";
-            print Dumper $this->{processed};
-            $this->CallDensityShortest( $distance_matrix, $mutations );
-
-            # print "SetOfNodes Hash =\n";
-            # print Dumper $this->{InitialSet}->{RawSetOfNodesWithShortest};
-        }
-        if ( $this->{'distance_measure'} eq $AVERAGEDISTANCE ) { # calling structure-independant average distances clustering
-            $this->CallDensityAverage();
-            # print "SetOfNodes Hash =\n";
-            # print Dumper $this->{InitialSet}->{RawSetOfNodesWithAvg};
-        }
-    }
-    if ( $this->{'structure_dependence'} eq $DEPENDENT ) { # calling structure-dependant clustering
-        $this->CallDensityStructurewise();
-        # print "SetOfNodes Hash =\n";
-        # print Dumper $this->{InitialSet}->{RawSetOfNodesWithStructure};
-    }    
-}
-
-#####
-#   Functions
-#####
-
-sub CallDensityShortest { # calls everything if user wants to do clustering by the shortest distance
-    my $this = shift;
-
-    my $distance_matrix = shift;
-    my $mutations = shift;
-
-    # name output files as *.shortest.*
-    $this->{pairwise_file_name_only} = "Shortest.$this->{pairwise_file_name_only}";
-
-    # get the shortest distances for each variants
-
-    #$this->MakeInitialSetOfNodes();
-
-    $this->{"CurrentSetOfNodes"} = $distance_matrix->{any}; # set the current SetOfNodes
-
-    ###### Reference run: start
-    $this->MainOPTICS( $distance_matrix, $mutations ); # perform OPTICS for the first time
-    $this->RunSuperClustersID(); # perform Clustering for the reference run
-
-    # print "Reference run: Done.\nStart probability calculation\n";
-
-    # $this->getClusterProbabilities(); # perform cluster-membership probability calculation
-
-    # print "\nProbability Calculation is Done.\n\n";
-
-}
-
-sub CallDensityAverage { # calls everything if user wants to do clustering by the average distance
-    my $this = shift;
-
-    # name output files as *.average.*
-    $this->{pairwise_file_name_only} = "Average.$this->{pairwise_file_name_only}";
-
-    # get the shortest distances for each variants
-    $this->MakeInitialSetOfNodesAvg();
-    $this->{"CurrentSetOfNodes"} = $this->{InitialSet}->{RawSetOfNodesWithAvg};
-
-    ###### Reference run: start
-    $this->MainOPTICS(); # perform OPTICS for the first time
-    $this->RunSuperClustersID(); # perform Clustering for the reference run
-
-    print "Reference run: Done.\nStart probability calculation\n";
-
-    $this->getClusterProbabilities(); # perform cluster-membership probability calculation
-
-    print "\nProbability Calculation is Done.\n\n";
-
-}
-
-sub CallDensityStructurewise { # calls everything if user wants to do clustering by the structure
-    my $this = shift;
-
-    # get the distances for each variants in each structure 
-    $this->MakeInitialSetOfNodesStructurewise();
-
-    # store the original pairwise file name
-    my $pairwiseFN = $this->{pairwise_file_name_only};
-
-    foreach my $structure ( keys %{ $this->{InitialSet}->{RawSetOfNodesWithStructure} } ) { # run the density calculation for each available structure
+    foreach my $structure ( keys %{$distance_matrix} ) { # run the density calculation for each available structure
         #print "Structure= $structure\n";
         # name output files as *.$pdbID.structure.*
         $this->{pairwise_file_name_only} = "$structure.Structure.$pairwiseFN";
 
         # call the SetOfNodes hash for each structure
-        $this->{"CurrentSetOfNodes"} = $this->{InitialSet}->{RawSetOfNodesWithStructure}->{$structure};
+        $this->{"CurrentSetOfNodes"} = $distance_matrix->{$structure};
 
         ###### Reference run: start
-        $this->MainOPTICS(); # perform OPTICS for the first time
+        $this->MainOPTICS( $distance_matrix, $mutations ); # perform OPTICS for the first time
         $this->RunSuperClustersID(); # perform Clustering for the reference run
 
         print "Reference run: Done.\nStart probability calculation\n";
 
-        $this->getClusterProbabilities(); # perform cluster-membership probability calculation
+        $this->getClusterProbabilities( $distance_matrix, $mutations ); # perform cluster-membership probability calculation
 
         print "\nProbability Calculation is Done.\n\n";
     }
-    my $numStructure = scalar keys %{ $this->{InitialSet}->{RawSetOfNodesWithStructure} };
+
+    my $numStructure = scalar keys %{ $distance_matrix };
     print "\n Structure-wise clusters are being calculated for $numStructure structures.\n";
+   
 }
 
-sub MakeInitialSetOfNodes {
-    my $this = shift;
-
-    my %SetOfNodes;
-    my $file = "$this->{pairwise_file}";
-    open(IN, "<$file") || die "Can't open $file: $!";
-
-    while (my $line = <IN>) {
-        chomp $line;
-        my @tabs = split(/\t/,$line);
-        my @infos = split /\|/ , $tabs[19]; #take the 19th tab
-        my $info = $infos[0]; # take the shortest distance
-        chomp( $info );
-        my ( $dis , $pdbID , $pvalue ) = split / / , $info;
-
-        my $key1 = CombineWords($tabs[0],$tabs[4]);
-        my $value1 = CombineWords($tabs[9],$tabs[13]);
-
-        if ( exists $SetOfNodes{$key1}{distances}{$value1} ) { # this is necessary because sometimes pairwise file has multiple lines for the same pair of variants
-            if ( $dis < $SetOfNodes{$key1}{distances}{$value1} ) {
-                $SetOfNodes{$key1}{distances}{$value1} = $dis;
-                $SetOfNodes{$value1}{distances}{$key1} = $dis;
-            }
-        }
-        else {
-            $SetOfNodes{$key1}{distances}{$value1} = $dis;
-            $SetOfNodes{$value1}{distances}{$key1} = $dis;
-        }
-    }
-    ###### For variants in the same residue and chain 
-    my $SetOfNodes_ref = PutZeroAtSameLocations( \%SetOfNodes ); 
-
-    $this->{"InitialSet"}->{"RawSetOfNodesWithShortest"} = $SetOfNodes_ref;
-}
-
-sub MakeInitialSetOfNodesAvg {
-    my $this = shift;
-
-    my %SetOfNodes;
-    my %AverageHash; # to take care multiple lines in pairwise with the same pair. Store the number of structures
-    my $file = "$this->{pairwise_file}";
-    open(IN, "<$file") || die "Can't open $file: $!";
-
-    while (my $line = <IN>) {
-        chomp $line;
-        my @tabs = split(/\t/,$line);
-        my @infos = split /\|/ , $tabs[19]; #take the 19th tab
-
-        my $avgDistance = 0;
-        foreach my $info ( @infos ) {
-            chomp( $info );
-            next unless ( $info );
-            my ( $dis , $pdbID , $pvalue ) = split / / , $info;
-            $avgDistance += $dis;
-        }
-        $avgDistance = $avgDistance / ( scalar @infos );
-
-        my $key1 = CombineWords($tabs[0],$tabs[4]);
-        my $value1 = CombineWords($tabs[9],$tabs[13]);
-
-        if ( not exists $AverageHash{$key1}{$value1} ) { # to take care of multiple line entries in pairwisefile for same pair of variants
-            $AverageHash{$key1}{$value1} = scalar @infos;
-            $AverageHash{$value1}{$key1} = scalar @infos;
-
-            $SetOfNodes{$key1}{distances}{$value1} = $avgDistance;
-            $SetOfNodes{$value1}{distances}{$key1} = $avgDistance;            
-        }
-        else {
-            $avgDistance = (($SetOfNodes{$key1}{distances}{$value1} * $AverageHash{$key1}{$value1}) + ($avgDistance * scalar @infos)) / ($AverageHash{$key1}{$value1} + scalar @infos);
-            $AverageHash{$key1}{$value1} = $AverageHash{$key1}{$value1} + scalar @infos;
-            $AverageHash{$value1}{$key1} = $AverageHash{$value1}{$key1} + scalar @infos;
-
-            $SetOfNodes{$key1}{distances}{$value1} = $avgDistance;
-            $SetOfNodes{$value1}{distances}{$key1} = $avgDistance;
-        }
-    }
-    ###### For variants in the same residue and chain 
-    my $SetOfNodes_ref = PutZeroAtSameLocations( \%SetOfNodes ); 
-
-
-    $this->{"InitialSet"}->{"RawSetOfNodesWithAvg"} = $SetOfNodes_ref;
-}
-
-sub MakeInitialSetOfNodesStructurewise {
-    my $this = shift;
-
-    my %SetOfNodes;
-    my $file = "$this->{pairwise_file}";
-    open(IN, "<$file") || die "Can't open $file: $!";
-
-    while (my $line = <IN>) {
-        chomp $line;
-        my @tabs = split(/\t/,$line);
-        my @infos = split /\|/ , $tabs[19]; #take the 19th tab
-
-        my $key1 = CombineWords($tabs[0],$tabs[4]);
-        my $value1 = CombineWords($tabs[9],$tabs[13]);
-
-        foreach my $info ( @infos ) {
-            chomp( $info );
-            next unless ( $info );
-            my ( $dis , $pdbID , $pvalue ) = split / / , $info;
-            
-            $SetOfNodes{$pdbID}{$key1}{distances}{$value1} = $dis;
-            $SetOfNodes{$pdbID}{$value1}{distances}{$key1} = $dis;
-        }
-    }
-    ###### For variants in the same residue and chain, have to do this for each structure 
-    foreach my $structure ( keys %SetOfNodes ) {
-        my $SetOfNodes_ref = PutZeroAtSameLocations( $SetOfNodes{$structure} );
-        $SetOfNodes{$structure} = $SetOfNodes_ref;
-    }
-     
-    $this->{"InitialSet"}->{"RawSetOfNodesWithStructure"} = \%SetOfNodes;
-}
-
-sub PutZeroAtSameLocations { # put dis=0 for the variants at the same location, and set processInfo=0 for all nodes
-    my $HashRef = shift;
-    my %SetOfNodes = %{$HashRef};
-
-    foreach my $key ( keys %SetOfNodes ) {
-        #print "key= $key\n";
-        $key =~ /(\w+)\:\D\.(\D+\d+)\D/g;
-        my $keyGene = $1;
-        my $keyRes = $2;
-        my @hits = grep(/$keyGene\:\D\.$keyRes\D/g, keys %SetOfNodes);
-        #print Dumper \@hits;
-        foreach my $hit (@hits) {
-            if ( $hit ne $key ) {
-                $SetOfNodes{$key}{distances}{$hit} = "0";
-                $SetOfNodes{$hit}{distances}{$key} = "0";
-            }
-        }
-    }
-
-    foreach my $i (keys %SetOfNodes) {
-        $SetOfNodes{$i}{processInfo} = "False";
-    }
-
-    return \%SetOfNodes;
-}
+#####
+#   Functions
+#####
 
 sub SetProcessInfoToFalse {
     my $SetOfNodes = shift;
@@ -397,8 +165,8 @@ sub MainOPTICS {
     @SetOfEdges = shuffle @SetOfEdges;
     my @SetOfCoresThenEdges = ( @SetOfCores, @SetOfEdges );
 
-    print "Set of Cores\n";
-    print Dumper \@SetOfCores;
+    # print "Set of Cores\n";
+    # print Dumper \@SetOfCores;
 
     # my $neighbors1 = GetNeighbors( "SMAD4:18:48604788:48604788", $Epsilon, $SetOfNodes );
     # print "neighbors\n";
@@ -417,7 +185,7 @@ sub MainOPTICS {
     ################# Main OPTICS function ####################
 
     foreach my $p ( @SetOfCoresThenEdges ) { # p - a node(object)
-        print "first p=$p\n";
+        #print "first p=$p\n";
         if ( not $this->hasBeenProcessed($p) ) { # not processed yet
             ########## Expand Cluster Order ###########
             my %neighbors; # is a hash with keys neigbor indices whose values are mutual separations
@@ -427,14 +195,14 @@ sub MainOPTICS {
             my $RD = undef; # reachability distance
             my $CD; # core distance
             $CD = GetCoreDistance($p, \%neighbors, $MinPts, $mutations);
-             print "p=$p and ";
-             print "CD=$CD\n";
-            pushToOrderedNodesArray($p, $RD, $CD, $mutations, \@OrderedNodes); # write to the file 
+            # print "p=$p and ";
+            # print "CD=$CD\n";
+            pushToOrderedNodesArray($p, $RD, $CD, $mutations, \@OrderedNodes, $this); # write to the file 
 
             if ( defined $CD ) {
                 OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
-                 print "For p=$p, OrderSeeds= \n";
-                 print Dumper \%OrderSeeds;
+                # print "For p=$p, OrderSeeds= \n";
+                # print Dumper \%OrderSeeds;
                 my $PrevObj = $p; # used to get the current obj. (To check whether variants are at the same location)
                 while (scalar keys %OrderSeeds != 0) {
                     my @SeedKeys = sort { $OrderSeeds{$a} <=> $OrderSeeds{$b} } keys %OrderSeeds;
@@ -443,24 +211,24 @@ sub MainOPTICS {
 
                     my $CurrentObject = GetCurrentObject(\@SeedValues, \@SeedKeys, $PrevObj, $CoreHash, $this, $mutations);
                     $PrevObj = $CurrentObject;
-                    print "\n\n current object= $CurrentObject\t neighbors=";
+                    #print "\n\n current object= $CurrentObject\t neighbors=";
                     %neighbors = %{GetNeighbors($CurrentObject, $Epsilon, $SetOfNodes)};
-                    print Dumper \%neighbors;
+                    #print Dumper \%neighbors;
                     #print Dumper $SetOfNodes{$CurrentObject}{distances};
                     $this->setProcessStatus($CurrentObject, 1); # set as processed
                     $RD = $SeedValues[0];
                     $CD = GetCoreDistance($CurrentObject, \%neighbors, $MinPts, $mutations);
-                    pushToOrderedNodesArray($CurrentObject, $RD, $CD, $mutations, \@OrderedNodes); # write to the file 
+                    pushToOrderedNodesArray($CurrentObject, $RD, $CD, $mutations, \@OrderedNodes, $this); # write to the file 
                     delete $OrderSeeds{$CurrentObject};
                     if (defined $CD) {
-                        print "\tCurrent object is a core.(CD=$CD)\n Updated Order seeds list\n\t";
+                        #print "\tCurrent object is a core.(CD=$CD)\n Updated Order seeds list\n\t";
                         OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
-                        print Dumper \%OrderSeeds;
+                        #print Dumper \%OrderSeeds;
                     }
                 }
             }
-             print "p=$p,(undefined CD) OrderedNodes= \n";
-             print Dumper \@OrderedNodes;
+             # print "p=$p,(undefined CD) OrderedNodes= \n";
+             # print Dumper \@OrderedNodes;
         }
     }
 
@@ -485,19 +253,31 @@ sub MainOPTICS {
     # close (OUT);
 
 
-    print "Process Info\n";
-    print Dumper $this->{processed};
+    # print "Current RD array\n";
+    # print Dumper $this->{CurrentRDarray};
 
     return $this;
 }
 
 sub pushToOrderedNodesArray {
-    my ( $Obj, $RD, $CD, $mutations, $OrderedNodes ) = @_;
+    my ( $Obj, $RD, $CD, $mutations, $OrderedNodes, $this ) = @_;
+
+    my ( $gene, $chromosome, $start, $stop ) = @{$this->splitMutationKey($Obj)};
 
     foreach my $RefAlt ( sort keys %{$mutations->{$Obj}} ) {
-        my $proteinKey = (sort keys %{$mutations->{$Obj}->{$RefAlt}})[0]; # take one of the keys, should be the same except transcripts
+        my @proteinKeys = sort keys %{$mutations->{$Obj}->{$RefAlt}};
+        my $proteinKey = shift @proteinKeys; # take the first key, should be the same except transcripts
+        my $altTranscriptColumn = join( "|", @proteinKeys);
         #print "To File: $proteinKey, $RD, $CD\n";
-        push @{$OrderedNodes}, [$proteinKey, $RD, $CD];
+        my ( $ref, $alt ) = @{$this->splitRefAltKey($RefAlt)};
+        my ( $transcript, $aa ) = @{$this->splitProteinKey($proteinKey)};
+
+        my $gene_aa = join ( ":", $gene, $aa );
+        my $genomicData = join ( "\t", $chromosome, $start, $stop, $ref, $alt, $transcript );
+
+        my $genomicData_altTransColumn = join ( "\t", $genomicData, $altTranscriptColumn );
+
+        push @{$OrderedNodes}, [$gene_aa, $RD, $CD, $genomicData_altTransColumn];
     }
 }
 
@@ -837,12 +617,13 @@ sub RunSuperClustersID {
 
     ########################  Writing to files  ##############################
 
-    my $OrderedFile = "./RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}";
+    my $OrderedFile = "./RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.out";
     open (OUT, ">$OrderedFile");
     for (my $i = 0; $i < scalar @{$this->{CurrentRDarray}}; $i++) {
         my $ele1 = ${$this->{CurrentRDarray}}[$i][0];
         my $ele2 = ${$this->{CurrentRDarray}}[$i][1];
-        print OUT "$ele1\t$ele2\n";
+        my $genomicAnnotation = ${$this->{CurrentRDarray}}[$i][3];
+        print OUT "$ele1\t$ele2\t$genomicAnnotation\n";
     }
     close (OUT);
 
@@ -863,14 +644,15 @@ sub RunSuperClustersID {
 
     open (OUT, ">$OutFile2");
 
-    print OUT "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\tEpsilon_prime\tAvg_density\tCovering_clusters\n";
+    print OUT "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\tEpsilon_prime\tAvg_density\tCovering_clusters\tChromosome\tStart\tStop\tReference\tAlternate\tTranscript\tAlternative_Transcripts\n";
 
     for (my $i = 0; $i < scalar @ClusterArray; $i++) {
         for (my $j = $ClusterArray[$i][0]; $j <= $ClusterArray[$i][1]; $j++) {
             my @characters = split(":",$InitialSet[$j][0]);
             my $Gene = $characters[0];
             my $Mutation = $characters[1];
-            print OUT "$ClusterArray[$i][4]\t$Gene\t$Mutation\t0\t0\t1\t0\t$ClusterArray[$i][2]\t$ClusterArray[$i][3]\t$ClusterArray[$i][5]\n";
+            my $genomicAnnotation = $InitialSet[$j][3];
+            print OUT "$ClusterArray[$i][4]\t$Gene\t$Mutation\t0\t0\t1\t0\t$ClusterArray[$i][2]\t$ClusterArray[$i][3]\t$ClusterArray[$i][5]\t$genomicAnnotation\n";
         }
     }
 
@@ -888,7 +670,7 @@ sub RunSuperClustersID {
       plotOutput(\"plot1\",click = \"plot_click\", hover = \"plot_hover\", brush = \"plot_brush\" ,  height = 900),
       verbatimTextOutput(\"info\")
     )\n" );
-    $OutFile3->print( "y = read.table(\"./RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}\")\n
+    $OutFile3->print( "y = read.table(\"./RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.out\")\n
     z = read.table(\"./RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.clusters.plot\")\n" );
     $OutFile3->print( "RD<-y[[2]]\nID<-y[[1]]\nx0<-z[[1]]\ny0<-z[[3]]\nx1<-z[[2]]+1\ny1<-z[[3]]\nCluster<-z[[5]]\n" );
     $OutFile3->print( "server <- function(input, output) {\n  output\$plot1 <- renderPlot({\n   barplot(RD,names.arg=ID,main=\"Reachability Plot:Epsilon=8 MinPts=4\",col=\"Red\", cex.names=0.6,border=NA, space=0, las=2, ylab=\"Reachabilty Distance (A)\")\n    segments (x0,y0,x1,y1)\n
@@ -921,13 +703,17 @@ sub RunSuperClustersID {
     ############################  Plotting  #################################
 
     #system ("Rscript ClustersLines.R $inputFile ./Results/$ARGV[0].SuperClustersID.plot SuperClustersID.$ARGV[0].pdf $Epsilon $MinPts");
-    system ("Rscript $this->{'R_path'}/HorizClustersLines.R RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only} RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.clusters.plot RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.Horiz.pdf $this->{Epsilon} $this->{MinPts}");
+    system ("Rscript $this->{'R_path'}/HorizClustersLines.R RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.out RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.clusters.plot RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.Horiz.pdf $this->{Epsilon} $this->{MinPts}");
     #system ("Rscript EasyClustersLines.R $inputFile ./Results/$ARGV[0].SuperClustersID.plot SuperClustersID.$ARGV[0].Easy.pdf $Epsilon $MinPts");
     #print "Done.\n";
 }
 
 sub getClusterProbabilities{
     my $this = shift;
+    my $distance_matrix = shift;
+    my $mutations = shift;
+
+    print "came to getClusterProbabilities\n";
 
     my $Epsilon = $this->{'Epsilon'};
     my $MinPts = $this->{'MinPts'};
@@ -943,14 +729,16 @@ sub getClusterProbabilities{
         if ( not $line =~ /Cluster/ ) {
             chomp $line;
             my @tabs2 = split(/\t/,$line);
-            push @InitialCuts, [$tabs2[0],$tabs2[1],$tabs2[2],$tabs2[7],$tabs2[8],$tabs2[9]];
-            # Cluster   Gene/Drug   Mutation/Gene   Epsilon_prime   Avg_density  Covering_clusters
+            my @annotations = splice @tabs2, 10, 7;
+            my $genomicAnnotation = join ( "\t", @annotations);
+            push @InitialCuts, [$tabs2[0], $tabs2[1], $tabs2[2], $tabs2[7], $tabs2[8], $tabs2[9], $genomicAnnotation];
+            # Cluster   Gene/Drug   Mutation/Gene   Epsilon_prime   Avg_density  tCovering_clusters   annotations(several columns)
         }
     }
 
     ###############################################################################
-    # print "InitialCuts\n";
-    # print Dumper \@InitialCuts;
+    print "InitialCuts\n";
+    print Dumper \@InitialCuts;
 
     for (my $i = 0; $i < scalar @InitialCuts; $i++) {
         $InitialCuts[$i][0] =~ /(\d+)\.(\d+)\.(\d+)/g;
@@ -962,10 +750,11 @@ sub getClusterProbabilities{
         }
         $this->{"Variants"}->{$InitialCuts[$i][1].":".$InitialCuts[$i][2]}->{"run0"}->{$1}->{$2}->{$3}->{"AverageDensity"} = $InitialCuts[$i][4];
         $this->{"Variants"}->{$InitialCuts[$i][1].":".$InitialCuts[$i][2]}->{"run0"}->{$1}->{$2}->{$3}->{"CoveringClusters"} = $InitialCuts[$i][5];
+        $this->{"Variants"}->{$InitialCuts[$i][1].":".$InitialCuts[$i][2]}->{"run0"}->{$1}->{$2}->{$3}->{"Annotations"} = $InitialCuts[$i][6];
         $this->{"Memberships"}->{$1}->{$2}->{$3}->{$InitialCuts[$i][1].":".$InitialCuts[$i][2]} = 1;
     }
 
-    #print Dumper $this;
+    print Dumper $this;
 
     ################################################################################
 
@@ -973,11 +762,11 @@ sub getClusterProbabilities{
 
     #print Dumper $this->{CurrentRDarray};
 
-
+    print "start of runs\n";
 
     for (my $run = 1; $run < $this->{'number_of_runs'}; $run++) {
 
-        $this->MainOPTICS(); # Generate a random ordred RD set (random OPTICS)
+        $this->MainOPTICS( $distance_matrix, $mutations ); # Generate a random ordred RD set (random OPTICS)
 
         $this->GetSuperClusters($this->{CurrentRDarray}); # Identify super clusters
         # print "CurrentRDarray\n";
@@ -1048,7 +837,7 @@ sub getClusterProbabilities{
     # Clusters output file (will be used in the visual)
     my $FinalDataFile2 = "./$Epsilon.$MinPts.$this->{'pairwise_file_name_only'}.Prob.$this->{'probability_cut_off'}.clusters";
     open (OUT, ">$FinalDataFile2");
-        print OUT "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\tEpsilon_prime\tAvg_density\tCovering_clusters\n";
+        print OUT "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\tEpsilon_prime\tAvg_density\tCovering_clusters\tChromosome\tStart\tStop\tReference\tAlternate\tTranscript\tAlternative_Transcripts\n";
 
         for (my $SCID = 0; $SCID < scalar keys %{$this->{Memberships}}; $SCID++) {
             for (my $levelID = 0; $levelID < scalar keys %{$this->{Memberships}->{$SCID}}; $levelID++) {
@@ -1058,8 +847,9 @@ sub getClusterProbabilities{
                             my $CurrentEpsilon = $this->{InitialCuts}->{$SCID}->{$levelID};
                             my $CurrentAvgDensity = $this->{Variants}->{$variant}->{run0}->{$SCID}->{$levelID}->{$SubID}->{AverageDensity};
                             my $CoveringClusters =  $this->{Variants}->{$variant}->{run0}->{$SCID}->{$levelID}->{$SubID}->{CoveringClusters};
+                            my $genomicAnnotation = $this->{Variants}->{$variant}->{run0}->{$SCID}->{$levelID}->{$SubID}->{Annotations};
                             $variant =~ /(\w+)\:(\D\.\D+\d+\D)/g;
-                            print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t0\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\n";
+                            print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t0\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation\n";
                         }
                     }
                 }

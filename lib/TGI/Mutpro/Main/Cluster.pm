@@ -238,7 +238,7 @@ sub getMutationMutationPairs {
 	return;
 }
 
-sub readPairwise {
+sub readPairwise { # shared
 	#$this->readPairwise( $distance_matrix );
 	my ( $this , $distance_matrix ) = @_;
 	print STDOUT "Reading in pairwise data ... \n";
@@ -331,7 +331,7 @@ sub checkMeric {
 	return 0;
 }
 
-sub readMAF{
+sub readMAF{ # shared
 	#$this->readMAF( $mutations );
 	my ( $this , $mutations ) = @_;
 	print STDOUT "HotSpot3D::Cluster::readMAF\n";
@@ -929,13 +929,13 @@ sub determineStructureClusters {
 #	}
 #}
 
-sub setProcessStatus {
+sub setProcessStatus { # shared
 	my ( $this , $mutationKey , $status ) = @_;
 	$this->{'processed'}->{$mutationKey} = $status;
 	return $this->{'processed'}->{$mutationKey};
 }
 
-sub hasBeenProcessed {
+sub hasBeenProcessed { # shared
 	my ( $this , $mutationKey ) = @_;
 	if ( $this->{'processed'}->{$mutationKey} ) {
 		return 1;
@@ -1084,7 +1084,7 @@ sub floydWarshall {
 #	print $str;
 #}
 
-sub isSameProteinPosition {
+sub isSameProteinPosition { # shared
 	my ( $this , $mutations , $mutationKey1 , $mutationKey2 ) = @_;
 	#print join( "\t" , ( "begin" , $mutationKey1 , $mutationKey2 ) )."\n";
 	if ( $mutationKey1 eq $mutationKey2 ) { return 1; }
@@ -1208,22 +1208,22 @@ sub makeProteinKey {
 	return $proteinKey;
 }
 
-sub splitMutationKey {
+sub splitMutationKey { # shared
 	my ( $this , $mutationKey ) = @_;
 	return &uncombine( $mutationKey );
 }
 
-sub splitRefAltKey {
+sub splitRefAltKey { # shared
 	my ( $this , $refAlt ) = @_;
 	return &uncombine( $refAlt );
 }
 
-sub splitPairKey {
+sub splitPairKey { 
 	my ( $this , $pairKey ) = @_;
 	return (split /_/ , $pairKey);
 }
 
-sub splitProteinKey {
+sub splitProteinKey { # shared
 	my ( $this , $proteinKey ) = @_;
 	my @split = @{&uncombine( $proteinKey )};
 	return \@split;
@@ -1432,7 +1432,7 @@ sub makeStructureKey {
 	return $ANY;
 }
 
-sub setSameSiteDistancesToZero {
+sub setSameSiteDistancesToZero { # used in density (this shuld be the same as initializeSameSiteDistancesToZero; but there was a problem when it was used)
 	my ( $this , $distance_matrix , $mutations ) = @_;
 
 	foreach my $structure ( sort keys %{$distance_matrix} ) {
