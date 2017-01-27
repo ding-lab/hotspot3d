@@ -95,20 +95,20 @@ sub process {
  	my $mutations = {};
 	my $WEIGHT = "weight";
 
-# 	$this->readMAF( $mutations );
-# #	foreach my $mk ( sort keys %{$mutations} ) {
-# #		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
-# #			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
-# #				print join( " -- " , ( $mk , $ra , $pk , $mutations->{$mk}->{$ra}->{$pk} ) )."\n";
-# #			}
-# #		}
-# #	}
-# 	$this->getDrugMutationPairs( $distance_matrix );
-# 	$this->getMutationMutationPairs( $distance_matrix );
-# 	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
-# 	$this->networkClustering( $mutations , $distance_matrix );
+	$this->readMAF( $mutations );
+#	foreach my $mk ( sort keys %{$mutations} ) {
+#		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
+#			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
+#				print join( " -- " , ( $mk , $ra , $pk , $mutations->{$mk}->{$ra}->{$pk} ) )."\n";
+#			}
+#		}
+#	}
+	$this->getDrugMutationPairs( $distance_matrix );
+	$this->getMutationMutationPairs( $distance_matrix );
+	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
+	$this->networkClustering( $mutations , $distance_matrix );
 
-#     return 1;
+    return 1;
 }
 #####
 #	sub functions

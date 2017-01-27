@@ -34,17 +34,7 @@ sub new {
     my $class = shift;
     my $this = shift;
 
-    print "density new\n";
-    #my $distance_matrix = shift;
-    #my $mutations = shift;
-    # $this->{'pairwise_file'} = '3D_Proximity.pairwise';
-    # $this->{'Epsilon'} = undef;
-    # $this->{'MinPts'} = undef;
-    # $this->{'number_of_runs'} = undef;
-    # $this->{'probability_cut_off'} = undef;
     bless $this, $class;
-    #bless $distance_matrix, $class;
-    #bless $mutations, $class;
     
     $this->process();
     return $this;
@@ -114,24 +104,13 @@ sub process {
     }
 
     my $numStructure = scalar keys %{ $distance_matrix };
-    print "\n Structure-wise clusters are being calculated for $numStructure structures.\n";
+    print "Density-based clusters are being calculated for $numStructure structures.\n\n";
    
 }
 
 #####
 #   Functions
 #####
-
-sub SetProcessInfoToFalse {
-    my $SetOfNodes = shift;
-    my $this = shift;
-
-    foreach my $mutation_key ( keys %{$SetOfNodes} ) {
-        $this->{processed}->{$mutation_key} = "0";
-    }
-
-    return $this;
-}
 
 sub MainOPTICS {
     my $this = shift;
@@ -259,26 +238,19 @@ sub MainOPTICS {
     return $this;
 }
 
-sub pushToOrderedNodesArray {
-    my ( $Obj, $RD, $CD, $mutations, $OrderedNodes, $this ) = @_;
+#####
+##   Optics sub-methods
+#####
 
-    my ( $gene, $chromosome, $start, $stop ) = @{$this->splitMutationKey($Obj)};
+sub SetProcessInfoToFalse {
+    my $SetOfNodes = shift;
+    my $this = shift;
 
-    foreach my $RefAlt ( sort keys %{$mutations->{$Obj}} ) {
-        my @proteinKeys = sort keys %{$mutations->{$Obj}->{$RefAlt}};
-        my $proteinKey = shift @proteinKeys; # take the first key, should be the same except transcripts
-        my $altTranscriptColumn = join( "|", @proteinKeys);
-        #print "To File: $proteinKey, $RD, $CD\n";
-        my ( $ref, $alt ) = @{$this->splitRefAltKey($RefAlt)};
-        my ( $transcript, $aa ) = @{$this->splitProteinKey($proteinKey)};
-
-        my $gene_aa = join ( ":", $gene, $aa );
-        my $genomicData = join ( "\t", $chromosome, $start, $stop, $ref, $alt, $transcript );
-
-        my $genomicData_altTransColumn = join ( "\t", $genomicData, $altTranscriptColumn );
-
-        push @{$OrderedNodes}, [$gene_aa, $RD, $CD, $genomicData_altTransColumn];
+    foreach my $mutation_key ( keys %{$SetOfNodes} ) {
+        $this->{processed}->{$mutation_key} = "0";
     }
+
+    return $this;
 }
 
 sub isThisAcore {
@@ -384,6 +356,28 @@ sub GetCurrentObject { # To check whether variants are at the same location
     return shift @SmallestKeys;
 }
 
+sub pushToOrderedNodesArray {
+    my ( $Obj, $RD, $CD, $mutations, $OrderedNodes, $this ) = @_;
+
+    my ( $gene, $chromosome, $start, $stop ) = @{$this->splitMutationKey($Obj)};
+
+    foreach my $RefAlt ( sort keys %{$mutations->{$Obj}} ) {
+        my @proteinKeys = sort keys %{$mutations->{$Obj}->{$RefAlt}};
+        my $proteinKey = shift @proteinKeys; # take the first key, should be the same except transcripts
+        my $altTranscriptColumn = join( "|", @proteinKeys);
+        #print "To File: $proteinKey, $RD, $CD\n";
+        my ( $ref, $alt ) = @{$this->splitRefAltKey($RefAlt)};
+        my ( $transcript, $aa ) = @{$this->splitProteinKey($proteinKey)};
+
+        my $gene_aa = join ( ":", $gene, $aa );
+        my $genomicData = join ( "\t", $chromosome, $start, $stop, $ref, $alt, $transcript );
+
+        my $genomicData_altTransColumn = join ( "\t", $genomicData, $altTranscriptColumn );
+
+        push @{$OrderedNodes}, [$gene_aa, $RD, $CD, $genomicData_altTransColumn];
+    }
+}
+
 sub GetFileName {
     my $this = shift @_;
 
@@ -392,6 +386,10 @@ sub GetFileName {
 
     return $this;
 }
+
+####################################################################################
+############################### Clustering Method ##################################
+####################################################################################
 
 sub RunSuperClustersID {
     my $this = shift @_;
@@ -448,7 +446,7 @@ sub RunSuperClustersID {
                 $ClusTot = $ClusTot + $InitialSet[$t][1];
             }
             my $ClusAvg = $ClusTot/($Clusters{SuperClusters}{$superC}-1 - $superC);
-            push @ClusterArray, [$superC,$Clusters{SuperClusters}{$superC}-1,9.5,$ClusAvg,$idSuperCluster."."."0"."."."0"]; # Artificially recording the super cluster. Randomly picked 9.5. (-1 b/c end has included the start of the next)
+            push @ClusterArray, [$superC,$Clusters{SuperClusters}{$superC}-1,9.9,$ClusAvg,$idSuperCluster."."."0"."."."0"]; # Artificially recording the super cluster. Randomly picked 9.9. (-1 b/c end has included the start of the next)
             
         }
 
@@ -518,15 +516,20 @@ sub RunSuperClustersID {
                                 $OverlapCheck = 0; # one of new sub clusters does not overlap with the previous sub cluster in consideration, check the next previous sub cluster
                                 #print "\tOverlapCheck = $OverlapCheck  continue checking\n";
                             }
-                            else {
-                                $OverlapCheck = 1;
-                                #print "\tOverlapCheck = $OverlapCheck  stop checking, found one overlap\n";
-                                last; # one of new sub clusters overlaps with one of the previous sub clusters, stop checking
+                            else { # one of new sub clusters overlaps with one of the previous sub clusters
+                                if ( (($Clusters{SubClusters}{$superC}{$subC} - $subC) / ($TempSubClusterRef->{$subCpre} - $subCpre)) >= 2 ) { # the expansion of the cluster is more than 100% --> record
+                                    $OverlapCheck = 0;
+                                }
+                                else {
+                                    $OverlapCheck = 1;
+                                    #print "\tOverlapCheck = $OverlapCheck  stop checking, found one overlap\n";
+                                }
+                                last; # one of new sub clusters overlaps with one of the previous sub clusters (or its size increased by more than 100%), stop checking
                             }
                         }
                         if ($OverlapCheck == 0) {
                             #print "\tOverlapCheck=0 passed subC=$subC\n";
-                            last; # one of new sub clusters does not overlap with any of the previous sub clusters, stop checking for other non-overlapping new clusters. One is enough!
+                            last; # one of new sub clusters does not overlap with any of the previous sub clusters (or there's an overlap, but its size increased by more than 100%), stop checking for other non-overlapping new clusters. One is enough!
                         }
                     }
                     if ($OverlapCheck == 0) {
@@ -708,12 +711,15 @@ sub RunSuperClustersID {
     #print "Done.\n";
 }
 
+
+####################################################################################
+############################ Clustering Probabilities ##############################
+####################################################################################
+
 sub getClusterProbabilities{
     my $this = shift;
     my $distance_matrix = shift;
     my $mutations = shift;
-
-    print "came to getClusterProbabilities\n";
 
     my $Epsilon = $this->{'Epsilon'};
     my $MinPts = $this->{'MinPts'};
@@ -737,8 +743,8 @@ sub getClusterProbabilities{
     }
 
     ###############################################################################
-    print "InitialCuts\n";
-    print Dumper \@InitialCuts;
+    # print "InitialCuts\n";
+    # print Dumper \@InitialCuts;
 
     for (my $i = 0; $i < scalar @InitialCuts; $i++) {
         $InitialCuts[$i][0] =~ /(\d+)\.(\d+)\.(\d+)/g;
@@ -754,15 +760,13 @@ sub getClusterProbabilities{
         $this->{"Memberships"}->{$1}->{$2}->{$3}->{$InitialCuts[$i][1].":".$InitialCuts[$i][2]} = 1;
     }
 
-    print Dumper $this;
+    # print Dumper $this;
 
     ################################################################################
 
     #print "\nOrderedNodes array=\n";
 
     #print Dumper $this->{CurrentRDarray};
-
-    print "start of runs\n";
 
     for (my $run = 1; $run < $this->{'number_of_runs'}; $run++) {
 
@@ -882,6 +886,10 @@ sub getClusterProbabilities{
     delete $this->{Variants};
     #print "Done.\n";
 }
+
+#####
+##   Probability sub-methods
+#####
 
 sub GetSuperClusters { # Identify super clusters:
     my ($this, $arrayRef) = @_;

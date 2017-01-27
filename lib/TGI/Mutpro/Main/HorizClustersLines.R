@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 args = commandArgs(trailingOnly=TRUE)
-y = read.table(args[1])
-z = read.table(args[2])
+y = read.table(args[1], sep = "\t")
+z = read.table(args[2], sep = "\t")
 
 RD<-y[[2]]
 ID<-y[[1]]
@@ -13,7 +13,7 @@ x1<-z[[3]]
 
 Cluster<-z[[5]]
 
-pdf(paste("./",args[3]),width=13.3,height=23.6)
+pdf(args[3],width=13.3,height=23.6)
 par(mar=c(8,5,5,1))
 barplot(RD,names.arg=ID,main=paste("Reachability Plot: Epsilon=",args[4],"MinPts=",args[5]),col="Red", cex.names=0.4, horiz=TRUE,border=NA, space=0, las=2, xlab="Reachabilty Distance (A)") # ylab="Reachabilty Distance (A)"
 segments (x0,y0,x1,y1)
