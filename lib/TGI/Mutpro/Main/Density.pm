@@ -156,6 +156,10 @@ sub MainOPTICS {
     #     print "is a core\n";
     # }
     # else { print "not a core\n"};
+    # print "distance_matrix\n";
+    # print Dumper $distance_matrix;
+    # print "mutations\n";
+    # print Dumper $mutations;
 
     ###########################################################
 
@@ -176,38 +180,39 @@ sub MainOPTICS {
             $CD = GetCoreDistance($p, \%neighbors, $MinPts, $mutations);
             # print "p=$p and ";
             # print "CD=$CD\n";
+            # print "neighbors\n";
+            # hashQC($this, $mutations, \%neighbors);
             pushToOrderedNodesArray($p, $RD, $CD, $mutations, \@OrderedNodes, $this); # write to the file 
 
             if ( defined $CD ) {
                 OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
                 # print "For p=$p, OrderSeeds= \n";
-                # print Dumper \%OrderSeeds;
+                # hashQC($this, $mutations, \%OrderSeeds);
+
                 my $PrevObj = $p; # used to get the current obj. (To check whether variants are at the same location)
                 while (scalar keys %OrderSeeds != 0) {
                     my @SeedKeys = sort { $OrderSeeds{$a} <=> $OrderSeeds{$b} } keys %OrderSeeds;
                     my @SeedValues = @OrderSeeds{@SeedKeys};
-                    #my $CurrentObject =  $SeedKeys[0]; # CurrentObject is the object having the least RD in OrderSeeds
 
                     my $CurrentObject = GetCurrentObject(\@SeedValues, \@SeedKeys, $PrevObj, $CoreHash, $this, $mutations);
                     $PrevObj = $CurrentObject;
-                    #print "\n\n current object= $CurrentObject\t neighbors=";
+                    #print "\n\n current object= $CurrentObject\t neighbors=\n";
                     %neighbors = %{GetNeighbors($CurrentObject, $Epsilon, $SetOfNodes)};
-                    #print Dumper \%neighbors;
-                    #print Dumper $SetOfNodes{$CurrentObject}{distances};
+                    #hashQC($this, $mutations, \%neighbors);
+
                     $this->setProcessStatus($CurrentObject, 1); # set as processed
                     $RD = $SeedValues[0];
                     $CD = GetCoreDistance($CurrentObject, \%neighbors, $MinPts, $mutations);
                     pushToOrderedNodesArray($CurrentObject, $RD, $CD, $mutations, \@OrderedNodes, $this); # write to the file 
                     delete $OrderSeeds{$CurrentObject};
                     if (defined $CD) {
-                        #print "\tCurrent object is a core.(CD=$CD)\n Updated Order seeds list\n\t";
+                        #print "\tCurrent object is a core.(CD=$CD)\n Updated Order seeds list\n";
                         OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
-                        #print Dumper \%OrderSeeds;
+                        #hashQC($this, $mutations, \%OrderSeeds);
                     }
                 }
             }
-             # print "p=$p,(undefined CD) OrderedNodes= \n";
-             # print Dumper \@OrderedNodes;
+            # print "p=$p,(undefined CD), go to next\n";
         }
     }
 
@@ -364,6 +369,7 @@ sub pushToOrderedNodesArray {
     foreach my $RefAlt ( sort keys %{$mutations->{$Obj}} ) {
         my @proteinKeys = sort keys %{$mutations->{$Obj}->{$RefAlt}};
         my $proteinKey = shift @proteinKeys; # take the first key, should be the same except transcripts
+        my $weight = $mutations->{$Obj}->{$RefAlt}->{$proteinKey};
         my $altTranscriptColumn = join( "|", @proteinKeys);
         #print "To File: $proteinKey, $RD, $CD\n";
         my ( $ref, $alt ) = @{$this->splitRefAltKey($RefAlt)};
@@ -374,8 +380,24 @@ sub pushToOrderedNodesArray {
 
         my $genomicData_altTransColumn = join ( "\t", $genomicData, $altTranscriptColumn );
 
-        push @{$OrderedNodes}, [$gene_aa, $RD, $CD, $genomicData_altTransColumn];
+        push @{$OrderedNodes}, [$gene_aa, $RD, $CD, $genomicData_altTransColumn, $weight];
     }
+}
+
+sub hashQC { # used for QC'ing OPTICS. Works for both OrderedSeeds and neigbors hashes; prints out: mutation_keys,distances/RDval,protein_keys    
+    my ( $this, $mutations, $OrderSeeds ) = @_;
+
+    my @SeedKeys = sort { $OrderSeeds->{$a} <=> $OrderSeeds->{$b} } keys %{$OrderSeeds};
+    
+    foreach my $key (@SeedKeys) {
+        my @proteinKeys;
+        foreach my $refAlt ( sort keys %{$mutations->{$key}} ) {
+            push @proteinKeys, (sort keys %{$mutations->{$key}->{$refAlt}})[0];
+        }
+        my $proteinKey = join ( "|", @proteinKeys);
+        print "$key\t$OrderSeeds->{$key}\t$proteinKey\t$this->{processed}->{$key}\n";
+    }
+    print "\n";
 }
 
 sub GetFileName {
@@ -623,10 +645,11 @@ sub RunSuperClustersID {
     my $OrderedFile = "./RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.out";
     open (OUT, ">$OrderedFile");
     for (my $i = 0; $i < scalar @{$this->{CurrentRDarray}}; $i++) {
-        my $ele1 = ${$this->{CurrentRDarray}}[$i][0];
-        my $ele2 = ${$this->{CurrentRDarray}}[$i][1];
+        my $ele1 = ${$this->{CurrentRDarray}}[$i][0]; # Gene:AAchange
+        my $ele2 = ${$this->{CurrentRDarray}}[$i][1]; # RD
         my $genomicAnnotation = ${$this->{CurrentRDarray}}[$i][3];
-        print OUT "$ele1\t$ele2\t$genomicAnnotation\n";
+        my $weight = ${$this->{CurrentRDarray}}[$i][4]; # weight
+        print OUT "$ele1\t$ele2\t$genomicAnnotation\t$weight\n";
     }
     close (OUT);
 
@@ -707,6 +730,7 @@ sub RunSuperClustersID {
 
     #system ("Rscript ClustersLines.R $inputFile ./Results/$ARGV[0].SuperClustersID.plot SuperClustersID.$ARGV[0].pdf $Epsilon $MinPts");
     system ("Rscript $this->{'R_path'}/HorizClustersLines.R RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.out RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.clusters.plot RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.Horiz.pdf $this->{Epsilon} $this->{MinPts}");
+    system ("Rscript $this->{'R_path'}/ColorScore.R RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.out RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.clusters.plot RD.$this->{Epsilon}.$this->{MinPts}.$this->{pairwise_file_name_only}.Horiz.weights.pdf $this->{Epsilon} $this->{MinPts}");
     #system ("Rscript EasyClustersLines.R $inputFile ./Results/$ARGV[0].SuperClustersID.plot SuperClustersID.$ARGV[0].Easy.pdf $Epsilon $MinPts");
     #print "Done.\n";
 }
