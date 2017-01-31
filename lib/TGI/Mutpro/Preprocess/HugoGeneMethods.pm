@@ -122,7 +122,9 @@ sub makeHugoGeneObjects {
 		my @entries = split /\t/, $line;
 		my $hugo = $entries[1];
 		$hugo =~ s/\s+//g;
-		next if ( not exists $list->{$hugo} );
+		if ( not exists $list->{$hugo} ) {
+			next unless ( scalar keys %{$list} == 0 );
+		}
 		$hugo_objects{$hugo} = new TGI::Mutpro::Preprocess::HugoGene;
 		$hugo_objects{$hugo}->symbol($hugo);
 		(defined $entries[0] && $entries[0] ne "" ) || confess "No ID for '$hugo'";

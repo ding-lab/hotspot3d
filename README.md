@@ -10,7 +10,7 @@ Usage
 
          Stable:     v0.6.0 
 
-           Beta:     up to v1.1.3
+           Beta:     up to v1.1.4
         
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
@@ -84,7 +84,7 @@ For the latest stable version:
 
 For the latest beta version:
 
-	git checkout v1.1.3
+	git checkout v1.1.4
     
 	cpanm HotSpot3D-1.1.3.tar.gz
 
