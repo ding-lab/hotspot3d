@@ -475,6 +475,7 @@ sub networkClustering {
 			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
 					$fh , $structure , $superClusterID , $subClusterID );
 		}
+		$this->resetProcessed();
 	}
 	$fh->close();
 	return;
@@ -941,6 +942,22 @@ sub hasBeenProcessed { # shared
 		return 1;
 	}
 	return 0;
+}
+
+sub resetProcessed {
+    my $this = shift;
+    my $SetOfNodes = {};
+    if ( @_ ) {
+        $SetOfNodes = shift;
+    } else {
+        $SetOfNodes = $this->{'processed'};
+    }
+
+    foreach my $mutation_key ( keys %{$SetOfNodes} ) {
+        $this->setProcessedStatus( $mutationKey , 0 );
+    }
+
+    return 1;
 }
 
 sub writeCluster {

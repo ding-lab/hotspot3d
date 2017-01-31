@@ -121,9 +121,8 @@ sub MainOPTICS {
     my $Epsilon = $this->{Epsilon};
     my $MinPts = $this->{MinPts};
 
-
-    SetProcessInfoToFalse($this->{CurrentSetOfNodes}, $this); # important in prob. runs; use the same set of nodes but start from the begining by setting processinfo to false
     my $SetOfNodes = $this->{CurrentSetOfNodes};
+	$this->resetProcessed( $SetOfNodes );# important in prob. runs; use the same set of nodes but start from the begining by setting processinfo to false
 
     #my $SetOfNodesRef = \%SetOfNodes; # just because Mac and Linux compatibility
 
@@ -241,17 +240,6 @@ sub MainOPTICS {
 #####
 ##   Optics sub-methods
 #####
-
-sub SetProcessInfoToFalse {
-    my $SetOfNodes = shift;
-    my $this = shift;
-
-    foreach my $mutation_key ( keys %{$SetOfNodes} ) {
-        $this->{processed}->{$mutation_key} = "0";
-    }
-
-    return $this;
-}
 
 sub isThisAcore {
     my ( $Obj, $SetOfNodes, $mutations, $Epsilon, $MinPts ) = @_;
