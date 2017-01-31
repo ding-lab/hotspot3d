@@ -57,7 +57,9 @@ sub process {
     ## get peptide file 
     my $url = 'ftp://ftp.ensembl.org/pub/release-74/fasta/homo_sapiens/pep/Homo_sapiens.GRCh37.74.pep.all.fa.gz';
     my $downloadFile = "$peptidesDir\/Homo_sapiens.GRCh37.74.pep.all.fa.gz";
-    getstore( $url, $downloadFile );
+	if ( not -e $downloadFile ) {
+		getstore( $url, $downloadFile );
+	}
     system( "gzip -d $downloadFile" );
     # load peptide seqs
     my $peptideSeqsRef = $this->loadPeptides( $peptidesFile );

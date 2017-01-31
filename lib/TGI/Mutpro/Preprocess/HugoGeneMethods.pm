@@ -114,6 +114,7 @@ sub makeHugoGeneObjects {
     # 31. UniProt ID (mapped data supplied by UniProt)
     # 32. Ensembl ID (mapped data supplied by Ensembl)
     # 33. UCSC ID (mapped data supplied by UCSC) 
+	my $list = shift;
     my %hugo_objects;
     my $page = get($HugoUrl);
     foreach my $line (split /\n/, $page) {
@@ -121,6 +122,7 @@ sub makeHugoGeneObjects {
 		my @entries = split /\t/, $line;
 		my $hugo = $entries[1];
 		$hugo =~ s/\s+//g;
+		next if ( not exists $list->{$hugo} );
 		$hugo_objects{$hugo} = new TGI::Mutpro::Preprocess::HugoGene;
 		$hugo_objects{$hugo}->symbol($hugo);
 		(defined $entries[0] && $entries[0] ne "" ) || confess "No ID for '$hugo'";

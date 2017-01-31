@@ -246,5 +246,58 @@ sub transProteinHash{
     return \%transProtein;
 }
 
-return 1;
+#sub getCanonicalTranscript {
+#	my $self = shift;
+#	foreach my $line ( split /\n/ , $self->annotations( "Ensembl" ) ) {
+#		if ( $line =~ /(ENST\d+);.*\[(\w+)-(\d+)\]/ ) {
+#			if ( $3 == 1 ) {
+#				return $1;
+#			}
+#		}
+#	}
+#	return "";
+#}
+#
+#sub getGeneID {
+#	my $self = shift;
+#	foreach my $line ( split /\n/ , $self->entireRecord() ) {
+#		chomp( $line );
+#		if ( $line =~ /^ID\s+(\w+)\s+\w+;\s+\d+\sAA\./ ) {
+#			return $1;
+#		}
+#	}
+#	return "";
+#}
+#
+#sub getPhosphosites {
+#	my $this = shift;
+#	my $description = shift;
+#	return $this->getModifiedResidues( "Phospho" );
+#}
+#
+#sub getModifiedResidues {
+#	my $this = shift;
+#	my $description = shift;
+#	my $sites = {};
+#	foreach my $feature ( split /\n/ , $this->sequenceFeatures() ) {
+#		if ( $feature =~ /MOD_RES/ ) {
+#			my ( $position , $type ) = $feature =~ m/FT\s+MOD_RES\s+(\d+)\s+\d+\s+(.*)/;
+#			next unless ( $type =~ /$description/ );
+#			my $detail = "";
+#			$sites->{$position}->{type} = $type;
+#			if ( $type =~ m/(.*); (.*)\./ ) {
+#				$sites->{$position}->{type} = $1;
+#				$sites->{$position}->{detail} = $2;
+#			} elsif ( $type =~ m/(.*)\.$/ ) {
+#				$sites->{$position}->{type} = $1;
+#				$sites->{$position}->{detail} = "";
+#			} elsif ( $type =~ m/(.*)\.(.*)/ ) {
+#				$sites->{$position}->{type} = $1;
+#				$sites->{$position}->{detail} = $2;
+#			}
+#		}
+#	}
+#	return $sites;
+#}
 
+return 1;

@@ -17,6 +17,8 @@ use Cwd;
 use FileHandle;
 use Getopt::Long;
 
+use TGI::Data::CleanNumber;
+
 sub new {
     my $class = shift;
     my $this = {};
@@ -116,9 +118,13 @@ sub addAnnotation {
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputf") ) { die "Could not open proximity file to add annotation information !\n" };
 	print STDOUT "Creating ".$outputf."\n";
-	my ( $coord , $offset );
+	my ( $coord1 , $coord2 , $offset1 , $offset2 );
+	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\tDomain1\t" );
+	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\tDomain2\t" );
+	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
     while ( my $a = $fhin->getline ) {
         next if ($a =~ /^WARNING:/);
+        next if ($a =~ /UniProt_ID1/);
         chomp($a);
         my @t = split /\t/, $a;
         next if ($t[0] !~ /^\w+$/);
@@ -129,16 +135,12 @@ sub addAnnotation {
         if ( $distance !~ /^-?\d+\.?\d*$/ ) { print STDERR "Wrong distance : $distance \n"; next; }
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
         $annoOneEnd = $annoTwoEnd = "N\/A";
-		$coord = $t[2];
-		if ( $coord =~ /N\/A/ ) { $coord = 0; }
-		$offset = $t[3];
-		if ( $offset =~ /N\/A/ ) { $offset = 0; }
-        $uniprotCoorOneEnd = $coord + $offset;
-		$coord = $t[7];
-		if ( $coord =~ /N\/A/ ) { $coord = 0; }
-		$offset = $t[8];
-		if ( $offset =~ /N\/A/ ) { $offset = 0; }
-        $uniprotCoorTwoEnd = $coord + $offset;
+		$t[2] = TGI::Data::CleanNumber::nullIsZero( $t[2] );
+		$t[3] = TGI::Data::CleanNumber::nullIsZero( $t[3] );
+		$t[7] = TGI::Data::CleanNumber::nullIsZero( $t[7] );
+		$t[8] = TGI::Data::CleanNumber::nullIsZero( $t[8] );
+        $uniprotCoorOneEnd = $t[2] + $t[3];
+        $uniprotCoorTwoEnd = $t[7] + $t[8];
         #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
         if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd} ) { $annoOneEnd = $annotationRef->{$uniprotId}->{$uniprotCoorOneEnd}; }
         if ( defined $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd} ) { $annoTwoEnd = $annotationRef->{$uniprotId}->{$uniprotCoorTwoEnd}; }

@@ -72,6 +72,7 @@ sub process {
         $annotationRef = $uniprotRef->domainsAfterPosition(1);
         my $fhoneuid = new FileHandle;
         unless( $fhoneuid->open("> $annoDir/$uniprotId.annotation.txt") ) { die "Could not open annotation file to write !\n" };
+		$fhoneuid->print( "Feature_Start\tFeature_End\tFeature_Type\tFeature_Description\n" );
         foreach my $annotation ( @{$annotationRef} ) {
             if ( $annotation =~ /(\w+)\s+\((\d+)\,\s+(\d+)\)\s+(.*)\.?$/ ) { 
                 $key = $1; $start = $2; $stop = $3; $desc = $4;

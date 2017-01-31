@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-our $VERSION = 'V0.5.1';
+our $VERSION = 'V1.1.3';
 
 use Carp;
 use FileHandle;
@@ -22,6 +22,7 @@ use TGI::Mutpro::Main::Cluster;
 use TGI::Mutpro::Main::Significance;
 use TGI::Mutpro::Main::Summary;
 use TGI::Mutpro::Main::Visual;
+use TGI::Mutpro::Main::AllMain;
 use TGI::Mutpro::Preprocess::Drugport;
 use TGI::Mutpro::Preprocess::Uppro;
 use TGI::Mutpro::Preprocess::Calpro;
@@ -32,10 +33,11 @@ use TGI::Mutpro::Preprocess::Anno;
 use TGI::Mutpro::Preprocess::Cosmic;
 use TGI::Mutpro::Preprocess::Prior;
 use TGI::Mutpro::Preprocess::Homolog;
+use TGI::Mutpro::Preprocess::AllPreprocess;
 
 my $subCmd = shift;
 ## Add module option here
-my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior help );
+my %cmds = map{ ($_, 1) } qw( search post visual cluster sigclus summary drugport uppro calpro calroi statis anno trans homo cosmic prior prep main density help );
 unless (defined $subCmd) { die help_text(); };
 unless (exists $cmds{$subCmd}) {
     warn ' Please give valid sub command ! ', "\n";
@@ -43,52 +45,54 @@ unless (exists $cmds{$subCmd}) {
 }
 SWITCH:{
 	## Add module action here
-    $subCmd eq 'search'   && do { TGI::Mutpro::Main::Proximity->new();      last SWITCH; };
-    $subCmd eq 'post'     && do { TGI::Mutpro::Main::Post->new();           last SWITCH; };
-    $subCmd eq 'visual'   && do { TGI::Mutpro::Main::Visual->new();         last SWITCH; };
-    $subCmd eq 'cluster'  && do { TGI::Mutpro::Main::Cluster->new();        last SWITCH; };
-    $subCmd eq 'sigclus'  && do { TGI::Mutpro::Main::Significance->new();   last SWITCH; };
-    $subCmd eq 'summary'  && do { TGI::Mutpro::Main::Summary->new();        last SWITCH; };
-    $subCmd eq 'drugport' && do { TGI::Mutpro::Preprocess::Drugport->new(); last SWITCH; };
-    $subCmd eq 'uppro'    && do { TGI::Mutpro::Preprocess::Uppro->new();    last SWITCH; };
-    $subCmd eq 'calpro'   && do { TGI::Mutpro::Preprocess::Calpro->new();   last SWITCH; };
-    $subCmd eq 'calroi'   && do { TGI::Mutpro::Preprocess::Calroi->new();   last SWITCH; };
-    $subCmd eq 'statis'   && do { TGI::Mutpro::Preprocess::Statis->new();   last SWITCH; };
-    $subCmd eq 'anno'     && do { TGI::Mutpro::Preprocess::Anno->new();     last SWITCH; };
-    $subCmd eq 'trans'    && do { TGI::Mutpro::Preprocess::Trans->new();    last SWITCH; };
-    $subCmd eq 'homo'     && do { TGI::Mutpro::Preprocess::Homolog->new();  last SWITCH; };
-    $subCmd eq 'cosmic'   && do { TGI::Mutpro::Preprocess::Cosmic->new();   last SWITCH; };
-    $subCmd eq 'prior'    && do { TGI::Mutpro::Preprocess::Prior->new();    last SWITCH; };
-    $subCmd eq 'help'     && do { die help_text(); last SWITCH; };
+    $subCmd eq 'search'   && do { TGI::Mutpro::Main::Proximity->new();            last SWITCH; };
+    $subCmd eq 'post'     && do { TGI::Mutpro::Main::Post->new();                 last SWITCH; };
+    $subCmd eq 'visual'   && do { TGI::Mutpro::Main::Visual->new();               last SWITCH; };
+    $subCmd eq 'cluster'  && do { TGI::Mutpro::Main::Cluster->new();              last SWITCH; };
+    $subCmd eq 'sigclus'  && do { TGI::Mutpro::Main::Significance->new();         last SWITCH; };
+    $subCmd eq 'summary'  && do { TGI::Mutpro::Main::Summary->new();              last SWITCH; };
+    $subCmd eq 'drugport' && do { TGI::Mutpro::Preprocess::Drugport->new();       last SWITCH; };
+    $subCmd eq 'uppro'    && do { TGI::Mutpro::Preprocess::Uppro->new();          last SWITCH; };
+    $subCmd eq 'calpro'   && do { TGI::Mutpro::Preprocess::Calpro->new();         last SWITCH; };
+    $subCmd eq 'calroi'   && do { TGI::Mutpro::Preprocess::Calroi->new();         last SWITCH; };
+    $subCmd eq 'statis'   && do { TGI::Mutpro::Preprocess::Statis->new();         last SWITCH; };
+    $subCmd eq 'anno'     && do { TGI::Mutpro::Preprocess::Anno->new();           last SWITCH; };
+    $subCmd eq 'trans'    && do { TGI::Mutpro::Preprocess::Trans->new();          last SWITCH; };
+    $subCmd eq 'homo'     && do { TGI::Mutpro::Preprocess::Homolog->new();        last SWITCH; };
+    $subCmd eq 'cosmic'   && do { TGI::Mutpro::Preprocess::Cosmic->new();         last SWITCH; };
+    $subCmd eq 'prior'    && do { TGI::Mutpro::Preprocess::Prior->new();          last SWITCH; };
+    $subCmd eq 'prep'     && do { TGI::Mutpro::Preprocess::AllPreprocess->new();  last SWITCH; };
+    $subCmd eq 'main'     && do { TGI::Mutpro::Main::AllMain->new();  last SWITCH; };
+    $subCmd eq 'help'     && do { die help_text();                                last SWITCH; };
 }
 sub help_text {
 	## Add module help here
 	return <<HELP        
 Program: hotspot3d - 3D mutation proximity analysis program.
 Version: $VERSION
- Author: Beifang Niu, Adam D Scott, Sohini Sengupta, & John Wallis
+ Author: Beifang Niu, Adam D Scott, Sohini Sengupta, John Wallis & Amila Weerasinghe
 
   Usage: hotspot3d <command> [options]
 
            Preprocessing
-
               drugport  --  0) Parse drugport database (OPTIONAL)
               uppro     --  1) Update proximity files
-              calroi    --  2) Generate region of interest (ROI) information
-              statis    --  3) Calculate p_values for pairs of mutations
-              anno      --  4) Add region of interest (ROI) annotation
-              trans     --  5) Add transcript annotation 
-              cosmic    --  6) Add COSMIC annotation to proximity file
-              prior     --  7) Prioritization
+              prep      --  2) Run steps 2a-2f of preprocessing
+                  calroi    --  2a) Generate region of interest (ROI) information
+                  statis    --  2b) Calculate p_values for pairs of mutations
+                  anno      --  2c) Add region of interest (ROI) annotation
+                  trans     --  2d) Add transcript annotation 
+                  cosmic    --  2e) Add COSMIC annotation to proximity file
+                  prior     --  2f) Prioritization
 
            Analysis
 
-              search    --  0) 3D mutation proximity searching
-              post      --  1) Post-processing of 3D proximity searching output 
-              cluster   --  2) Determine mutation-mutation and mutation-drug clusters
-              sigclus   --  3) Determine significance of clusters
-              summary   --  4) Summarize clusters
-              visual    --  5) Visulization of 3D proximity
+              main      --  0) Run steps a-f of analysis (BETA)
+                  search    --  a) 3D mutation proximity searching
+                  cluster   --  b) Determine mutation-mutation and mutation-drug clusters
+                  sigclus   --  c) Determine significance of clusters (BETA)
+                  summary   --  d) Summarize clusters
+                  visual    --  e) Visulization of 3D proximity
 
            help      --  this message
 

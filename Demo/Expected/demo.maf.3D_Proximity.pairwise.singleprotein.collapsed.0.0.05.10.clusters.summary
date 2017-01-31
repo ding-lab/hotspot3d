@@ -1,6 +1,0 @@
-Cluster_ID	Centroid	Avg_Degree	Centrality	Avg_Geodesic	Avg_Recurrence	Mutations_(Unique_AAchanges)	Total_Drugs	Genes_Drugs
-0	SMAD2:p.D304G	1.000	0.228	1.567	1.000	2 (2)	NA	SMAD2	
-1	SMAD2:p.F356C	1.000	0.193	1.688	1.000	2 (2)	NA	SMAD2	
-2	SMAD4:p.L533R	1.000	0.201	1.656	1.000	2 (2)	NA	SMAD4	
-3	SMAD4:p.RFCLG361in_frame_del	4.444	112.841	1.128	2.444	22 (9)	NA	SMAD4	
-4	SMAD3:p.R295W	1.000	0.214	1.613	1.000	2 (2)	NA	SMAD3	
