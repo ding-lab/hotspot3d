@@ -966,7 +966,7 @@ sub resetProcessed {
 
     foreach my $mutationKey ( keys %{$SetOfNodes} ) {
 		#print join( "\t" , ( $mutationKey , $SetOfNodes->{$mutationKey} , $this->{'processed'}->{$mutationKey} ) )."\t";
-        $this->setProcessedStatus( $mutationKey , 0 );
+        $this->setProcessStatus( $mutationKey , 0 );
 		#print $this->{'processed'}->{$mutationKey}."\n";
     }
 
