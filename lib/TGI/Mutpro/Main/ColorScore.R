@@ -22,6 +22,7 @@ if (newH < 24){
 }
 # replace RD=0 by 0.1 (so that we get a bar to color)
 d$RD[d$RD==0] <- 0.1
+d$weight <- log(d$weight)
 
 library(ggplot2)
 

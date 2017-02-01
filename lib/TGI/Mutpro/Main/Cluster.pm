@@ -209,6 +209,17 @@ sub setOptions {
 		warn "The input .maf file )".$this->{'maf_file'}.") does not exist! ", "\n";
 		die $this->help_text();
 	}
+	my $tempMericHash = {}; ### check for correct meric option 
+	$tempMericHash->{$MULTIMER} = 0;
+	$tempMericHash->{$MONOMER} = 0;
+	$tempMericHash->{$HOMOMER} = 0;
+	$tempMericHash->{$HETEROMER} = 0;
+	$tempMericHash->{$UNSPECIFIED} = 0;
+	$tempMericHash->{$INTRA} = 0;
+	$tempMericHash->{$INTER} = 0;
+	if ( not exists $tempMericHash->{$this->{'meric_type'}} ) {
+		die "Error: meric-type should be one of the following: intra, monomer, homomer, inter, heteromer, multimer, unspecified\n";
+	}
 	print STDOUT "p-value-cutoff = ".$this->{'p_value_cutoff'}."\n";
 	print STDOUT " & 3d-distance-cutoff = ".$this->{'3d_distance_cutoff'}."\n";
 	print STDOUT " & max-radius = ".$this->{'max_radius'}."\n";
