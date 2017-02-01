@@ -953,7 +953,7 @@ sub resetProcessed {
         $SetOfNodes = $this->{'processed'};
     }
 
-    foreach my $mutation_key ( keys %{$SetOfNodes} ) {
+    foreach my $mutationKey ( keys %{$SetOfNodes} ) {
         $this->setProcessedStatus( $mutationKey , 0 );
     }
 
