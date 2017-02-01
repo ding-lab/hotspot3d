@@ -99,7 +99,7 @@ sub process {
     map{ $this->{_STAT}{$_} = 0; } qw( num_muts pdb pairs );
 
     if ( not defined $this->{clusters_file_type} ) {
-		$this->{'clusters-file-type'} = $NETWORK;
+		$this->{clusters_file_type} = $NETWORK;
 		warn "HotSpot3D::Visual::setOptions warning: no clusters-file-type option given, setting to default network\n";
 	}
 
