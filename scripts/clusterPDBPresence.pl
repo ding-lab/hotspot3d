@@ -111,7 +111,7 @@ foreach my $pdb ( sort keys %represent ) {
 } #foreach cluster in represent
 $OUT1->close();
 
-$OUT1->print( "Cluster\tPDB_ID\tGene\tChain\tnMutations\tnResidues\tTotalRecurrence\tMutations|Position\n" );
+$OUT2->print( "Cluster\tPDB_ID\tGene\tChain\tnMutations\tnResidues\tTotalRecurrence\tMutations|Position\n" );
 foreach my $cluster ( sort keys %complex ) {
 	foreach my $pdb ( sort keys %{$complex{$cluster}} ) {
 		my ( @mutations , @geneChains );
