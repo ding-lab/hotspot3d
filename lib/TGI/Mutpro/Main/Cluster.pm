@@ -965,7 +965,9 @@ sub resetProcessed {
     }
 
     foreach my $mutationKey ( keys %{$SetOfNodes} ) {
-        $this->setProcessStatus( $mutationKey , 0 );
+		#print join( "\t" , ( $mutationKey , $SetOfNodes->{$mutationKey} , $this->{'processed'}->{$mutationKey} ) )."\t";
+        $this->setProcessedStatus( $mutationKey , 0 );
+		#print $this->{'processed'}->{$mutationKey}."\n";
     }
 
     return 1;
@@ -1438,25 +1440,25 @@ sub getElementByKeys {
 sub makeStructureKey {
 	my ( $this , $structure , $chain1 , $chain2 ) = @_;
 	my @chains = sort( ( $chain1 , $chain2 ) );
-	print "makeStructureKey: ".join( "  " , ( $structure , $chain1 , $chain2 ) )."\n";
+	#print "makeStructureKey: ".join( "  " , ( $structure , $chain1 , $chain2 ) )."\n";
 	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
 		if ( $this->{'subunit_dependence'} eq $DEPENDENT ) {
-			print "\t".&combine( $structure , &combine( $chains[0] , $chains[1] ) )."\n";
+			#print "\t".&combine( $structure , &combine( $chains[0] , $chains[1] ) )."\n";
 			return &combine( $structure , &combine( $chains[0] , $chains[1] ) );
 		} else {
-			print "\t".$structure."\n";
+			#print "\t".$structure."\n";
 			return $structure;
 		}
 	} else {
 		if ( $this->{'subunit_dependence'} eq $DEPENDENT ) {
-			print "\t".&combine( $structure , &combine( $chains[0] , $chains[1] ) )."\n";
+			#print "\t".&combine( $structure , &combine( $chains[0] , $chains[1] ) )."\n";
 			return &combine( $structure , &combine( $chains[0] , $chains[1] ) );
 		} else {
-			print "\t".$ANY."\n";
+			#print "\t".$ANY."\n";
 			return $ANY;
 		}
 	}
-	print "\tbackup ".$ANY."\n";
+	#print "\tbackup ".$ANY."\n";
 	return $ANY;
 }
 
