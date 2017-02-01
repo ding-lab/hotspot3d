@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 #26 April 2016 - Adam Scott - 
+# customized to genes (instead of cluster) by Kuan Jan. 2017
 
 use strict;
 use warnings;
@@ -7,20 +8,20 @@ use warnings;
 use IO::File;
 use FileHandle;
 
-my $usage = 'perl clusterPDBPresence.pl <pairwise> <clusters> <output_prefix> 
+my $usage = 'perl clusterPDBPresence.pl <pairwise> <output_prefix> 
 ';
 
-die $usage , unless @ARGV == 3;
-my ( $pairwiseFile , $clustersFile , $output ) = @ARGV;
+die $usage , unless @ARGV == 2;
+my ( $pairwiseFile , $output ) = @ARGV;
 
 my $IN1 = FileHandle->new( "$pairwiseFile" , "r" );
 if ( not defined $IN1 ) { die "ADSERROR: Could not open/read $pairwiseFile\n"; }
-my $IN2 = FileHandle->new( "$clustersFile" , "r" );
-if ( not defined $IN2 ) { die "ADSERROR: Could not open/read $clustersFile\n"; }
-my $OUT1 = FileHandle->new( "$output.chains" , "w" );
-if ( not defined $OUT1 ) { die "ADSERROR: Could not open/write $output.chains\n"; }
-my $OUT2 = FileHandle->new( "$output.xmer" , "w" );
-if ( not defined $OUT2 ) { die "ADSERROR: Could not open/write $output.xmer\n"; }
+# my $IN2 = FileHandle->new( "$clustersFile" , "r" );
+# if ( not defined $IN2 ) { die "ADSERROR: Could not open/read $clustersFile\n"; }
+my $OUT1 = FileHandle->new( "$output.gene.chains" , "w" );
+if ( not defined $OUT1 ) { die "ADSERROR: Could not open/write $output.gene.chains\n"; }
+my $OUT2 = FileHandle->new( "$output.gene.xmer" , "w" );
+if ( not defined $OUT2 ) { die "ADSERROR: Could not open/write $output.gene.xmer\n"; }
 
 my %structures;
 my %represent;
@@ -39,7 +40,11 @@ while ( my $line = <$IN1> ) {
 		&checkMin( $minMax , $pdb , $gene2 , $chain2 , $residue2 );
 		&checkMax( $minMax , $pdb , $gene1 , $chain1 , $residue1 );
 		&checkMax( $minMax , $pdb , $gene2 , $chain2 , $residue2 );
+
+		$represent{$pdb}{$gene1}{$chain1}{$mutation1.":".$residue1} = 1;
+		$represent{$pdb}{$gene2}{$chain2}{$mutation2.":".$residue2} = 1;
 	} #foreach pdbInfo in pdbInfos
+
 }
 $IN1->close();
 
@@ -65,72 +70,58 @@ sub checkMax {
 	$minMax->{$pdb}->{$gene}->{$chain}->{'max'} = $residue;
 }
 
-while ( my $line = <$IN2> ) {
-	if ( $line !~ /Cluster/ ) {
-		chomp( $line );
-		my ( $cluster , $cgene , $mutation , $recurrence ) = (split( "\t" , $line ))[0,1,2,6];
-		foreach my $pdb ( keys %{$structures{$cgene}{$mutation}} ) {
-			foreach my $chain ( keys %{$structures{$cgene}{$mutation}{$pdb}} ) {
-				$represent{$pdb}{$cgene}{$chain}{$cluster}{$mutation.":".$structures{$cgene}{$mutation}{$pdb}{$chain}} = $recurrence;
-			}
-		}
-	}
-}
-$IN2->close();
-
-$OUT1->print( "PDB_ID\tGene\tChain\tCluster\tMinResidue\tMaxResidue\tnMutations\tnResidues\tTotalRecurrence\tMutations|Position\n" );
+$OUT1->print( "PDB_ID\tGene\tChain\tMinResidue\tMaxResidue\tnUniqMutations\tnUniqResidues\tMutations|Position\n" );
 my %complex;
 foreach my $pdb ( sort keys %represent ) {
 	foreach my $gene ( sort keys %{$represent{$pdb}} ) {
 		foreach my $chain ( sort keys %{$represent{$pdb}{$gene}} ) {
 			$chain =~ m/\[(.*)\]/;
-			foreach my $cluster ( sort keys %{$represent{$pdb}{$gene}{$chain}} ) {
+			#foreach my $cluster ( sort keys %{$represent{$pdb}{$gene}{$chain}} ) {
 				my ( $mutres , $mutation , $position );
 				my @mutations;
 				my %residues;
 				my $recurrence = 0;
-				foreach my $mutpos ( sort keys %{$represent{$pdb}{$gene}{$chain}{$cluster}} ) {
+				foreach my $mutpos ( sort keys %{$represent{$pdb}{$gene}{$chain}} ) {
 					( $mutation , $position ) = split( ":" , $mutpos );
-					$recurrence += $represent{$pdb}{$gene}{$chain}{$cluster}{$mutpos};
+					$recurrence += $represent{$pdb}{$gene}{$chain}{$mutpos};
 					$mutres = join( "|" , ( $mutation , $position ) );
 					push @mutations , $mutres;
 					$residues{$position} = 1;
 				}
-				my @logline = ( $pdb , $gene , $chain , $cluster , $mutation , $position , $recurrence );
+				my @logline = ( $pdb , $gene , $chain , $mutation , $position , $recurrence );
 				print join( "\t" , @logline )."\n";
 				if ( exists $minMax->{$pdb}->{$gene}->{$chain} ) {
 					my $min = $minMax->{$pdb}->{$gene}->{$chain}->{'min'};
 					my $max = $minMax->{$pdb}->{$gene}->{$chain}->{'max'};
-					my @outline = ( $pdb , $gene , $chain , $cluster , $min , $max , scalar @mutations , scalar keys %residues , $recurrence , join( ";" , @mutations ) );
-					$complex{$cluster}{$pdb}{$gene}{$chain} = \@outline;
+					my @outline = ( $pdb , $gene , $chain , $min , $max , scalar @mutations , scalar keys %residues , join( ";" , @mutations ) );
+					$complex{$pdb}{$gene}{$chain} = \@outline;
 					$OUT1->print( join( "\t" , @outline )."\n" );
 				}
-			}
+			#}
 		}
 	} #foreach pdb in represent => cluster
 } #foreach cluster in represent
 $OUT1->close();
 
-$OUT2->print( "Cluster\tPDB_ID\tGene\tChain\tnMutations\tnResidues\tTotalRecurrence\tMutations|Position\n" );
-foreach my $cluster ( sort keys %complex ) {
-	foreach my $pdb ( sort keys %{$complex{$cluster}} ) {
+$OUT2->print( "PDB_ID\tGene\tChain\tnUniqMutations\tnUniqResidues\tMutations|Position\n" );
+#foreach my $cluster ( sort keys %complex ) {
+	foreach my $pdb ( sort keys %complex ) {
 		my ( @mutations , @geneChains );
 		my ( $mutations , $residues , $recurrence );
-		foreach my $gene ( sort keys %{$complex{$cluster}{$pdb}} ) {
+		foreach my $gene ( sort keys %{$complex{$pdb}} ) {	
 			my @chains;
-			foreach my $chain ( sort keys %{$complex{$cluster}{$pdb}{$gene}} ) {
-				my @outline = @{$complex{$cluster}{$pdb}{$gene}{$chain}};
-				$mutations += $outline[6];
-				$residues += $outline[7];
-				$recurrence += $outline[8];
+			foreach my $chain ( sort keys %{$complex{$pdb}{$gene}} ) {
+				my @outline = @{$complex{$pdb}{$gene}{$chain}};
+				$mutations += $outline[5];
+				$residues += $outline[6];
 				push @chains , $chain;
 				push @mutations , $chains[-1]."\\";
 				$mutations[-1] .= $outline[-1];
 			} #foreach chain
 			push @geneChains , $gene."|".join( "/" , @chains );
 		} #foreach gene
-		my @complexLine = ( $cluster , $pdb , join( ";" , @geneChains ) , $mutations , $residues , $recurrence , join( ";" , @mutations ) );
+		my @complexLine = ( $pdb , join( ";" , @geneChains ) , $mutations , $residues , join( ";" , @mutations ) );
 		$OUT2->print( join( "\t" , @complexLine )."\n" );
 	} #foreach pdb
-} #foreach cluster
+#} #foreach cluster
 $OUT2->close();
