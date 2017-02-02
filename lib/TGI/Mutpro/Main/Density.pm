@@ -472,7 +472,7 @@ sub RunSuperClustersID {
             my $n = $superC;
             my $counter = 0;
             my $s = $superC;
-            while ($n <= $Clusters{SuperClusters}{$superC}) {
+            while ($n < $Clusters{SuperClusters}{$superC}) { # n < (end of the super cluster) bc we don't want the last bar in the super cluster in a sub cluster
                 if ($InitialSet[$n][1] < $Cutoff) {
                     $counter++;
                     if ($counter >= $MinPts) {
@@ -508,6 +508,7 @@ sub RunSuperClustersID {
                     }
                     $nsubcPre = $nsubc;
                     $idLevel++;
+                    $TempSubClusterRef = $Clusters{SubClusters}{$superC}; # we store the current subclusters hash to detect overlapping and covering
                 }
                 elsif ($nsubc == $nsubcPre && defined $TempSubClusterRef) {
                     # print "\tinside the second loop\n";
@@ -555,10 +556,11 @@ sub RunSuperClustersID {
                             $idSubCluster++;
                         }
                         $idLevel++;
+                        $TempSubClusterRef = $Clusters{SubClusters}{$superC}; # we store the current subclusters hash to detect overlapping and covering
                     }
                 }
             }
-            $TempSubClusterRef = $Clusters{SubClusters}{$superC}; # we store the current subclusters hash to detect overlapping and covering
+            
             delete $Clusters{SubClusters}{$superC}; # since we track the number of subclusters by nsubc and nsubcPre we delete the hash--> important to correctly track the number
             #print "\n\n";
         }
