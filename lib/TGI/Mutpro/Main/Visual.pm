@@ -219,6 +219,9 @@ sub getClusters {
 						$ccols{"Geodesic_From_Centroid"} );
 		} else {
 			my ( $id , $gd , $mp , $cc , $gfc ) = ( split /\t/ , $line )[@ccols];
+			if ( $id =~ m/\d+\.\d+\.\w/ ) {
+				next if ( $id !~ m/$this->{_PDB}/ );
+			}
 			my $variant = $gd.":".$mp;
 			if ( exists $this->{mutations}->{$variant} ) {
 				my @positions = keys %{$this->{mutations}->{$variant}};
