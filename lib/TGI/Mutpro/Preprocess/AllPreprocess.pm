@@ -17,6 +17,7 @@ use Cwd;
 use Getopt::Long;
 use IO::File;
 use FileHandle;
+use Parallel::ForkManager;
 
 #use TGI::Mutpro::Preprocess::Uppro;
 use TGI::Mutpro::Preprocess::Calroi;
@@ -34,6 +35,9 @@ my $ANNO = "anno";
 my $TRANS = "trans";
 my $COSMIC = "cosmic";
 my $PRIOR = "prior";
+my $CPU = "cpu";
+my $BSUB = "bsub";
+my $NONE = "none";
 
 sub new {
 	my $class = shift;
@@ -45,6 +49,7 @@ sub new {
 	$this->{'p_value_cutoff'} = 1;
 	$this->{'min_seq_dis'} = 0;
 	$this->{'start'} = $CALROI; 
+	$this->{'parallel'} = $CPU;
 	bless $this, $class;
 	$this->process();
 	return $this;
@@ -60,7 +65,7 @@ sub process {
 		'blat=s'   => \$this->{'_BLAT'},
 		'3d-distance-cutoff=i'	=> \$this->{'max_3d_dis'},
 		'p-value-cutoff=i'	=> \$this->{'p_value_cutoff'},
-		'linear-distance-cutoff=i'   => \$this->{'min_seq_dis'},
+		'linear-cutoff=i'   => \$this->{'min_seq_dis'},
 		'start=s' => \$this->{'start'} ,
 		'help' => \$help,
 	);

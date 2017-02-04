@@ -59,8 +59,8 @@ use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::PdbStructure;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
 
-my $SHORTESTDISTANCE = "shortestDistance";
-my $AVGDISTANCE = "averageDistance";
+my $SHORTESTDISTANCE = "shortest";
+my $AVGDISTANCE = "average";
 
 sub new {
 	my $class = shift;
@@ -102,7 +102,7 @@ sub new {
 	unless( $this->{'output_dir'} and (-e $this->{'output_dir'} ) ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); }
 	unless( $this->{'pdb_file_dir'} and (-e $this->{'pdb_file_dir'}) ) { warn 'You must provide a PDB file directory ! ', "\n"; die $this->help_text(); }
 	if ( $this->{'distance_measure'} ne $SHORTESTDISTANCE and $this->{'distance_measure'} ne $AVGDISTANCE ) {
-		warn "HotSpot3D::Calpro warning: measure not recognized, resetting to default = averageDistance\n";
+		warn "HotSpot3D::Calpro warning: measure not recognized, resetting to default = average\n";
 		$this->{'distance_measure'} = $AVGDISTANCE;
 	}
 	#unless( $this->{'drugport_file'} and (-e $this->{'drugport_file'}) ) { warn 'You must provide a drugport database file ! ', "\n"; die $this->help_text(); }
@@ -618,7 +618,7 @@ Usage: hotspot3d calpro [options]
                              OPTIONAL
 --3d-distance-cutoff         Maximum 3D distance (<= Angstroms), default: 100
 --linear-cutoff              Minimum linear distance (> peptides), default: 0
---measure                    Distance measurement between residues (shortestDistance or averageDistance), default: averageDistance
+--measure                    Distance measurement between residues (shortest or average), default: average
 
 --help                       this message
 

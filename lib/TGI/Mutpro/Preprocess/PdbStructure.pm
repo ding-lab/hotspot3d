@@ -149,6 +149,15 @@ sub chainStartStop {
     return ($start, $stop);
 }
 
+sub recordExists {
+	my $self = shift;
+	if ( $self->entireRecord() eq "" ) {
+		warn "HotSpot3D::Pdbstructure::chainToUniprotId warning: ".$self->pdbId()." not found\n";
+		return 0;
+	}
+	return 1;
+}
+
 sub chainToUniprotId {
     # Return: ref to hash with key = chain; value = Uniprot ID of peptide 
     # If there is more than one 'DBREF' entry for a given chain, 
@@ -172,6 +181,9 @@ sub chainToUniprotId {
          $chainId, 
          %ambiguous, );
     my $pdbId = $self->pdbId();
+	if ( $self->recordExists() == 0 ) {
+		return {};
+	}
     foreach $line (split /\n/, $self->entireRecord()) {
 	# match line like this:
 	# DBREF  2H32 A    1   126  UNP    P12018   VPREB_HUMAN     20    145
@@ -235,6 +247,9 @@ sub makePeptides {
     #my ( $self, $drugport_ref, ) = @_;
     my ( $self ) = @_;
     my ( %peptideObjects, @entireFile, $line, @columns, $chain, $aminoAcid, $position, $x, $y, $z);
+	if ( $self->recordExists() == 0 ) {
+		return {};
+	}
     foreach $line ( split /\n/, $self->entireRecord() ) {
 		chomp $line;
 		$aminoAcid = $position = $x = $y = $z = undef;

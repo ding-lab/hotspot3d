@@ -60,7 +60,7 @@ For configuration, we recommend using local::lib:
 
 	cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
 
-Dependencies include the modules: LWP::Simple, Test::Most, List::Util, List::MoreUtils
+Dependencies include the modules: LWP::Simple, Test::Most, List::Util, List::MoreUtils, Parallel::ForkManager
 
 	cpanm LWP::Simple
 
@@ -69,6 +69,8 @@ Dependencies include the modules: LWP::Simple, Test::Most, List::Util, List::Mor
 	cpanm List::Util
 
 	cpanm List::MoreUtils
+
+	cpanm Parallel::ForkManager
 
 Install HotSpot3D package: 
         

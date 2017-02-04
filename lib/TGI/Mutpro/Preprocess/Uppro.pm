@@ -10,7 +10,7 @@ package TGI::Mutpro::Preprocess::Uppro;
 #
 use strict;
 use warnings;
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 use Carp;
 use Cwd;
@@ -27,6 +27,9 @@ use TGI::Files::List;
 
 my $MINDISTANCE = "shortest";
 my $AVGDISTANCE = "average";
+my $BSUB = "bsub";
+my $LOCAL = "local";
+my $NONE = "none";
 
 sub new {
     my $class = shift;
@@ -39,9 +42,11 @@ sub new {
         'status' => undef,
         'pdb_file_dir' => undef,
         'genes' => undef,
-        'distance_measure' => $AVGDISTANCE,
+        'distance_measure' => undef,
         #'drugport_file' => undef, 
         'cmd_list_submit_file' => "cmd_list_submit_file", 
+		'parallel' => undef ,
+		'max_processes' => undef ,
     );
     map{ $this->{$_} = $sub_cmds{$_} } keys %sub_cmds;
     bless $this, $class;
@@ -63,6 +68,8 @@ sub process {
         #'drugport-file=s' => \$this->{'drugport_file'},
         'cmd-list-submit-file=s' => \$this->{'cmd_list_submit_file'},
         'hold'   => \$this->{'hold'},
+		'parallel=s' => \$this->{'parallel'} ,
+		'max-processes=s' => \$this->{'max_processes'} ,
         'help' => \$help,
     );
     if ($help) { print STDERR help_text(); exit 0; }
@@ -74,6 +81,16 @@ sub process {
 			die $this->help_text();
 		}
 	} qw( output_dir pdb_file_dir );
+	if ( $this->{'parallel'} eq $LOCAL ) {
+		if ( not defined $this->{'max_processes'} ) {
+			die "HotSpot3D::Uppro error: local parallelization requested, but max-processes was not set\n    CAUTION: make sure you know your max CPU processes !\n";
+		}
+	} elsif ( not defined $this->{'parallel'} ) {
+		my $error = "HotSpot3D::Uppro error: parallelization type not set, please use either: \n";
+		$error .= "\tbsub (if you have an bsub/LSF server), \n";
+		$error .= "\tlocal (if you want to parallelize on your CPU), or \n";
+		$error .= "\tnone (if you want to run calpro for each protein serially) \n !\n";
+	}
     my $pro_dir = "$this->{'output_dir'}\/proximityFiles";
     my $inpro_dir = "$pro_dir\/inProgress";
     my $pdbcor_dir = "$pro_dir\/pdbCoordinateFiles";
@@ -86,7 +103,7 @@ sub process {
     unless (-e $pdbcor_dir) { mkdir($pdbcor_dir) || die "HotSpot3D Uppro Error: can not make $pdbcor_dir !\n"; }
     unless ( -e $log_dir ) { mkdir( $log_dir ) || die "HotSpot3D Uppro Error: can not make $log_dir !\n"; }
 	unless ( $measure eq $MINDISTANCE or $measure eq $AVGDISTANCE ) {
-		warn "HotSpot3D::Uppro warning: measure not recognized, resetting to default = average\n";
+		die "HotSpot3D::Uppro error: measure not set or recognized (use either shortest or average)\n";
 	}
     my %uniprotid_toupdate;
     my $uniprot_to_structureref = $this->current_structures($log_file);
@@ -145,21 +162,100 @@ sub process {
 	my $cmd_list_submit_file_fh;
     unless( open ( $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} ) ) { die "HotSpot3D Uppro Error: Could not open cmd file (".$this->{'cmd_list_submit_file'}.")"; }
 	print STDOUT "Creating ".$this->{'cmd_list_submit_file'}."\n";
-    map {
-        system("touch $inpro_dir/$_.ProximityFile.csv");
-		my $bsub = "bsub -oo ".$log_dir.$_.".err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000";
-		my $update_program = " 'hotspot3d calpro";
-		my $programOptions = " --output-dir=".$this->{'output_dir'}." --pdb-file-dir=".$this->{'pdb_file_dir'}." --uniprot-id=".$_." --3d-distance-cutoff=".$this->{'max_3d_dis'}." --linear-cutoff=".$this->{'min_seq_dis'}." --measure=".$this->{'distance_measure'}."'";
-        my $submit_cmd = $bsub.$update_program.$programOptions;
-        print STDOUT $submit_cmd."\n"; 
-        $cmd_list_submit_file_fh->print($submit_cmd."\n");
-		if ( not $this->{'hold'} ) {
-			system( $submit_cmd );
-		}
-    } keys %uniprotid_toupdate;
-    $cmd_list_submit_file_fh->close();
+	my $command = "";
+	if ( $this->{'parallel'} eq $BSUB ) {
+		$command = $this->makeBSUBCalproCommand( $inpro_dir , $cmd_list_submit_file_fh , \%uniprotid_toupdate );
+	} elsif ( $this->{'parallel'} eq $LOCAL ) {
+		$command = $this->makeLocalCalproCommand( $inpro_dir , $cmd_list_submit_file_fh , \%uniprotid_toupdate );
+	} else {
+		$command = $this->makeSerialCalproCommand( $inpro_dir , $cmd_list_submit_file_fh , \%uniprotid_toupdate );
+	}
+	if ( not $this->{'hold'} ) {
+		system( $command );
+	}
+	$cmd_list_submit_file_fh->close();
 
     return 1;
+}
+
+sub makeCalproCommand {
+	my ( $this , $protein ) = @_;
+	my $command = "'hotspot3d calpro ";
+	$command .= "--output-dir=".$this->{'output_dir'}." ";
+	$command .= "--pdb-file-dir=".$this->{'pdb_file_dir'}." ";
+	$command .= "--uniprot-id=".$protein." ";
+	$command .= "--3d-distance-cutoff=".$this->{'max_3d_dis'}." ";
+	$command .= "--linear-cutoff=".$this->{'min_seq_dis'}." ";
+	$command .= "--measure=".$this->{'distance_measure'}."'";
+	return $command;
+}
+
+sub makeBSUBCalproCommand {
+	my ( $this , $inpro_dir , $cmd_list_submit_file_fh , $uniprotid_toupdate ) = @_;
+    my $log_dir = "$this->{'output_dir'}\/Logs\/";
+	map {
+		system("touch $inpro_dir/$_.ProximityFile.csv");
+		my $command = "";
+		$command = "bsub -oo ".$log_dir.$_.".calpro.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 ";
+		$command .= $this->makeCalproCommand( $_ );
+		print STDOUT $command."\n"; 
+		$cmd_list_submit_file_fh->print( $command."\n" );
+	} keys %{$uniprotid_toupdate};
+}
+
+sub makeSerialCalproCommand {
+	my ( $this , $inpro_dir , $cmd_list_submit_file_fh , $uniprotid_toupdate ) = @_;
+    my $log_dir = "$this->{'output_dir'}\/Logs\/";
+	map {
+		system("touch $inpro_dir/$_.ProximityFile.csv");
+		my $command = "";
+		$command = "bsub -oo ".$log_dir.$_.".calpro.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 ";
+		$command .= $this->makeCalproCommand( $_ );
+		print STDOUT $command."\n"; 
+		$cmd_list_submit_file_fh->print( $command."\n" );
+	} keys %{$uniprotid_toupdate};
+}
+
+sub makeLocalCalproCommand {
+	my ( $this , $proteinsToUpdate , $inpro_dir , $cmd_list_submit_file_fh ) = @_;
+    my $log_dir = "$this->{'output_dir'}\/Logs\/";
+	my $parallel = "#!/usr/bin/perl\n#command script for parallelizing the calpro steps from HotSpot3D uppro\n";
+	$parallel .= "use strict; use warnings; use Parallel::ForkManager;\n";
+	$parallel .= "my \$usage = \'perl calpro_parallel_command.pl #n-processes#\\'; die \$usage unless @ARGV == 1;\n";
+	$parallel .= "my ( \$Nprocesses ) = \@ARGV;\n";
+	my $i = 0;
+	$parallel .= "my \@proteinsToUpdate = ( ";
+	my @ids;
+	foreach my $protein ( keys %{$proteinsToUpdate} ) {
+		if ( $i < 20 ) {
+			push @ids , $protein;
+		} else {
+			$parallel .= "  ".join( "," , @ids ).",\n";
+			@ids = undef;
+			push @ids , $protein;
+		}
+		$i += 1;
+	}
+	$parallel .= join( "," , @ids ).",\n";
+	$parallel .= " );\n";
+	$parallel .= "my \$pm = Parallel::ForkManager->new( \$Nprocesses );\n";
+	$parallel .= "DATA_LOOP:\n";
+	$parallel .= "foreach ( my \$protein \@proteinsToUpdate ) {\n";
+	$parallel .= "\tmy \$pid = \$pm->start and next DATA_LOOP;\n";
+	$parallel .= "\tsystem( \'hotspot3d calpro ";
+	$parallel .= "--output-dir=".$this->{'output_dir'}." ";
+	$parallel .= "--pdb-file-dir=".$this->{'pdb_file_dir'}." ";
+	$parallel .= "--uniprot-id=\$protein ";
+	$parallel .= "--3d-distance-cutoff=".$this->{'max_3d_dis'}." ";
+	$parallel .= "--linear-cutoff=".$this->{'min_seq_dis'}." ";
+	$parallel .= "--measure=".$this->{'distance_measure'}." ";
+	$parallel .= ">".$log_dir."\$protein.calpro.log\' ";
+	$parallel .= ");\n";
+	$parallel .= "\t\$pm->finish;\n";
+	$parallel .= "}\n";
+	$cmd_list_submit_file_fh->print( $parallel );
+	my $command = "perl ".$this->{'cmd_list_submit_file'}." ".$this->{'max_processes'};
+	return $command;
 }
 
 # Check which Uniprot files are on disk 
@@ -210,12 +306,17 @@ Usage: hotspot3d uppro [options]
                              REQUIRED
 --output-dir                 Output directory of proximity files
 --pdb-file-dir               PDB file directory 
+--measure                    Distance measure between residues (shortest or average)
+--parallel                   Parallelization to use (bsub, local, or none)
+                                 use bsub if you want to use an LSF server
+                                 use local if you want to use your CPU (CAUTION: make sure you know your max CPU processes)
+                                 use none if you want to run calpro for each protein serially
 
                              OPTIONAL
+--max-process                Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
 --gene-file                  File with HUGO gene names in the first column (like a .maf)
 --3d-distance-cutoff         Maximum 3D distance (<= Angstroms), defaul: 100
 --linear-distance-cutoff     Minimum linear distance (> peptides), default: 0
---measure                    Distance measure between residues (shortest or average), default: average
 --cmd-list-submit-file       Batch jobs file to run calpro step in parallel, default: cmd_list_submit_file
 --hold                       Do not submit batch jobs, just write cmd_list_submit_file, default: submits (takes no input)
 
