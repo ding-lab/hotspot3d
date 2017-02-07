@@ -81,15 +81,24 @@ sub process {
 			die $this->help_text();
 		}
 	} qw( output_dir pdb_file_dir );
-	if ( $this->{'parallel'} eq $LOCAL ) {
-		if ( not defined $this->{'max_processes'} ) {
-			die "HotSpot3D::Uppro error: local parallelization requested, but max-processes was not set\n    CAUTION: make sure you know your max CPU processes !\n";
+	if ( defined $this->{'parallel'} ) {
+		if ( $this->{'parallel'} eq $LOCAL ) {
+			if ( not defined $this->{'max_processes'} ) {
+				die "HotSpot3D::Uppro error: local parallelization requested, but max-processes was not set\n    CAUTION: make sure you know your max CPU processes !\n";
+			}
+		} elsif ( $this->{'parallel'} ne $BSUB and $this->{'parallel'} ne $NONE ) {
+			my $error = "HotSpot3D::Uppro error: parallelization type not set, please use either: \n";
+			$error .= "\tbsub (if you have an bsub/LSF server), \n";
+			$error .= "\tlocal (if you want to parallelize on your CPU), or \n";
+			$error .= "\tnone (if you want to run calpro for each protein serially) \n";
+			die $error;
 		}
 	} elsif ( not defined $this->{'parallel'} ) {
 		my $error = "HotSpot3D::Uppro error: parallelization type not set, please use either: \n";
 		$error .= "\tbsub (if you have an bsub/LSF server), \n";
 		$error .= "\tlocal (if you want to parallelize on your CPU), or \n";
-		$error .= "\tnone (if you want to run calpro for each protein serially) \n !\n";
+		$error .= "\tnone (if you want to run calpro for each protein serially) \n";
+		die $error;
 	}
     my $pro_dir = "$this->{'output_dir'}\/proximityFiles";
     my $inpro_dir = "$pro_dir\/inProgress";
@@ -180,13 +189,13 @@ sub process {
 
 sub makeCalproCommand {
 	my ( $this , $protein ) = @_;
-	my $command = "'hotspot3d calpro ";
+	my $command = "hotspot3d calpro ";
 	$command .= "--output-dir=".$this->{'output_dir'}." ";
 	$command .= "--pdb-file-dir=".$this->{'pdb_file_dir'}." ";
 	$command .= "--uniprot-id=".$protein." ";
 	$command .= "--3d-distance-cutoff=".$this->{'max_3d_dis'}." ";
 	$command .= "--linear-cutoff=".$this->{'min_seq_dis'}." ";
-	$command .= "--measure=".$this->{'distance_measure'}."'";
+	$command .= "--measure=".$this->{'distance_measure'};
 	return $command;
 }
 
@@ -197,7 +206,7 @@ sub makeBSUBCalproCommand {
 		system("touch $inpro_dir/$_.ProximityFile.csv");
 		my $command = "";
 		$command = "bsub -oo ".$log_dir.$_.".calpro.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 ";
-		$command .= $this->makeCalproCommand( $_ );
+		$command .= "'".$this->makeCalproCommand( $_ )."'";
 		print STDOUT $command."\n"; 
 		$cmd_list_submit_file_fh->print( $command."\n" );
 	} keys %{$uniprotid_toupdate};
@@ -208,53 +217,42 @@ sub makeSerialCalproCommand {
     my $log_dir = "$this->{'output_dir'}\/Logs\/";
 	map {
 		system("touch $inpro_dir/$_.ProximityFile.csv");
-		my $command = "";
-		$command = "bsub -oo ".$log_dir.$_.".calpro.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 ";
-		$command .= $this->makeCalproCommand( $_ );
+		my $command = $this->makeCalproCommand( $_ );
 		print STDOUT $command."\n"; 
 		$cmd_list_submit_file_fh->print( $command."\n" );
 	} keys %{$uniprotid_toupdate};
 }
 
 sub makeLocalCalproCommand {
-	my ( $this , $proteinsToUpdate , $inpro_dir , $cmd_list_submit_file_fh ) = @_;
+	my ( $this , $inpro_dir , $cmd_list_submit_file_fh , $proteinsToUpdate ) = @_;
     my $log_dir = "$this->{'output_dir'}\/Logs\/";
-	my $parallel = "#!/usr/bin/perl\n#command script for parallelizing the calpro steps from HotSpot3D uppro\n";
-	$parallel .= "use strict; use warnings; use Parallel::ForkManager;\n";
-	$parallel .= "my \$usage = \'perl calpro_parallel_command.pl #n-processes#\\'; die \$usage unless @ARGV == 1;\n";
-	$parallel .= "my ( \$Nprocesses ) = \@ARGV;\n";
-	my $i = 0;
-	$parallel .= "my \@proteinsToUpdate = ( ";
-	my @ids;
-	foreach my $protein ( keys %{$proteinsToUpdate} ) {
-		if ( $i < 20 ) {
-			push @ids , $protein;
-		} else {
-			$parallel .= "  ".join( "," , @ids ).",\n";
-			@ids = undef;
-			push @ids , $protein;
-		}
-		$i += 1;
-	}
-	$parallel .= join( "," , @ids ).",\n";
-	$parallel .= " );\n";
+	my $parallel = "#!/usr/bin/perl\n#command script for parallelizing the calpro steps from HotSpot3D uppro\n\n";
+	$parallel .= "use strict;\nuse warnings;\nuse Parallel::ForkManager;\n\n";
+	$parallel .= "my \$usage = \'perl cmd_list_submit_file #n-processes#\n\'; die \$usage unless \@ARGV == 1;\n";
+	$parallel .= "my ( \$Nprocesses ) = \@ARGV;\n\n";
 	$parallel .= "my \$pm = Parallel::ForkManager->new( \$Nprocesses );\n";
 	$parallel .= "DATA_LOOP:\n";
-	$parallel .= "foreach ( my \$protein \@proteinsToUpdate ) {\n";
+	$parallel .= "while ( my \$protein = <DATA> ) {\n";
+	$parallel .= "\tchomp( \$protein );\n";
 	$parallel .= "\tmy \$pid = \$pm->start and next DATA_LOOP;\n";
-	$parallel .= "\tsystem( \'hotspot3d calpro ";
+	$parallel .= "\tmy \$cmd = \'hotspot3d calpro ";
 	$parallel .= "--output-dir=".$this->{'output_dir'}." ";
 	$parallel .= "--pdb-file-dir=".$this->{'pdb_file_dir'}." ";
-	$parallel .= "--uniprot-id=\$protein ";
+	$parallel .= "--uniprot-id=\'\.\$protein\.\' ";
 	$parallel .= "--3d-distance-cutoff=".$this->{'max_3d_dis'}." ";
 	$parallel .= "--linear-cutoff=".$this->{'min_seq_dis'}." ";
 	$parallel .= "--measure=".$this->{'distance_measure'}." ";
-	$parallel .= ">".$log_dir."\$protein.calpro.log\' ";
-	$parallel .= ");\n";
+	$parallel .= ">".$log_dir."\'\.\$protein\.\'.calpro.log\';\n";
+	$parallel .= "\tsystem( \$cmd );\n";
 	$parallel .= "\t\$pm->finish;\n";
 	$parallel .= "}\n";
+	$parallel .= "__DATA__\n";
+	foreach my $protein ( keys %{$proteinsToUpdate} ) {
+		$parallel .= $protein."\n";
+	}
 	$cmd_list_submit_file_fh->print( $parallel );
 	my $command = "perl ".$this->{'cmd_list_submit_file'}." ".$this->{'max_processes'};
+	print STDOUT $command."\n";
 	return $command;
 }
 
