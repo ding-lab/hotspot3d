@@ -486,7 +486,7 @@ sub networkClustering {
 			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
 					$fh , $structure , $superClusterID , $subClusterID );
 		}
-		$this->resetProcessed();
+		#$this->resetProcessed( $structure );
 	}
 	$fh->close();
 	return;
@@ -693,11 +693,11 @@ sub initializeGeodesics {
 	my $nMutations = scalar keys %{$clusterings->{$structure}->{$superClusterID}};
 	#print $nMutations." mutations to initialize geodesics\n";
 	foreach my $mutationKey1 ( sort keys %{$clusterings->{$structure}->{$superClusterID}} ) { #initialize geodesics
-		next if ( $this->hasBeenProcessed( $mutationKey1 ) );
+		next if ( $this->hasBeenProcessed( $structure , $mutationKey1 ) );
 	#foreach my $mutationKey1 ( sort keys %{$distance_matrix->{$structure}} ) { #initialize geodesics
 		#print "need to process mutationKey1 = ".$mutationKey1.": \n";
 		foreach my $mutationKey2 ( sort keys %{$clusterings->{$structure}->{$superClusterID}} ) {
-			next if ( $this->hasBeenProcessed( $mutationKey2 ) );
+			next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) );
 		#foreach my $mutationKey2 ( sort keys %{$distance_matrix->{$structure}} ) {
 			#next if ( exists $dist{$mutationKey1}{$mutationKey2} );
 			#print "need to process mutationKey2 = ".$mutationKey2.": \n";
@@ -838,7 +838,7 @@ sub checkProcessedDistances {
 	print "CHECK PROCESSED: \n";
 	foreach my $mutationKey1 ( keys %{$distance_matrix->{$structure}} ) {
 		print "\t".$mutationKey1;
-		if ( not $this->hasBeenProcessed( $mutationKey1 ) ) {
+		if ( not $this->hasBeenProcessed( $structure , $mutationKey1 ) ) {
 			print "no\n";
 			$count += 1;
 		} else {
@@ -871,9 +871,9 @@ sub sum {
 sub anyFiniteGeodesicsRemaining {
 	my ( $this , $mutations , $geodesics , $structure ) = @_;
 	foreach my $mutationKey1 ( keys %{$geodesics->{$structure}} ) {
-		next if ( $this->hasBeenProcessed( $mutationKey1 ) );
+		next if ( $this->hasBeenProcessed( $structure , $mutationKey1 ) );
 		foreach my $mutationKey2 ( keys %{$geodesics->{$structure}->{$mutationKey1}} ) {
-			next if ( $this->hasBeenProcessed( $mutationKey2 ) 
+			next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) 
 				and not $this->isRadiusOkay( $geodesics , $structure , $mutationKey1 , $mutationKey2 ) );
 			#my $sumWeights1 = &sum( $this->mutationWeights( $mutations , $mutationKey1 ) );
 			#my $sumWeights2 = &sum( $this->mutationWeights( $mutations , $mutationKey2 ) );
@@ -942,14 +942,14 @@ sub determineStructureClusters {
 #}
 
 sub setProcessStatus { # shared
-	my ( $this , $mutationKey , $status ) = @_;
-	$this->{'processed'}->{$mutationKey} = $status;
-	return $this->{'processed'}->{$mutationKey};
+	my ( $this , $structure , $mutationKey , $status ) = @_;
+	$this->{'processed'}->{$structure}->{$mutationKey} = $status;
+	return $this->{'processed'}->{$structure}->{$mutationKey};
 }
 
 sub hasBeenProcessed { # shared
-	my ( $this , $mutationKey ) = @_;
-	if ( $this->{'processed'}->{$mutationKey} ) {
+	my ( $this , $structure , $mutationKey ) = @_;
+	if ( $this->{'processed'}->{$structure}->{$mutationKey} ) {
 		return 1;
 	}
 	return 0;
@@ -957,16 +957,17 @@ sub hasBeenProcessed { # shared
 
 sub resetProcessed {
     my $this = shift;
+	my $structure = shift;
     my $SetOfNodes = {};
     if ( @_ ) {
         $SetOfNodes = shift;
     } else {
-        $SetOfNodes = $this->{'processed'};
+        $SetOfNodes = $this->{'processed'}->{$structure};
     }
 
     foreach my $mutationKey ( keys %{$SetOfNodes} ) {
 		#print join( "\t" , ( $mutationKey , $SetOfNodes->{$mutationKey} , $this->{'processed'}->{$mutationKey} ) )."\t";
-        $this->setProcessStatus( $mutationKey , 0 );
+        $this->setProcessStatus( $structure , $mutationKey , 0 );
 		#print $this->{'processed'}->{$mutationKey}."\n";
     }
 
@@ -1019,9 +1020,9 @@ sub writeCluster {
 				  #);
 		#$writtenLines += 1;
 	} #foreach refAlt
-	$this->setProcessStatus( $centroid , 1 );
+	$this->setProcessStatus( $structure , $centroid , 1 );
 	foreach my $mutationKey2 ( sort keys %{$geodesics->{$structure}->{$centroid}} ) {
-		next if ( $this->hasBeenProcessed( $mutationKey2 ) );
+		next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) );
 		$geodesic = $geodesics->{$structure}->{$centroid}->{$mutationKey2};
 		next if ( $geodesic > $this->{'max_radius'} ); 
 		#print $centroid." geodesic to ".$mutationKey2."\t".$geodesic."\n";
@@ -1054,7 +1055,7 @@ sub writeCluster {
 			#$writtenLines += 1;
 		} #foreach refAlt
 		#print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
-		$this->setProcessStatus( $mutationKey2 , 1 );
+		$this->setProcessStatus( $structure , $mutationKey2 , 1 );
 	} #foreach other vertex in network
 #	print "LINES TO WRITE = ".(scalar @linesToWrite)."\n";
 	if ( scalar @linesToWrite > 1 ) {
@@ -1391,8 +1392,8 @@ sub setElement {
 		$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $distance;
 		$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = $distance;
 
-		$this->setProcessStatus( $mutationKey1 , 0 );
-		$this->setProcessStatus( $mutationKey2 , 0 );
+		$this->setProcessStatus( $structure , $mutationKey1 , 0 );
+		$this->setProcessStatus( $structure , $mutationKey2 , 0 );
 	#}
 	return;
 }

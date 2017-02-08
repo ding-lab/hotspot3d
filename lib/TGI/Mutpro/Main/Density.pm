@@ -93,12 +93,12 @@ sub process {
         $this->{"CurrentSetOfNodes"} = $distance_matrix->{$structure};
 
         ###### Reference run: start
-        $this->MainOPTICS( $distance_matrix, $mutations ); # perform OPTICS for the first time
+        $this->MainOPTICS( $structure , $distance_matrix, $mutations ); # perform OPTICS for the first time
         $this->RunSuperClustersID(); # perform Clustering for the reference run
 
         print "Reference run: Done.\nStart probability calculation\n";
 
-        $this->getClusterProbabilities( $distance_matrix, $mutations ); # perform cluster-membership probability calculation
+        $this->getClusterProbabilities( $structure , $distance_matrix, $mutations ); # perform cluster-membership probability calculation
 
         print "\nProbability Calculation is Done.\n\n";
     }
@@ -114,7 +114,7 @@ sub process {
 
 sub MainOPTICS {
     my $this = shift;
-
+	my $structure = shift;
     my $distance_matrix = shift;
     my $mutations = shift;
 
@@ -122,7 +122,7 @@ sub MainOPTICS {
     my $MinPts = $this->{MinPts};
 
     my $SetOfNodes = $this->{CurrentSetOfNodes};
-	$this->resetProcessed( $SetOfNodes );# important in prob. runs; use the same set of nodes but start from the begining by setting processinfo to false
+	$this->resetProcessed( $structure , $SetOfNodes );# important in prob. runs; use the same set of nodes but start from the begining by setting processinfo to false
 
     #my $SetOfNodesRef = \%SetOfNodes; # just because Mac and Linux compatibility
 
@@ -732,6 +732,7 @@ sub RunSuperClustersID {
 
 sub getClusterProbabilities{
     my $this = shift;
+	my $structure = shift;
     my $distance_matrix = shift;
     my $mutations = shift;
 
@@ -784,7 +785,7 @@ sub getClusterProbabilities{
 
     for (my $run = 1; $run < $this->{'number_of_runs'}; $run++) {
 
-        $this->MainOPTICS( $distance_matrix, $mutations ); # Generate a random ordred RD set (random OPTICS)
+        $this->MainOPTICS( $structure , $distance_matrix, $mutations ); # Generate a random ordred RD set (random OPTICS)
 
         $this->GetSuperClusters($this->{CurrentRDarray}); # Identify super clusters
         # print "CurrentRDarray\n";
