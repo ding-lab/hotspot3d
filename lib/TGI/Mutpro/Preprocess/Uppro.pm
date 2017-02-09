@@ -311,7 +311,7 @@ Usage: hotspot3d uppro [options]
                                  use none if you want to run calpro for each protein serially
 
                              OPTIONAL
---max-process                Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
+--max-processes              Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
 --gene-file                  File with HUGO gene names in the first column (like a .maf)
 --3d-distance-cutoff         Maximum 3D distance (<= Angstroms), defaul: 100
 --linear-distance-cutoff     Minimum linear distance (> peptides), default: 0

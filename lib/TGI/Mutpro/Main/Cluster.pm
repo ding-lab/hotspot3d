@@ -41,8 +41,8 @@ my $AVERAGEDISTANCE = "average";
 my $SHORTESTDISTANCE = "shortest";
 my $NETWORK = "network";
 my $DENSITY = "density";
-my $INDEPENDENT = "independent";
-my $DEPENDENT = "dependent";
+my $INDEPENDENT = 0; #"independent";
+my $DEPENDENT = 1; #"dependent";
 my $ANY = "any";
 
 my $MULTIMER = "multimer";
@@ -143,8 +143,8 @@ sub setOptions {
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'weight-header=s' => \$this->{'weight_header'},
         'clustering=s' => \$this->{'clustering'},
-        'structure-dependence=s' => \$this->{'structure_dependence'},
-        'subunit-dependence=s' => \$this->{'subunit_dependence'},
+        'structure-dependent' => \$this->{'structure_dependence'},
+        'subunit-dependent' => \$this->{'subunit_dependence'},
         'parallel=s' => \$this->{'parallel'},
         'max-processes=i' => \$this->{'max_processes'},
         'meric-type=s' => \$this->{'meric_type'},
@@ -172,11 +172,15 @@ sub setOptions {
 	}
 	if ( not defined $this->{'structure_dependence'} ) {
 		$this->{'structure_dependence'} = $INDEPENDENT;
-		warn "HotSpot3D::Cluster::setOptions warning: no structure-dependence option given, setting to default independent\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no structure-dependent option given, setting to default independent\n";
+	} else {
+		$this->{'structure_dependence'} = $DEPENDENT;
 	}
 	if ( not defined $this->{'subunit_dependence'} ) {
 		$this->{'subunit_dependence'} = $INDEPENDENT;
-		warn "HotSpot3D::Cluster::setOptions warning: no subunit-dependence option given, setting to default independent\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no subunit-dependent option given, setting to default independent\n";
+	} else {
+		$this->{'subunit_dependence'} = $DEPENDENT;
 	}
 	if ( not defined $this->{'meric_type'} ) {
 		$this->{'meric_type'} = $UNSPECIFIED;
@@ -250,8 +254,8 @@ sub setOptions {
 	print STDOUT " max-radius            = ".$this->{'max_radius'}."\n";
 	print STDOUT " vertex-type           = ".$this->{'vertex_type'}."\n";
 	print STDOUT " distance-measure      = ".$this->{'distance_measure'}."\n";
-	print STDOUT " structure-dependence  = ".$this->{'structure_dependence'}."\n";
-	print STDOUT " subunit-dependence    = ".$this->{'subunit_dependence'}."\n";
+	print STDOUT " structure-dependent   = ".$this->{'structure_dependence'}."\n";
+	print STDOUT " subunit-dependent     = ".$this->{'subunit_dependence'}."\n";
 	print STDOUT " meric-type            = ".$this->{'meric_type'}."\n";
 	print STDOUT " parallel              = ".$this->{'parallel'}."\n";
 	if ( defined $this->{'max_processes'} ) {
@@ -1656,7 +1660,7 @@ Usage: hotspot3d density [options]
 --number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
 --probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100
 --distance-measure           Pair distance to use (shortest or average), default: average
---structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent 
+--structure-dependent        Clusters for each structure or across all structures (dependent or independent), default: independent 
 
 --help                       this message
 
@@ -1683,8 +1687,8 @@ Usage: hotspot3d cluster [options]
 --clustering                 Cluster using network or density-based methods (network or density), default: network
 --vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
 --distance-measure           Pair distance to use (shortest or average), default: average
---structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent
---subunit-dependence         Clusters for each subunit or across all subunits (dependent or independent), default: independent
+--structure-dependent        Clusters for each structure or across all structures, default (no flag): independent
+--subunit-dependent          Clusters for each subunit or across all subunits, default (no flag): independent
 --meric-type                 Clusters for each intra-molecular (both monomers and homomers), monomer, homomer, 
                                  inter-molecular (heteromers), heteromer, multimer (simultaneously homomer & heteromer), or any *mer 
                                  (intra, monomer, homomer, inter, heteromer, multimer, or unspecified), default: unspecified
