@@ -56,10 +56,23 @@ mkdir -p prep/cosmic pdb
 #######################
 # RUNNING PREPROCESSING
 #####
-# The uppro step launches jobs to an LSF server, and those jobs run calpro.
-# If you do not have an LSF server, you can skip uppro, and run calpro 'manually'.
+# The uppro step used to default launch jobs to an LSF server where those jobs run calpro (now called with the option --parallel bsub).
+# If you do not have an LSF server, you have the option to parallelize on your CPU cores using --parallel local.
+# For this demo, the difference between --parallel none & --parallel local with --max-processes 6 reduced the uppro/calpro runtime from 30-60min to 1-2min on a 2014 macbook pro.
+#   CAUTION: be sure to know your max cores, and be sure not to set --max-process >= max cores.
+#     This can slow down your system.
+#     To check on unix-based OS, use 'nproc' to check.
+#     On Mac-based OS use 'sysctl -n hw.ncpu' to check.
+# Otherwise, you can skip uppro, and run calpro 'manually'.
 # To get help with calpro, simply enter the command, 'hotspot3d calpro'.
-hotspot3d uppro --measure average --output-dir prep/ --pdb pdb/ --gene-file demo.maf 1>demo.uppro.out 2>demo.uppro.err
+#
+# local CPU parallelization
+hotspot3d uppro --measure average --output-dir prep/ --pdb pdb/ --gene-file demo.maf --parallel local --max-processes 6 1>demo.uppro.out 2>demo.uppro.err
+# bsub parallelization
+#hotspot3d uppro --measure average --output-dir prep/ --pdb pdb/ --gene-file demo.maf --parallel bsub 1>demo.uppro.out 2>demo.uppro.err
+# no parallelization
+#hotspot3d uppro --measure average --output-dir prep/ --pdb pdb/ --gene-file demo.maf --parallel none 1>demo.uppro.out 2>demo.uppro.err
+# run with shortest residue distance measure option
 #hotspot3d uppro --measure shortest --output-dir prep/ --pdb pdb/ --gene-file demo.maf 1>demo.uppro.out 2>demo.uppro.err
 
 ######
@@ -90,14 +103,32 @@ hotspot3d prep --output-dir prep 1>demo.prep.out 2>demo.prep.err
 ##################
 # RUNNING ANALYSIS
 #####
-# singleprotein means any homodimer and monomer
-# complex means any heterodimer
-# HotSpot3D visual generates a PyMol script and will attempt to launch pymol if the 'script-only' flag is given.
+# There are several new options for clustering, meric-type, structure-dependence, subunit-dependence, & parallel.
+# meric-type deals with quartenary structures such as monomer, multimer, homomer, heteromer.
+#   To keep some legacy capability, intra and inter can also be used as a meric-type.
+# structure-dependence will partition pairs by what structure they come from and then cluster pairs only within each structure.
+# subunit-dependence will partition pairs by specific subunit/chain pairs within each structure and then cluster only those pairs from specific subunits.
+#   Examples for when subunit-dependence is set to dependent:
+#     If meric-type is monomer, then clustering is partitioned to pairs within the same structure AND within the same subunit.
+#     If meric-type is multimer, then clustering is partitioned to pairs within the same structure AND between different subunits.
+#     If meric-type is not specified, then clustering is partitioned to any pairs within the same structure AND between each pair of subunits where a pair exists.
+#   intra used to be called singleprotein and means any homodimer and monomer.
+#   inter used to be called complex and means any heterodimer.
+#   The post step used to proved a .collapsed file using the singleprotein and complex naming scheme, but the post step is deprecated.
+# parallel will parallelize with the same method as used in the uppro step above.
+#   This is currently only useful if you are doing structure or subunit dependent clustering, since it parallelizes clustering over the structures.
+#   For best performance, if you expect to have many structures involved (>100) then using parallel with with max-process at least 4 should have similar runtime (estimating).
+#   If you are not doing structure or subunit dependent clustering, then use the parallel default (none, don't set this option) or set --parallel none.
+# 
+# The visual step generates a PyMol script and will attempt to launch pymol if the 'script-only' flag is given.
+
 hotspot3d search --maf-file demo.maf --prep-dir prep --3d-distance-cutoff 10 1>demo.search.out 2>demo.search.err
 
-hotspot3d cluster --pairwise-file 3D_Proximity.pairwise --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.singleprotein.collapsed --3d-distance-cutoff 10 1>demo.cluster.singleprotein.out 2>demo.cluster.singleprotein.err
-
-hotspot3d cluster --pairwise-file 3D_Proximity.pairwise --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.complex.collapsed --3d-distance-cutoff 10 1>demo.cluster.complex.out 2>demo.cluster.complex.err
+hotspot3d cluster --pairwise-file 3D_Proximity.pairwise --maf-file demo.maf --meric-type intra --3d-distance-cutoff 10 1>demo.cluster.singleprotein.out 2>demo.cluster.singleprotein.err
+#this used to be: hotspot3d cluster --pairwise-file 3D_Proximity.pairwise --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.singleprotein.collapsed --3d-distance-cutoff 10 1>demo.cluster.singleprotein.out 2>demo.cluster.singleprotein.err
+#
+#hotspot3d cluster --pairwise-file 3D_Proximity.pairwise --maf-file demo.maf --meric-type inter --3d-distance-cutoff 10 1>demo.cluster.complex.out 2>demo.cluster.complex.err
+#this used to be: hotspot3d cluster --pairwise-file 3D_Proximity.pairwise --maf-file demo.maf --collapsed-file 3D_Proximity.pairwise.complex.collapsed --3d-distance-cutoff 10 1>demo.cluster.complex.out 2>demo.cluster.complex.err
 
 hotspot3d summary --clusters-file demo.maf.3D_Proximity.pairwise.singleprotein.collapsed.l0.ad10.r10.clusters 1>demo.summary.out 2>demo.summary.err
 
