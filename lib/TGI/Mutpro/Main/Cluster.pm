@@ -22,6 +22,8 @@ use List::Util qw( min max );
 use IO::File;
 use FileHandle;
 use File::Basename;
+use File::Temp;
+use Parallel::ForkManager;
 
 use Data::Dumper;
 
@@ -51,6 +53,10 @@ my $UNSPECIFIED = "unspecified";
 my $INTRA = "intra";
 my $INTER = "inter";
 
+my $BSUB = "bsub";
+my $LOCAL = "local";
+my $NONE = "none";
+
 sub new {
     my $class = shift;
     my $this = {};
@@ -69,6 +75,8 @@ sub new {
     $this->{'weight_header'} = $WEIGHT;
     $this->{'clustering'} = undef;
 
+	$this->{'parallel'} = undef;
+	$this->{'max_processes'} = undef;
 
     $this->{'structure_dependence'} = undef;
     $this->{'subunit_dependence'} = undef;
@@ -78,6 +86,7 @@ sub new {
 	$this->{'processed'} = undef;
 	$this->{'distance_matrix'} = undef;
 	$this->{'mutations'} = undef;
+	$this->{'results'} = undef;
 
     $this->{'Epsilon'} = undef;
     $this->{'MinPts'} = undef;
@@ -136,6 +145,8 @@ sub setOptions {
         'clustering=s' => \$this->{'clustering'},
         'structure-dependence=s' => \$this->{'structure_dependence'},
         'subunit-dependence=s' => \$this->{'subunit_dependence'},
+        'parallel=s' => \$this->{'parallel'},
+        'max-processes=i' => \$this->{'max_processes'},
         'meric-type=s' => \$this->{'meric_type'},
 
         'help' => \$help,
@@ -146,6 +157,19 @@ sub setOptions {
 		warn "HotSpot3D::Cluster::setOptions warning: no clustering option given, setting to default network\n";
 	}
 	if ( $help ) { print STDERR help_text(); exit 0; }
+	my $acceptableParallels = { $LOCAL => 1 , $NONE => 1 }; #, $BSUB => 1 };
+	if ( not defined $this->{'parallel'} ) { 
+		$this->{'parallel'} = $NONE;
+		warn "HotSpot3D::Cluster::setOptions warning: no parallel option given, setting to default none\n";
+	} elsif ( not exists $acceptableParallels->{$this->{'parallel'}} ) {
+		warn "HotSpot3D::Cluster::setOptions error: unrecognized parallel option given, please use either none, local, or bsub\n";
+		die $this->help_text();
+	} else {
+		if ( $this->{'parallel'} eq $LOCAL and ( not defined $this->{'max_processes'} ) ) {
+			warn "HotSpot3D::Cluster::setOptions error: local parallelization specified, but max-processes was not set\n";
+			die $this->help_text();
+		}
+	}
 	if ( not defined $this->{'structure_dependence'} ) {
 		$this->{'structure_dependence'} = $INDEPENDENT;
 		warn "HotSpot3D::Cluster::setOptions warning: no structure-dependence option given, setting to default independent\n";
@@ -220,14 +244,20 @@ sub setOptions {
 	if ( not exists $tempMericHash->{$this->{'meric_type'}} ) {
 		die "Error: meric-type should be one of the following: intra, monomer, homomer, inter, heteromer, multimer, unspecified\n";
 	}
-	print STDOUT "p-value-cutoff = ".$this->{'p_value_cutoff'}."\n";
-	print STDOUT " & 3d-distance-cutoff = ".$this->{'3d_distance_cutoff'}."\n";
-	print STDOUT " & max-radius = ".$this->{'max_radius'}."\n";
-	print STDOUT " & vertex-type = ".$this->{'vertex_type'}."\n";
-	print STDOUT " & distance-measure = ".$this->{'distance_measure'}."\n";
-	print STDOUT " & structure-dependence = ".$this->{'structure_dependence'}."\n";
-	print STDOUT " & subunit-dependence = ".$this->{'subunit_dependence'}."\n";
-	print STDOUT " & meric-type = ".$this->{'meric_type'}."\n";
+	print STDOUT "=====Parameters=====\n";
+	print STDOUT " p-value-cutoff        = ".$this->{'p_value_cutoff'}."\n";
+	print STDOUT " 3d-distance-cutoff    = ".$this->{'3d_distance_cutoff'}."\n";
+	print STDOUT " max-radius            = ".$this->{'max_radius'}."\n";
+	print STDOUT " vertex-type           = ".$this->{'vertex_type'}."\n";
+	print STDOUT " distance-measure      = ".$this->{'distance_measure'}."\n";
+	print STDOUT " structure-dependence  = ".$this->{'structure_dependence'}."\n";
+	print STDOUT " subunit-dependence    = ".$this->{'subunit_dependence'}."\n";
+	print STDOUT " meric-type            = ".$this->{'meric_type'}."\n";
+	print STDOUT " parallel              = ".$this->{'parallel'}."\n";
+	if ( defined $this->{'max_processes'} ) {
+		print STDOUT " max-processes         = ".$this->{'max_processes'}."\n";
+	}
+	print STDOUT "====================\n";
 
 	if ( $this->{'clustering'} eq $DENSITY ) {
 		if ( $help ) {
@@ -252,7 +282,7 @@ sub getMutationMutationPairs {
 sub readPairwise { # shared
 	#$this->readPairwise( $distance_matrix );
 	my ( $this , $distance_matrix ) = @_;
-	print STDOUT "Reading in pairwise data ... \n";
+	print STDOUT "HotSpot3D::Cluster::readPairwise\n";
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	my $pdbCount;
@@ -378,7 +408,6 @@ sub readMAF{ # shared
 		};
 		push @mafcols , $mafcols{$this->{"weight_header"}};
 	}
-	print STDOUT "Reading in .maf ...\n";
 	map {
 		chomp;
 		my @line = split /\t/;
@@ -463,8 +492,112 @@ sub networkClustering {
 	#$this->finalize( $clusterings , $mutations , $distance_matrix );
 	my ( $this , $mutations , $distance_matrix ) = @_;
 	print STDOUT "HotSpot3D::Cluster::networkClustering\n";
+	my $clusterings = {};
+	$this->link( $clusterings , $distance_matrix );
+	if ( $this->{'parallel'} eq $LOCAL ) {
+		$this->localParallelNetworkClustering( $clusterings , $mutations , $distance_matrix );
+	#} elsif ( $this->{'parallel'} eq $BSUB ) {
+	#	$this->bsubParallelNetworkClustering( $clusterings , $mutations , $distance_matrix );
+	} else {
+		$this->noParallelNetworkClustering( $clusterings , $mutations , $distance_matrix );
+	}
+	$this->writeClustersFile();
+	return;
+}
+
+sub localParallelNetworkClustering {
+	my ( $this , $clusterings , $mutations , $distance_matrix ) = @_;
+	print STDOUT "HotSpot3D::Cluster::localParallelNetworkClustering\n";
+	print STDOUT "\tparallel clustering over structures with up to ".$this->{'max_processes'}." processes\n";
+	my $tempDir = File::Temp->newdir( TEMPLATE => 'hs3dXXXXX' );
+	my $pm = Parallel::ForkManager->new( $this->{'max_processes'} , $tempDir );
+	my %finalLines;
+	$pm->run_on_finish( 
+		sub {
+			my ( $pid , $exit_code , $ident , $exit_signal , $core_dump , $data ) = @_;
+			if ( defined $data ) {
+				if ( exists $clusterings->{$data->[0]} ) {
+					$finalLines{$data->[0]} = $data->[1];
+				}
+			} else {
+				print qq|No data from child $pid!\n|;
+			}
+		}
+	);
+	DATA_LOOP:
+	foreach my $structure ( sort keys %{$distance_matrix} ) {
+		my $pid = $pm->start and next DATA_LOOP;
+		my %lines;
+		#my $lines = "";
+		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
+			my @lines;
+			my $subClusterID = 0;
+			#$lines .= $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+					#$structure , $superClusterID , $subClusterID , () );
+			$lines{$superClusterID} = $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+					$structure , $superClusterID , $subClusterID , \@lines );
+		}
+		my @finalLines;
+		foreach my $superClusterID ( keys %lines ) {
+			push @finalLines , @{$lines{$superClusterID}};
+		}
+		my @pair = ( $structure , \@finalLines );
+		#my @pair = ( $structure , $lines );
+		$pm->finish( 0 , \@pair );
+	}
+	$pm->wait_all_children;
+	foreach my $structure ( keys %finalLines ) {
+		#if ( exists $this->{'distance_matrix'}->{$structure} ) {
+			#$this->{'results'}->{$structure} = join( "\n" , @{$lines{$structure}} )."\n";
+			$this->{'results'}->{$structure} = $finalLines{$structure};
+		#}
+	}
+	return;
+}
+
+#TODO finish bsub parallelization
+#sub bsubParallelNetworkClustering {
+#	my ( $this , $clusterings , $mutations , $distance_matrix ) = @_;
+#	print STDOUT "bsub parallel clustering over structures\n";
+#	foreach my $structure ( sort keys %{$distance_matrix} ) {
+#		$this->{'results'}->{$structure} = "";
+#		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
+#			my $subClusterID = 0;
+#			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+#					$structure , $superClusterID , $subClusterID );
+#		}
+#	}
+#	return;
+#}
+
+sub noParallelNetworkClustering {
+	my ( $this , $clusterings , $mutations , $distance_matrix ) = @_;
+	print STDOUT "serially clustering over structures\n";
+	foreach my $structure ( sort keys %{$distance_matrix} ) {
+		my %lines;
+		#my $lines = "";
+		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
+			my @lines;
+			my $subClusterID = 0;
+			$lines{$superClusterID} = $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+					$structure , $superClusterID , $subClusterID , \@lines );
+			# $lines .= $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+			#		$structure , $superClusterID , $subClusterID , 0 );
+		}
+		#$this->{'results'}->{$structure} = join( "\n" , @lines );
+		#$this->{'results'}->{$structure}  = $lines;
+		foreach my $superClusterID ( keys %lines ) {
+			push @{$this->{'results'}->{$structure}} , @{$lines{$superClusterID}};
+		}
+	}
+	return;
+}
+
+sub writeClustersFile {
+	my ( $this ) = @_;
+	print STDOUT "HotSpot3D::Cluster::writeClustersFile\n";
 	my $outFilename = $this->generateFilename();
-	print STDOUT "Creating cluster output file: ".$outFilename."\n";
+	print STDOUT "\tCreating cluster output file: ".$outFilename."\n";
 	my $fh = new FileHandle;
 	die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
 	$fh->print( join( "\t" , ( 	"Cluster" , "Gene/Drug" , "Mutation/Gene" , 
@@ -476,17 +609,20 @@ sub networkClustering {
 							 )
 					)."\n"
 			  );
-	print STDOUT "\nClustering\n\n";
-	my $clusterings = {};
-	$this->link( $clusterings , $distance_matrix );
-	#$this->link( $distance_matrix );
-	foreach my $structure ( sort keys %{$distance_matrix} ) {
-		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
-			my $subClusterID = 0;
-			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-					$fh , $structure , $superClusterID , $subClusterID );
+	foreach my $structure ( %{$this->{'results'}} ) {
+		if ( exists $this->{'results'}->{$structure} ) {
+			my @mutations = uniq( @{$this->{'results'}->{$structure}} );
+			my $nMutations = scalar( uniq( @mutations ) );
+			if ( $nMutations > 0 ) {
+				print STDOUT "\twriting for structure: ".$structure;
+				print STDOUT "\thas ".$nMutations." mutations\n";
+				foreach my $line ( @mutations ) {
+					$fh->print( $line."\n" );
+				}
+			} else {
+				print STDOUT "\tno mutations to write for structure: ".$structure."\n";
+			}
 		}
-		#$this->resetProcessed( $structure );
 	}
 	$fh->close();
 	return;
@@ -687,7 +823,7 @@ sub link {
 
 sub initializeGeodesics {
 	my ( $this , $clusterings , $superClusterID , $structure , $distance_matrix , $mutations ) = @_;
-	print STDOUT "HotSpot3D::Cluster::initializeGeodesics\n";
+	#print STDOUT "HotSpot3D::Cluster::initializeGeodesics\n";
 	my $geodesics = {};
 	my $nInitialized = 0;
 	my $nMutations = scalar keys %{$clusterings->{$structure}->{$superClusterID}};
@@ -731,7 +867,7 @@ sub initializeGeodesics {
 #		}
 #	}
 
-	print "\tnInitialized = ".$nInitialized."\n";
+	#print "\tnInitialized = ".$nInitialized."\n";
 	return $geodesics;
 	#return $distance_matrix;
 }
@@ -751,7 +887,7 @@ sub calculateClosenessCentrality {
 	my ( $this , $mutations , $geodesics , $structure , $superClusterID , $subClusterID ) = @_;
 	#my ( $this , $mutations , $geodesics , $structure ) = @_;
 	my $centrality = {};
-	print STDOUT "HotSpot3D::Cluster::calculateClosenessCentrality\n";#.$x." by ";
+	#print STDOUT "HotSpot3D::Cluster::calculateClosenessCentrality\n";#.$x." by ";
 	my $max=0;
 	my $centroid = "";
 	my ( $mutationKey1 , $mutationKey2 , $weight );
@@ -835,14 +971,14 @@ sub calculateClosenessCentrality {
 sub checkProcessedDistances {
 	my ( $this , $distance_matrix , $structure ) = @_;
 	my $count = 0;
-	print "CHECK PROCESSED: \n";
+	#print "CHECK PROCESSED: \n";
 	foreach my $mutationKey1 ( keys %{$distance_matrix->{$structure}} ) {
-		print "\t".$mutationKey1;
+		#print "\t".$mutationKey1;
 		if ( not $this->hasBeenProcessed( $structure , $mutationKey1 ) ) {
-			print "no\n";
+			#print "no\n";
 			$count += 1;
-		} else {
-			print "yes\n";
+		#} else {
+			#print "yes\n";
 		}
 	}
 	return $count;
@@ -887,8 +1023,8 @@ sub anyFiniteGeodesicsRemaining {
 
 sub determineStructureClusters {
 	my ( $this , $clusterings , $mutations , $distance_matrix ,
-		 $fh , $structure , $superClusterID , $subClusterID ) = @_;
-	print STDOUT "HotSpot3D::Cluster::determineStructureClusters\n";
+		 $structure , $superClusterID , $subClusterID , $linesToWrite ) = @_;
+	#print STDOUT "HotSpot3D::Cluster::determineStructureClusters\n";
 	#print "\t".$structure."\t".$superClusterID.".".$subClusterID."\n";
 	my $geodesics = $this->initializeGeodesics( $clusterings , $superClusterID ,
 							$structure , $distance_matrix , $mutations );
@@ -901,21 +1037,27 @@ sub determineStructureClusters {
 		#my ( $centroid , $centrality ) = $this->calculateClosenessCentrality( 
 		#										$mutations , $geodesics , 
 		#										$structure );
-		my $writtenLines = $this->writeCluster( $fh , $mutations , $geodesics , $structure , 
+		#my $writtenLines = $this->writeCluster( $mutations , $geodesics , $structure , 
+		my ( $writtenLines , $lines ) = $this->writeCluster( $mutations , $geodesics , $structure , 
 				$superClusterID , $subClusterID , $centroid , $centrality );
 		
 		my $count = $this->checkProcessedDistances( $geodesics , $structure );
 		#print join( "\t" , ( "recluster?" , $count , 
 		#		$superClusterID.".".$subClusterID , $structure ) );
 		if ( $count >= 2 and $writtenLines ) {
+			push @{$linesToWrite} , @{$lines};
+			#$linesToWrite .= join( "\n" , @{$lines} );
 			$subClusterID += 1;
 			#print " yes\n";
-			$this->determineStructureClusters( $clusterings , 
-						$mutations , $geodesics , $fh , $structure , 
-							$superClusterID , $subClusterID );
-		} else {
+			#$linesToWrite .= $this->determineStructureClusters( $clusterings , 
+								#$mutations , $geodesics , $structure , 
+								#$superClusterID , $subClusterID , $linesToWrite )};
+			push @{$linesToWrite} , @{$this->determineStructureClusters( $clusterings , 
+								$mutations , $geodesics , $structure , 
+								$superClusterID , $subClusterID , $linesToWrite )};
+		#} else {
 			#print " no\n";
-			return 0;
+			#return $linesToWrite;
 		}
 	#	my $numstructures = scalar keys %{$distance_matrix->{$structure}};
 	#	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
@@ -924,7 +1066,7 @@ sub determineStructureClusters {
 	#		print STDOUT "Found ".$numclusters." super-clusters\n";
 	#	}
 	} 
-	return 1;
+	return $linesToWrite;
 }
 
 #TODO use this method to recalculate closeness centralities of acceptable region 
@@ -977,18 +1119,19 @@ sub resetProcessed {
 sub writeCluster {
 	#$this->writeCluster( $fh , $mutations , $geodesics , $structure , 
 	#		$superClusterID , $subClusterID , $centroid , $centrality );
-	my ( $this , $fh , $mutations , $geodesics , $structure ,
+	my ( $this , $mutations , $geodesics , $structure ,
 		 $superClusterID , $subClusterID , $centroid , $centrality ) = @_;
 	my $writtenLines = 0;
 	my @linesToWrite;
 	my $clusterID = $superClusterID;
-	print STDOUT "HotSpot3D::Cluster::writeCluster (".$clusterID.")\n";
+	#print STDOUT "HotSpot3D::Cluster::writeCluster\n"; 
 	if ( $this->{'structure_dependence'} eq $DEPENDENT 
 		 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
 		$clusterID = join( "." , ( $superClusterID , $subClusterID , $structure ) );
 	} else {
 		$clusterID = join( "." , ( $superClusterID , $subClusterID ) );
 	}
+	#print "\tcluster ID ".$clusterID."\n";
 	my $geodesic = 0;
 	my $degrees = scalar keys %{$geodesics->{$structure}->{$centroid}}; #TODO update to only count subcluster nodes
 	my $closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$centroid};
@@ -1016,7 +1159,7 @@ sub writeCluster {
 								   $reference , $alternate ,
 								   $reportedTranscript , $alternateAnnotations
 								 )
-						)."\n";
+						);
 				  #);
 		#$writtenLines += 1;
 	} #foreach refAlt
@@ -1050,7 +1193,7 @@ sub writeCluster {
 									   $reference , $alternate ,
 									   $reportedTranscript , $alternateAnnotations
 									 )
-							)."\n";
+							);
 					  #);
 			#$writtenLines += 1;
 		} #foreach refAlt
@@ -1059,17 +1202,16 @@ sub writeCluster {
 	} #foreach other vertex in network
 #	print "LINES TO WRITE = ".(scalar @linesToWrite)."\n";
 	if ( scalar @linesToWrite > 1 ) {
-		foreach my $line ( @linesToWrite ) {
-			$fh->print( $line );
-		}
+		#$this->{'results'}->{$structure} .= join( "\n" , @linesToWrite );
+		#$fh->print( $line );
 		$writtenLines = scalar @linesToWrite;
 	}
-	return $writtenLines;
+	return ( $writtenLines , \@linesToWrite );
 }
 
 sub floydWarshall {
 	my ( $this , $geodesics , $structure ) = @_;
-	print STDOUT "HotSpot3D::Cluster::floydWarshall: \n";
+	#print STDOUT "HotSpot3D::Cluster::floydWarshall\n";
 	foreach my $mu_k ( keys %{$geodesics->{$structure}} ) {
 		#print "\t".$mu_k."\n";
 		foreach my $mu_i ( keys %{$geodesics->{$structure}} ) {
@@ -1549,6 +1691,8 @@ Usage: hotspot3d cluster [options]
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name
 --amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 
 --weight-header              .maf file column header for mutation weight, default: weight (used if vertex-type = weight)
+--parallel                   Parallelization for structure and subunit dependent runs (none or local), default: none
+--max-processes              Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
 
 --help                       this message
 
