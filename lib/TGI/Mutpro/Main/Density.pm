@@ -168,12 +168,12 @@ sub MainOPTICS {
 
     foreach my $p ( @SetOfCoresThenEdges ) { # p - a node(object)
         #print "first p=$p\n";
-        if ( not $this->hasBeenProcessed($p) ) { # not processed yet
+        if ( not $this->hasBeenProcessed($structure, $p) ) { # not processed yet
             ########## Expand Cluster Order ###########
             my %neighbors; # is a hash with keys neigbor indices whose values are mutual separations
             my %OrderSeeds; # is a hash to add seeds
             %neighbors = %{GetNeighbors($p, $Epsilon, $SetOfNodes)};
-            $this->setProcessStatus($p, 1); # set as processed
+            $this->setProcessStatus($structure, $p, 1); # set as processed
             my $RD = undef; # reachability distance
             my $CD; # core distance
             $CD = GetCoreDistance($p, \%neighbors, $MinPts, $mutations);
@@ -184,7 +184,7 @@ sub MainOPTICS {
             pushToOrderedNodesArray($p, $RD, $CD, $mutations, \@OrderedNodes, $this); # write to the file 
 
             if ( defined $CD ) {
-                OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
+                OrderSeedsUpdate($this, $structure, \%neighbors, $CD, \%OrderSeeds);
                 # print "For p=$p, OrderSeeds= \n";
                 # hashQC($this, $mutations, \%OrderSeeds);
 
@@ -199,14 +199,14 @@ sub MainOPTICS {
                     %neighbors = %{GetNeighbors($CurrentObject, $Epsilon, $SetOfNodes)};
                     #hashQC($this, $mutations, \%neighbors);
 
-                    $this->setProcessStatus($CurrentObject, 1); # set as processed
+                    $this->setProcessStatus($structure, $CurrentObject, 1); # set as processed
                     $RD = $SeedValues[0];
                     $CD = GetCoreDistance($CurrentObject, \%neighbors, $MinPts, $mutations);
                     pushToOrderedNodesArray($CurrentObject, $RD, $CD, $mutations, \@OrderedNodes, $this); # write to the file 
                     delete $OrderSeeds{$CurrentObject};
                     if (defined $CD) {
                         #print "\tCurrent object is a core.(CD=$CD)\n Updated Order seeds list\n";
-                        OrderSeedsUpdate($this, \%neighbors, $CD, \%OrderSeeds);
+                        OrderSeedsUpdate($this, $structure, \%neighbors, $CD, \%OrderSeeds);
                         #hashQC($this, $mutations, \%OrderSeeds);
                     }
                 }
@@ -296,10 +296,10 @@ sub GetCoreDistance {
 }
 
 sub OrderSeedsUpdate {
-    my ( $this, $neighbors, $CD, $OrderSeeds ) = @_;
+    my ( $this, $structure, $neighbors, $CD, $OrderSeeds ) = @_;
 
     foreach my $mutation_key ( keys %{$neighbors} ) {
-        if ( not $this->hasBeenProcessed( $mutation_key ) ) {
+        if ( not $this->hasBeenProcessed( $structure, $mutation_key ) ) {
             my $new_r_dist = max ( $CD, $neighbors->{$mutation_key} );
             if ( exists $OrderSeeds->{$mutation_key} ) {
                 if ( $new_r_dist < $OrderSeeds->{$mutation_key} ) {

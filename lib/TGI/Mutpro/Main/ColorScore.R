@@ -41,6 +41,6 @@ p <- p + annotate("text", x = x1+1, y = y0, label = Cluster, size = 2)
 
 p <- p + ggtitle(paste("Reachability Plot with weights: Epsilon=",args[4],"MinPts=",args[5]))
 
-ggsave(args[3], width = 13.3, height = newH)
+ggsave(args[3], width = 13.3, height = newH, limitsize = FALSE)
 
 # args: 1-RD.out, 2-clusters.plot, 3-pdf_file_name, 4-epsilon, 5-MinPts
