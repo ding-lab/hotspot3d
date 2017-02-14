@@ -1,9 +1,9 @@
 package TGI::Mutpro::Main::Cluster;
 #
 #----------------------------------
-# $Authors: Adam Scott & Sohini Sengupta
+# $Authors: Adam Scott, Sohini Sengupta, & Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 4 $
+# $Revision: 5 $
 # $URL: $
 # $Doc: $ determine mutation clusters from HotSpot3D inter, intra, and druggable data
 # 
@@ -34,6 +34,7 @@ use TGI::Mutpro::Main::Density;
 my $WEIGHT = "weight";
 my $RECURRENCE = "recurrence";
 my $UNIQUE = "unique";
+my $SITE = "site";
 my $PVALUEDEFAULT = 0.05;
 my $DISTANCEDEFAULT = 10;
 my $MAXDISTANCE = 10000;
@@ -68,7 +69,7 @@ sub new {
     $this->{'3d_distance_cutoff'} = undef;
     $this->{'linear_cutoff'} = 0;
 	$this->{'max_radius'} = 10;
-	$this->{'vertex_type'} = $RECURRENCE;
+	$this->{'vertex_type'} = $SITE;
 	$this->{'distance_measure'} = $AVERAGEDISTANCE;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
@@ -100,11 +101,13 @@ sub new {
 sub process {
     my $this = shift;
 	$this->setOptions();
+	my $temp_distance_matrix = {};
+ 	my $temp_mutations = {};
 	my $distance_matrix = {};
  	my $mutations = {};
 	my $WEIGHT = "weight";
 
-	$this->readMAF( $mutations );
+	$this->readMAF( $temp_mutations );
 #	foreach my $mk ( sort keys %{$mutations} ) {
 #		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
 #			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
@@ -112,13 +115,47 @@ sub process {
 #			}
 #		}
 #	}
-	$this->getDrugMutationPairs( $distance_matrix );
-	$this->getMutationMutationPairs( $distance_matrix );
+	$this->getDrugMutationPairs( $temp_distance_matrix );
+	$this->getMutationMutationPairs( $temp_distance_matrix );
+	$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+	#%{$mutations} = %{$temp_mutations};
+	#%{$distance_matrix} = %{$temp_distance_matrix};
+	$this->printMutations( $temp_mutations , "tempmu" );
+	$this->printMutations( $mutations , "realmu" );
+	$this->printDistanceMatrix( $temp_distance_matrix , "tempdm" );
+	$this->printDistanceMatrix( $distance_matrix , "realdm" );
 	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
 	$this->networkClustering( $mutations , $distance_matrix );
 
     return 1;
 }
+
+sub printMutations {
+	my ( $this , $mutations , $type ) = @_;
+	foreach my $a ( sort keys %{$mutations} ) {
+		foreach my $b ( sort keys %{$mutations->{$a}} ) {
+			foreach my $c ( sort keys %{$mutations->{$a}->{$b}} ) {
+				print join( "  " , ( $type , $a , $b , $c , $mutations->{$a}->{$b}->{$c} ) )."\n";
+			}
+		}
+	}
+	print scalar( keys %{$mutations})." of mu\n";
+}
+
+sub printDistanceMatrix {
+	my ( $this , $distance_matrix , $type ) = @_;
+	foreach my $a ( sort keys %{$distance_matrix} ) {
+		foreach my $b ( sort keys %{$distance_matrix->{$a}} ) {
+			foreach my $c ( sort keys %{$distance_matrix->{$a}->{$b}} ) {
+				print join( "  " , ( $type , $a , $b , $c , $distance_matrix->{$a}->{$b}->{$c} ) )."\n";
+			}
+		}
+		print scalar( keys %{$distance_matrix->{$a}})." of dm\n";
+		last;
+	}
+	print scalar( keys %{$distance_matrix})." of dms\n";
+}
+
 #####
 #	sub functions
 #####
@@ -216,12 +253,13 @@ sub setOptions {
 		warn "HotSpot3D::Cluster::setOptions error: must provide a pairwise-file!\n";
 		die $this->help_text();
 	}
-	if ( $this->{'vertex_type'} ne $RECURRENCE
-		 and $this->{'vertex_type'} ne $UNIQUE
-		 and $this->{'vertex_type'} ne $WEIGHT ) {
-		warn "vertex-type option not recognized as \'recurrence\', \'unique\', or \'weight\'\n";
-		warn "Using default vertex-type = \'recurrence\'\n";
+	my $acceptableVertex = { $RECURRENCE => 1 , $UNIQUE => 1 , $SITE => 1 , $WEIGHT => 1 };
+	if ( not defined $this->{'vertex_type'} ) {
+		warn "vertex-type not specified. Using default vertex-type = \'recurrence\'\n";
 		$this->{'vertex_type'} = $RECURRENCE;
+	} elsif ( not exists $acceptableVertex->{$this->{'vertex_type'}} ) {
+		warn "vertex-type option not recognized as \'recurrence\', \'unique\', \'site\', or \'weight\'\n";
+		die $this->help_text();
 	}
 	if ( $this->{'distance_measure'} ne $AVERAGEDISTANCE
 		 and $this->{'distance_measure'} ne $SHORTESTDISTANCE ) {
@@ -273,6 +311,121 @@ sub setOptions {
 		}
 	}
 	return;
+}
+
+sub vertexFilter {
+#$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+	my ( $this , $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix ) = @_;
+	if ( $this->{'vertex_type'} eq $SITE ) {
+		print STDOUT "Filtering vertices\n";
+#TODO if using a different .maf from search step, then some mutations can be missed
+		foreach my $structure ( keys %{$temp_distance_matrix} ) {
+			foreach my $mutationKey1 ( keys %{$temp_distance_matrix->{$structure}} ) {
+				foreach my $mutationKey2 ( keys %{$temp_distance_matrix->{$structure}} ) {
+					if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #skip if same site
+						next;
+					} else { #not the same site
+						my $seenIt = 0;
+						foreach my $mutationKey3 ( keys %{$distance_matrix->{$structure}} ) {
+							next if $mutationKey3 eq $mutationKey1;
+							next if $mutationKey3 eq $mutationKey2;
+							if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey3 ) ) {
+								$seenIt = 1;
+								print "update ".$mutationKey1." to ".$mutationKey3."\n";
+								$mutationKey1 = $mutationKey3;
+							}
+							if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey2 , $mutationKey3 ) ) {
+								$seenIt = 1;
+								print "update ".$mutationKey2." to ".$mutationKey3."\n";
+								$mutationKey2 = $mutationKey3;
+							}
+							if ( $seenIt ) {
+								last;
+							}
+						}
+						if ( $seenIt == 0 ) {
+							if ( exists $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} ) {
+								my ( $ra1 , $pk1 , $ra2 , $pk2 );
+
+								( $ra1 , $pk1 ) = $this->getARepresentativeAnnotation(
+													$temp_mutations , $mutationKey1 );
+								$mutations->{$mutationKey1}->{$ra1}->{$pk1} = 1;
+								$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = 
+									$temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+
+								( $ra2 , $pk2 ) = $this->getARepresentativeAnnotation(
+													$temp_mutations , $mutationKey2 );
+								$mutations->{$mutationKey2}->{$ra2}->{$pk2} = 1;
+								$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = 
+									$temp_distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
+							}
+						}
+#						if ( exists $distance_matrix->{$structure}->{$mutationKey1} ) { #have we seen this key before
+#							print "checkPartners of key1: ".$mutationKey1."\t";
+#							$this->checkPartners( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations );
+#						} else {
+#							print "first pass of key1: ".$mutationKey1."\t";
+#							$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+#						}	
+#						if ( exists $distance_matrix->{$structure}->{$mutationKey2} ) {
+#							print "checkPartners of key2: ".$mutationKey2."\n";
+#							$this->checkPartners( $distance_matrix , $structure , $mutationKey2 , $mutationKey1 , $temp_distance_matrix , $temp_mutations , $mutations );
+#						} else {
+#							print "first pass of key2: ".$mutationKey2."\n";
+#							$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = $temp_distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
+#						}
+					}
+				}
+			}
+		}
+	} else {
+		%{$mutations} = %{$temp_mutations};
+		%{$distance_matrix} = %{$temp_distance_matrix};
+	}
+	$temp_mutations = undef;
+	$temp_distance_matrix = undef;
+	return;
+}
+
+sub getARepresentativeAnnotation {
+	my ( $this , $mutations , $mutationKey ) = @_;
+	my $ra = ".:.";
+	my $pk = ".:p.";
+	foreach my $refAlt ( keys %{$mutations->{$mutationKey}} ) {
+		$ra = $refAlt;
+		foreach my $proteinKey ( keys %{$mutations->{$mutationKey}->{$refAlt}} ) {
+			$pk = $proteinKey;
+			last;
+		}
+		last;
+	}
+	return ( $ra , $pk );
+}
+
+sub checkPartners {
+	my ( $this , $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations ) = @_;
+	my $storeIt = 1;
+	foreach my $partner ( keys %{$distance_matrix->{$structure}->{$mutationKey1}} ) { #foreach known partner
+		if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey2 , $partner ) ) { #is the partner at the same site as our new key
+			$storeIt = 0;
+		}
+	}
+	if ( $storeIt ) { #keep this pair
+		$this->setRepresentative( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations );
+	}
+}
+
+sub setRepresentative {
+	my ( $this , $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations ) = @_;
+	$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+	foreach my $refAlt ( keys %{$temp_mutations->{$mutationKey1}} ) { #get A refAlt for representation
+		foreach my $proteinKey ( sort keys %{$temp_mutations->{$mutationKey1}->{$refAlt}} ) { #get A protein key for representation
+			$mutations->{$mutationKey1}->{$refAlt}->{$proteinKey} = $temp_mutations->{$mutationKey1}->{$refAlt}->{$proteinKey};
+			print join( "\t" , ( "setRep" , $mutationKey1 , $refAlt , $proteinKey , $mutationKey2 ) )."\n";
+			last; #only need one
+		}
+		last; #only need one
+	}
 }
 
 sub getMutationMutationPairs {
@@ -642,6 +795,14 @@ sub generateFilename {
 			my $maf = basename( $this->{'maf_file'} );
 			push @outFilename , $maf;
 		}
+		if ( defined $this->{'pairwise_file'} ) {
+			my $clean = basename( $this->{'pairwise_file'} );
+			if ( $clean ne '' and scalar @outFilename > 1 ) {
+				push @outFilename , $clean;
+			} elsif ( $clean ne '' ) {
+				push @outFilename , $clean;
+			}
+		}
 		if ( defined $this->{'drug_clean_file'} ) {
 			my $clean = basename( $this->{'drug_clean_file'} );
 			if ( $clean ne '' and scalar @outFilename > 1 ) {
@@ -650,6 +811,7 @@ sub generateFilename {
 				push @outFilename , $clean;
 			}
 		}
+		push @outFilename , $this->{'vertex_type'};
 		push @outFilename , "l".$this->{'linear_cutoff'};
 		my $m = "a";
 		if ( $this->{'distance_measure'} eq $SHORTESTDISTANCE ) { $m = "s"; }
@@ -1437,7 +1599,7 @@ sub setShortestDistance {
 
 	my @infos = split /\|/ , $infos;
 	my $nStructures = scalar @infos;
-	print "HotSpot3D::Cluster::setShortestDistance\n";
+	#print "HotSpot3D::Cluster::setShortestDistance\n";
 	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
 		foreach my $info ( @infos ) {
 			chomp( $info );
@@ -1685,7 +1847,11 @@ Usage: hotspot3d cluster [options]
 --linear-cutoff              Linear distance cutoff (> peptides), default: 0
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
 --clustering                 Cluster using network or density-based methods (network or density), default: network
---vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
+--vertex-type                Graph vertex type for network-based clustering (recurrence, unique, site or weight), default: site
+                                 recurrence vertices are the genomic mutations for each sample from the given .maf
+                                 unique vertices are the specific genomic changes
+								 site vertices are the affected protein positions
+								 weight vertices are the genomic mutations with a numerical weighting
 --distance-measure           Pair distance to use (shortest or average), default: average
 --structure-dependent        Clusters for each structure or across all structures, default (no flag): independent
 --subunit-dependent          Clusters for each subunit or across all subunits, default (no flag): independent
