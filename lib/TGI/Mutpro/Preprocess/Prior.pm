@@ -31,31 +31,10 @@ sub new {
 
 sub process {
     my $this = shift;
-    my ( $help, $options );
-    unless( @ARGV ) { die $this->help_text(); }
-    $options = GetOptions (
-        'output-dir=s' => \$this->{_OUTPUT_DIR},
-        'p-value-cutoff=f' => \$this->{_PVALUE_CUTOFF},
-        '3d-distance-cutoff=i' => \$this->{_3D_CUTOFF},
-        'linear-cutoff=i' => \$this->{_1D_CUTOFF},
-        'help' => \$help,
-    );
-    if ( $help ) { print STDERR help_text(); exit 0; }
-    unless( $options ) { die $this->help_text(); }
-    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide output directory ! ', "\n"; die help_text(); }
-    unless( -d $this->{_OUTPUT_DIR} ) { warn 'You must provide a valid output directory ! ', "\n"; die help_text(); }
-    my $fh   = new FileHandle;
+	$this->setOptions();
     #### processing ####
     # do prioritization 
-    my ( $UniprotIdFile, $proximityDir, $cosmicDir, $prioritizationDir, );
-    $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
-    $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
-    $cosmicDir = "$proximityDir\/cosmicanno";
-    $prioritizationDir = "$this->{_OUTPUT_DIR}\/prioritization";
-    unless( -d $cosmicDir ) { warn "You must provide a valid COSMIC annotations directory ! \n"; die help_text(); }
-    unless( -e $prioritizationDir ) { mkdir($prioritizationDir) || die "can not make prioritization result files directory\n"; }
-    my $fhunipro = new FileHandle;
-    unless( $fhunipro->open("<$UniprotIdFile") ) { die "Could not open Uniprot ID file !\n" };
+	my ( $fhunipro , $proximityDir , $cosmicDir , $prioritizationDir ) = $this->getInputs();
     my $u = 0;
     while ( my $line = <$fhunipro> ) {
         chomp $line;
@@ -72,6 +51,38 @@ sub process {
         #delete file if null
     }
     $fhunipro->close();
+}
+
+sub setOptions {
+	my ( $this ) = @_;
+    my ( $help, $options );
+    unless( @ARGV ) { die $this->help_text(); }
+    $options = GetOptions (
+        'output-dir=s' => \$this->{_OUTPUT_DIR},
+        'p-value-cutoff=f' => \$this->{_PVALUE_CUTOFF},
+        '3d-distance-cutoff=i' => \$this->{_3D_CUTOFF},
+        'linear-cutoff=i' => \$this->{_1D_CUTOFF},
+        'help' => \$help,
+    );
+    if ( $help ) { print STDERR help_text(); exit 0; }
+    unless( $options ) { die $this->help_text(); }
+    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide output directory ! ', "\n"; die help_text(); }
+    unless( -d $this->{_OUTPUT_DIR} ) { warn 'You must provide a valid output directory ! ', "\n"; die help_text(); }
+	return;
+}
+
+sub getInputs {
+	my ( $this ) = @_;
+    my ( $UniprotIdFile, $proximityDir, $cosmicDir, $prioritizationDir, );
+    $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
+    $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
+    $cosmicDir = "$proximityDir\/cosmicanno";
+    $prioritizationDir = "$this->{_OUTPUT_DIR}\/prioritization";
+    unless( -d $cosmicDir ) { warn "You must provide a valid COSMIC annotations directory ! \n"; die help_text(); }
+    unless( -e $prioritizationDir ) { mkdir($prioritizationDir) || die "can not make prioritization result files directory\n"; }
+    my $fhunipro = new FileHandle;
+    unless( $fhunipro->open("<$UniprotIdFile") ) { die "Could not open Uniprot ID file !\n" };
+	return ( $fhunipro , $proximityDir , $cosmicDir , $prioritizationDir );
 }
 
 # prioritization based on 
@@ -92,6 +103,9 @@ sub doPrior {
         my @t = split /\t/, $a;
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
         $annoOneEnd = $annoTwoEnd = "N\/A";
+		if ( scalar @t < 11 ) {
+			warn "bad line in ".$uniprotId.": ".$a."\n";
+		}
         next if ( ($t[2] =~ /N\/A/) or 
                   ($t[3] =~ /N\/A/) or 
                   ($t[9] =~ /N\/A/) or ($t[10] =~ /N\/A/));
