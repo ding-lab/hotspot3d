@@ -401,7 +401,7 @@ sub densityVisual {
 	my $SurfaceColors = ['violetpurple','violet','deeppurple', 'purple','lightmagenta', 'blue', 'lightblue', 'bluewhite', 'oxygen' , 'green', 'deepolive' , 'wheat' , 'lime' , 'brown' , 'orange' , 'yellow', 'salmon' , 'red',  'violetpurple' , 'limon' , 'sand' , 'raspberry' , 'slate', 'red','blue', 'green', 'yellow', 'deepolive' , 'deeppurple' , 'bluewhite' , 'lime' , 'purple' , 'dash' , 'orange' , 'brown' , 'salmon' , 'oxygen' , 'wheat' , 'violetpurple' , 'limon' , 'sand' , 'raspberry' , 'slate','red','blue', 'green', 'yellow', 'deepolive' , 'deeppurple' , 'bluewhite' , 'lime' , 'purple' , 'dash' , 'orange' , 'brown' , 'salmon' , 'oxygen' , 'wheat' , 'violetpurple' , 'limon' , 'sand' , 'raspberry' , 'slate'];
 	#my $spectrumPalette = shift @spectrum;
 	#my $ClusterSurfaceColor = shift $SurfaceColors;
-	my $currentColor = shift $SurfaceColors;
+	my $currentColor = shift @{$SurfaceColors};
 
 
 	for (my $i = 0; $i < scalar @InputClusters; $i++) {
@@ -441,8 +441,8 @@ sub densityVisual {
 	$fh->print( "\n" );
 	$fh->print( "bg_color white;\n" );
 	$fh->print( "\n" );
-	foreach my $chain (keys $this->{chains}) {
-		my $chain_color = shift $ChainColors;
+	foreach my $chain ( keys %{$this->{chains}} ) {
+		my $chain_color = shift @{$ChainColors};
 		$fh->print( "color ".$chain_color.", chain ".$chain.";\n" );
 	}
 
