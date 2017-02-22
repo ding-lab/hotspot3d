@@ -25,9 +25,10 @@ use FileHandle;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'clusters_file'} = '3D_Proximity.pairwise.singleprotein.collapsed.clusters';
+    $this->{'clusters_file'} = '3D_Proximity.pairwise.clusters';
     $this->{'output_prefix'} = undef;
     $this->{mutationmass} = {};
+    $this->{recurrencemass} = {};
     $this->{drugmass} = {};
     $this->{degrees} = {};
     $this->{centralities} = {};
@@ -41,6 +42,13 @@ sub new {
 
 sub process {
     my $this = shift;
+	$this->setOptions();
+	$this->readClustersFile();
+	$this->writeSummary();
+}
+
+sub setOptions {
+	my ( $this ) = shift;
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
@@ -52,16 +60,11 @@ sub process {
     unless( $options ) { die $this->help_text(); }
     unless( $this->{'clusters_file'} ) { warn 'You must provide a clusters file! ', "\n"; die $this->help_text(); }
     unless( -e $this->{'clusters_file'} ) { warn "The input clusters file (".$this->{'clusters_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+	return;
+}
 
-	my ( $genes , $degrees , $centralities , $geodesics , $clustertotal , $centroids ) = {};
-	my ( $mutationmass , $drugmass ) = {};
-	#my ( $DrugBank , $NIH ) = {};
-	#my ( $DMKB , $DMKBs ) = {};
-	#my ( $family , $domains ) = {};
-	
-	my $infh = new FileHandle;
-	unless( $infh->open( $this->{'clusters_file'} , "r" ) ) { die "Could not open clusters file $! \n" };
-	my $fh = new FileHandle;
+sub generateOutputFileName {
+	my ( $this ) = @_;
 	my $outFilename = "";
 	if ( defined $this->{'output_prefix'} ) {
 		$outFilename = $this->{'output_prefix'};
@@ -69,7 +72,13 @@ sub process {
 		$outFilename = $this->{'clusters_file'};
 	}
 	$outFilename .= ".summary";
-	unless( $fh->open( $outFilename , "w" ) ) { die "Could not open $outFilename $! \n"; }
+	return $outFilename;
+}
+
+sub readClustersFile {
+	my ( $this ) = @_;
+	my $infh = new FileHandle;
+	unless( $infh->open( $this->{'clusters_file'} , "r" ) ) { die "Could not open clusters file $! \n" };
 	my @cols;
 	while ( my $line = <$infh> ) {
 		chomp( $line );
@@ -93,7 +102,7 @@ sub process {
 						$cols{"Geodesic_From_Centroid"} , 
 						$cols{"Recurrence"} );
 		} else {
-			my ( $id , $genedrug , $aagene , $degree , $centrality , $geodesic , $recurrence ) = (split( "\t" , $line ))[0..6];
+			my ( $id , $genedrug , $aagene , $degree , $centrality , $geodesic , $recurrence ) = (split( "\t" , $line ))[@cols];
 			$this->sum( 'degrees' , $id , $degree );
 			$this->sum( 'centralities' , $id , $centrality );
 			$this->sum( 'geodesics' , $id , $geodesic );
@@ -102,7 +111,7 @@ sub process {
 			if ( $aagene =~ /p\./ ) {
 				if ( $geodesic == 0 ) { $this->{centroids}->{$id} = $genedrug.":".$aagene; }
 				$this->sum( 'mutationmass' , $id , 1 );
-				$this->sum( 'clustertotal' , $id , $recurrence );
+				$this->sum( 'recurrencemass' , $id , $recurrence );
 				#if ( $families ) { &sumlist( $family , $id , $families , $recurrence ); }
 				#if ( $doms ) { &sumlist( $domains , $id , $doms , $recurrence ); }
 				#$this->list( 'family' , $id , $families );
@@ -122,9 +131,16 @@ sub process {
 		}
 	}
 	$infh->close();
+	return;
+}
 
+sub writeSummary {
+	my ( $this ) = @_;
+	my $outFilename = $this->generateOutputFileName();
+	my $fh = new FileHandle;
+	unless( $fh->open( $outFilename , "w" ) ) { die "Could not open $outFilename $! \n"; }
 	my $fill = "%.3f"."\t";
-	$fh->print( "Cluster_ID\tCentroid\tAvg_Degree\tCentrality\tAvg_Geodesic\tAvg_Recurrence" );
+	$fh->print( "Cluster_ID\tCentroid\tAvg_Degree\tCentrality\tAvg_Centrality\tAvg_Geodesic\tRecurrence_Mass\tAvg_Recurrence" );
 	$fh->print( "\tMutations_(Unique_AAchanges)" );
 	#$fh->print( "\tKnown_Mutations_(Unique_Known)" );
 	$fh->print( "\tTotal_Drugs\tGenes_Drugs" );
@@ -140,9 +156,11 @@ sub process {
         }
 		$fh->printf( $fill , $this->avg( 'degrees' , $id , 'mutationmass' ) ); #AVG_Degree (pairs)
 		$fh->printf( $fill , $this->{centralities}->{$id} ); #Centrality (cluster closeness)
+		$fh->printf( $fill , $this->avg( 'centralities' , $id , 'recurrencemass' ) ); #Avg_Frequency (average recurrence)
 		$fh->printf( $fill , $this->avg( 'geodesics' , $id , 'mutationmass' ) ); #Avg_Geodesic (average geodesic from centroid)
-		$fh->printf( $fill , $this->avg( 'clustertotal' , $id , 'mutationmass' ) ); #Avg_Frequency (average recurrence)
-		$fh->print( $this->{clustertotal}->{$id}." (".$this->{mutationmass}->{$id}.")\t" ); #Mutations_(Unique_AAchanges)
+		$fh->printf( $fill , $this->{recurrencemass}->{$id} ); #Recurrence_Mass (sum recurrence in cluster)
+		$fh->printf( $fill , $this->avg( 'recurrencemass' , $id , 'mutationmass' ) ); #Avg_Frequency (average recurrence)
+		$fh->print( $this->{recurrencemass}->{$id}." (".$this->{mutationmass}->{$id}.")\t" ); #Mutations_(Unique_AAchanges)
 		#$fh->print( $DMKB->{$id}." (".(scalar keys %{$DMKBs->{$id}}).")\t" ); #Known_Mutations_(Unique_Known)#known druggable
 		if ( exists $this->{drugmass}->{$id} ) {
 			$fh->print( $this->{drugmass}->{$id}."\t" );
@@ -177,6 +195,7 @@ sub process {
 		$fh->print( "\n" );
 	}
 	$fh->close();
+	return;
 }
 
 sub sum {

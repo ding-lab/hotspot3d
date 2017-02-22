@@ -1,9 +1,9 @@
 package TGI::Mutpro::Main::Cluster;
 #
 #----------------------------------
-# $Authors: Adam Scott & Sohini Sengupta
+# $Authors: Adam Scott, Sohini Sengupta, & Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 4 $
+# $Revision: 6 $
 # $URL: $
 # $Doc: $ determine mutation clusters from HotSpot3D inter, intra, and druggable data
 # 
@@ -22,16 +22,20 @@ use List::Util qw( min max );
 use IO::File;
 use FileHandle;
 use File::Basename;
+use File::Temp;
+use Parallel::ForkManager;
 
 use Data::Dumper;
 
 use TGI::Variant;
 use TGI::ProteinVariant;
+use TGI::Mutpro::Main::Network;
 use TGI::Mutpro::Main::Density;
 
 my $WEIGHT = "weight";
 my $RECURRENCE = "recurrence";
 my $UNIQUE = "unique";
+my $SITE = "site";
 my $PVALUEDEFAULT = 0.05;
 my $DISTANCEDEFAULT = 10;
 my $MAXDISTANCE = 10000;
@@ -39,8 +43,8 @@ my $AVERAGEDISTANCE = "average";
 my $SHORTESTDISTANCE = "shortest";
 my $NETWORK = "network";
 my $DENSITY = "density";
-my $INDEPENDENT = "independent";
-my $DEPENDENT = "dependent";
+my $INDEPENDENT = 0; #"independent";
+my $DEPENDENT = 1; #"dependent";
 my $ANY = "any";
 
 my $MULTIMER = "multimer";
@@ -50,6 +54,10 @@ my $HETEROMER = "heteromer";
 my $UNSPECIFIED = "unspecified";
 my $INTRA = "intra";
 my $INTER = "inter";
+
+my $BSUB = "bsub";
+my $LOCAL = "local";
+my $NONE = "none";
 
 sub new {
     my $class = shift;
@@ -62,13 +70,15 @@ sub new {
     $this->{'3d_distance_cutoff'} = undef;
     $this->{'linear_cutoff'} = 0;
 	$this->{'max_radius'} = 10;
-	$this->{'vertex_type'} = $RECURRENCE;
+	$this->{'vertex_type'} = $SITE;
 	$this->{'distance_measure'} = $AVERAGEDISTANCE;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
     $this->{'weight_header'} = $WEIGHT;
     $this->{'clustering'} = undef;
 
+	$this->{'parallel'} = undef;
+	$this->{'max_processes'} = undef;
 
     $this->{'structure_dependence'} = undef;
     $this->{'subunit_dependence'} = undef;
@@ -78,6 +88,7 @@ sub new {
 	$this->{'processed'} = undef;
 	$this->{'distance_matrix'} = undef;
 	$this->{'mutations'} = undef;
+	$this->{'results'} = undef;
 
     $this->{'Epsilon'} = undef;
     $this->{'MinPts'} = undef;
@@ -91,11 +102,13 @@ sub new {
 sub process {
     my $this = shift;
 	$this->setOptions();
+	my $temp_distance_matrix = {};
+ 	my $temp_mutations = {};
 	my $distance_matrix = {};
  	my $mutations = {};
 	my $WEIGHT = "weight";
 
-	$this->readMAF( $mutations );
+	$this->readMAF( $temp_mutations );
 #	foreach my $mk ( sort keys %{$mutations} ) {
 #		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
 #			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
@@ -103,13 +116,47 @@ sub process {
 #			}
 #		}
 #	}
-	$this->getDrugMutationPairs( $distance_matrix );
-	$this->getMutationMutationPairs( $distance_matrix );
+	$this->getDrugMutationPairs( $temp_distance_matrix );
+	$this->getMutationMutationPairs( $temp_distance_matrix );
+	$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+	#%{$mutations} = %{$temp_mutations};
+	#%{$distance_matrix} = %{$temp_distance_matrix};
+	#$this->printMutations( $temp_mutations , "tempmu" );
+	#$this->printMutations( $mutations , "realmu" );
+	#$this->printDistanceMatrix( $temp_distance_matrix , "tempdm" );
+	#$this->printDistanceMatrix( $distance_matrix , "realdm" );
 	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
 	$this->networkClustering( $mutations , $distance_matrix );
 
     return 1;
 }
+
+sub printMutations {
+	my ( $this , $mutations , $type ) = @_;
+	foreach my $a ( sort keys %{$mutations} ) {
+		foreach my $b ( sort keys %{$mutations->{$a}} ) {
+			foreach my $c ( sort keys %{$mutations->{$a}->{$b}} ) {
+				print join( "  " , ( $type , $a , $b , $c , $mutations->{$a}->{$b}->{$c} ) )."\n";
+			}
+		}
+	}
+	print scalar( keys %{$mutations})." of mu\n";
+}
+
+sub printDistanceMatrix {
+	my ( $this , $distance_matrix , $type ) = @_;
+	foreach my $a ( sort keys %{$distance_matrix} ) {
+		foreach my $b ( sort keys %{$distance_matrix->{$a}} ) {
+			foreach my $c ( sort keys %{$distance_matrix->{$a}->{$b}} ) {
+				print join( "  " , ( $type , $a , $b , $c , $distance_matrix->{$a}->{$b}->{$c} ) )."\n";
+			}
+		}
+		print scalar( keys %{$distance_matrix->{$a}})." of dm\n";
+		last;
+	}
+	print scalar( keys %{$distance_matrix})." of dms\n";
+}
+
 #####
 #	sub functions
 #####
@@ -134,8 +181,10 @@ sub setOptions {
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'weight-header=s' => \$this->{'weight_header'},
         'clustering=s' => \$this->{'clustering'},
-        'structure-dependence=s' => \$this->{'structure_dependence'},
-        'subunit-dependence=s' => \$this->{'subunit_dependence'},
+        'structure-dependent' => \$this->{'structure_dependence'},
+        'subunit-dependent' => \$this->{'subunit_dependence'},
+        'parallel=s' => \$this->{'parallel'},
+        'max-processes=i' => \$this->{'max_processes'},
         'meric-type=s' => \$this->{'meric_type'},
 
         'help' => \$help,
@@ -146,13 +195,30 @@ sub setOptions {
 		warn "HotSpot3D::Cluster::setOptions warning: no clustering option given, setting to default network\n";
 	}
 	if ( $help ) { print STDERR help_text(); exit 0; }
+	my $acceptableParallels = { $LOCAL => 1 , $NONE => 1 }; #, $BSUB => 1 };
+	if ( not defined $this->{'parallel'} ) { 
+		$this->{'parallel'} = $NONE;
+		warn "HotSpot3D::Cluster::setOptions warning: no parallel option given, setting to default none\n";
+	} elsif ( not exists $acceptableParallels->{$this->{'parallel'}} ) {
+		warn "HotSpot3D::Cluster::setOptions error: unrecognized parallel option given, please use either none, local, or bsub\n";
+		die $this->help_text();
+	} else {
+		if ( $this->{'parallel'} eq $LOCAL and ( not defined $this->{'max_processes'} ) ) {
+			warn "HotSpot3D::Cluster::setOptions error: local parallelization specified, but max-processes was not set\n";
+			die $this->help_text();
+		}
+	}
 	if ( not defined $this->{'structure_dependence'} ) {
 		$this->{'structure_dependence'} = $INDEPENDENT;
-		warn "HotSpot3D::Cluster::setOptions warning: no structure-dependence option given, setting to default independent\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no structure-dependent option given, setting to default independent\n";
+	} else {
+		$this->{'structure_dependence'} = $DEPENDENT;
 	}
 	if ( not defined $this->{'subunit_dependence'} ) {
 		$this->{'subunit_dependence'} = $INDEPENDENT;
-		warn "HotSpot3D::Cluster::setOptions warning: no subunit-dependence option given, setting to default independent\n";
+		warn "HotSpot3D::Cluster::setOptions warning: no subunit-dependent option given, setting to default independent\n";
+	} else {
+		$this->{'subunit_dependence'} = $DEPENDENT;
 	}
 	if ( not defined $this->{'meric_type'} ) {
 		$this->{'meric_type'} = $UNSPECIFIED;
@@ -188,12 +254,13 @@ sub setOptions {
 		warn "HotSpot3D::Cluster::setOptions error: must provide a pairwise-file!\n";
 		die $this->help_text();
 	}
-	if ( $this->{'vertex_type'} ne $RECURRENCE
-		 and $this->{'vertex_type'} ne $UNIQUE
-		 and $this->{'vertex_type'} ne $WEIGHT ) {
-		warn "vertex-type option not recognized as \'recurrence\', \'unique\', or \'weight\'\n";
-		warn "Using default vertex-type = \'recurrence\'\n";
+	my $acceptableVertex = { $RECURRENCE => 1 , $UNIQUE => 1 , $SITE => 1 , $WEIGHT => 1 };
+	if ( not defined $this->{'vertex_type'} ) {
+		warn "vertex-type not specified. Using default vertex-type = \'recurrence\'\n";
 		$this->{'vertex_type'} = $RECURRENCE;
+	} elsif ( not exists $acceptableVertex->{$this->{'vertex_type'}} ) {
+		warn "vertex-type option not recognized as \'recurrence\', \'unique\', \'site\', or \'weight\'\n";
+		die $this->help_text();
 	}
 	if ( $this->{'distance_measure'} ne $AVERAGEDISTANCE
 		 and $this->{'distance_measure'} ne $SHORTESTDISTANCE ) {
@@ -220,25 +287,156 @@ sub setOptions {
 	if ( not exists $tempMericHash->{$this->{'meric_type'}} ) {
 		die "Error: meric-type should be one of the following: intra, monomer, homomer, inter, heteromer, multimer, unspecified\n";
 	}
-	print STDOUT "p-value-cutoff = ".$this->{'p_value_cutoff'}."\n";
-	print STDOUT " & 3d-distance-cutoff = ".$this->{'3d_distance_cutoff'}."\n";
-	print STDOUT " & max-radius = ".$this->{'max_radius'}."\n";
-	print STDOUT " & vertex-type = ".$this->{'vertex_type'}."\n";
-	print STDOUT " & distance-measure = ".$this->{'distance_measure'}."\n";
-	print STDOUT " & structure-dependence = ".$this->{'structure_dependence'}."\n";
-	print STDOUT " & subunit-dependence = ".$this->{'subunit_dependence'}."\n";
-	print STDOUT " & meric-type = ".$this->{'meric_type'}."\n";
+	print STDOUT "=====Parameters=====\n";
+	print STDOUT " p-value-cutoff        = ".$this->{'p_value_cutoff'}."\n";
+	print STDOUT " 3d-distance-cutoff    = ".$this->{'3d_distance_cutoff'}."\n";
+	print STDOUT " max-radius            = ".$this->{'max_radius'}."\n";
+	print STDOUT " vertex-type           = ".$this->{'vertex_type'}."\n";
+	print STDOUT " distance-measure      = ".$this->{'distance_measure'}."\n";
+	print STDOUT " structure-dependent   = ".$this->{'structure_dependence'}."\n";
+	print STDOUT " subunit-dependent     = ".$this->{'subunit_dependence'}."\n";
+	print STDOUT " meric-type            = ".$this->{'meric_type'}."\n";
+	print STDOUT " parallel              = ".$this->{'parallel'}."\n";
+	if ( defined $this->{'max_processes'} ) {
+		print STDOUT " max-processes         = ".$this->{'max_processes'}."\n";
+	}
+	print STDOUT "====================\n";
 
-	if ( $this->{'clustering'} eq $DENSITY ) {
+	$this->launchClustering( $help );
+	return;
+}
+
+sub launchClustering {
+	my ( $this , $help ) = @_;
+	if ( $this->{'clustering'} eq $NETWORK ) {
 		if ( $help ) {
-			die density_help_text();
+			die $this->help_text();
+		} else {
+			TGI::Mutpro::Main::Network->new( $this );
 		}
-		else{
+	} elsif ( $this->{'clustering'} eq $DENSITY ) {
+		if ( $help ) {
+			die $this->density_help_text();
+		} else{
 			TGI::Mutpro::Main::Density->new($this);
-			exit;
 		}
 	}
 	return;
+}
+
+sub vertexFilter {
+#$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+	my ( $this , $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix ) = @_;
+	if ( $this->{'vertex_type'} eq $SITE ) {
+		print STDOUT "Filtering vertices\n";
+#TODO if using a different .maf from search step, then some mutations can be missed
+		foreach my $structure ( keys %{$temp_distance_matrix} ) {
+			foreach my $mutationKey1 ( keys %{$temp_distance_matrix->{$structure}} ) {
+				foreach my $mutationKey2 ( keys %{$temp_distance_matrix->{$structure}} ) {
+					if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #skip if same site
+						next;
+					} else { #not the same site
+						my $seenIt = 0;
+						foreach my $mutationKey3 ( keys %{$distance_matrix->{$structure}} ) {
+							next if $mutationKey3 eq $mutationKey1;
+							next if $mutationKey3 eq $mutationKey2;
+							if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey3 ) ) {
+								$seenIt = 1;
+								print "update ".$mutationKey1." to ".$mutationKey3."\n";
+								$mutationKey1 = $mutationKey3;
+							}
+							if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey2 , $mutationKey3 ) ) {
+								$seenIt = 1;
+								print "update ".$mutationKey2." to ".$mutationKey3."\n";
+								$mutationKey2 = $mutationKey3;
+							}
+							if ( $seenIt ) {
+								last;
+							}
+						}
+						if ( $seenIt == 0 ) {
+							if ( exists $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} ) {
+								my ( $ra1 , $pk1 , $ra2 , $pk2 );
+
+								( $ra1 , $pk1 ) = $this->getARepresentativeAnnotation(
+													$temp_mutations , $mutationKey1 );
+								$mutations->{$mutationKey1}->{$ra1}->{$pk1} = 1;
+								$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = 
+									$temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+
+								( $ra2 , $pk2 ) = $this->getARepresentativeAnnotation(
+													$temp_mutations , $mutationKey2 );
+								$mutations->{$mutationKey2}->{$ra2}->{$pk2} = 1;
+								$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = 
+									$temp_distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
+							}
+						}
+#						if ( exists $distance_matrix->{$structure}->{$mutationKey1} ) { #have we seen this key before
+#							print "checkPartners of key1: ".$mutationKey1."\t";
+#							$this->checkPartners( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations );
+#						} else {
+#							print "first pass of key1: ".$mutationKey1."\t";
+#							$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+#						}	
+#						if ( exists $distance_matrix->{$structure}->{$mutationKey2} ) {
+#							print "checkPartners of key2: ".$mutationKey2."\n";
+#							$this->checkPartners( $distance_matrix , $structure , $mutationKey2 , $mutationKey1 , $temp_distance_matrix , $temp_mutations , $mutations );
+#						} else {
+#							print "first pass of key2: ".$mutationKey2."\n";
+#							$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = $temp_distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
+#						}
+					}
+				}
+			}
+		}
+	} else {
+		%{$mutations} = %{$temp_mutations};
+		%{$distance_matrix} = %{$temp_distance_matrix};
+	}
+	$temp_mutations = undef;
+	$temp_distance_matrix = undef;
+	return;
+}
+
+sub getARepresentativeAnnotation {
+	my ( $this , $mutations , $mutationKey ) = @_;
+	my $ra = ".:.";
+	my $pk = ".:p.";
+	foreach my $refAlt ( keys %{$mutations->{$mutationKey}} ) {
+		$ra = $refAlt;
+		foreach my $proteinKey ( keys %{$mutations->{$mutationKey}->{$refAlt}} ) {
+			$pk = $proteinKey;
+			last;
+		}
+		last;
+	}
+	return ( $ra , $pk );
+}
+
+sub checkPartners {
+	my ( $this , $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations ) = @_;
+	my $storeIt = 1;
+	foreach my $partner ( keys %{$distance_matrix->{$structure}->{$mutationKey1}} ) { #foreach known partner
+		if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey2 , $partner ) ) { #is the partner at the same site as our new key
+			$storeIt = 0;
+		}
+	}
+	if ( $storeIt ) { #keep this pair
+		$this->setRepresentative( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations );
+	}
+}
+
+sub setRepresentative {
+	my ( $this , $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations ) = @_;
+	$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
+	foreach my $refAlt ( keys %{$temp_mutations->{$mutationKey1}} ) { #get A refAlt for representation
+		foreach my $proteinKey ( sort keys %{$temp_mutations->{$mutationKey1}->{$refAlt}} ) { #get A protein key for representation
+			$mutations->{$mutationKey1}->{$refAlt}->{$proteinKey} = $temp_mutations->{$mutationKey1}->{$refAlt}->{$proteinKey};
+			print join( "\t" , ( "setRep" , $mutationKey1 , $refAlt , $proteinKey , $mutationKey2 ) )."\n";
+			last; #only need one
+		}
+		last; #only need one
+	}
 }
 
 sub getMutationMutationPairs {
@@ -252,7 +450,7 @@ sub getMutationMutationPairs {
 sub readPairwise { # shared
 	#$this->readPairwise( $distance_matrix );
 	my ( $this , $distance_matrix ) = @_;
-	print STDOUT "Reading in pairwise data ... \n";
+	print STDOUT "HotSpot3D::Cluster::readPairwise\n";
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	my $pdbCount;
@@ -378,7 +576,6 @@ sub readMAF{ # shared
 		};
 		push @mafcols , $mafcols{$this->{"weight_header"}};
 	}
-	print STDOUT "Reading in .maf ...\n";
 	map {
 		chomp;
 		my @line = split /\t/;
@@ -459,12 +656,11 @@ sub getMutationInfo {
 	return $weights;
 }
 
-sub networkClustering {
-	#$this->finalize( $clusterings , $mutations , $distance_matrix );
-	my ( $this , $mutations , $distance_matrix ) = @_;
-	print STDOUT "HotSpot3D::Cluster::networkClustering\n";
+sub writeClustersFile {
+	my ( $this ) = @_;
+	print STDOUT "HotSpot3D::Cluster::writeClustersFile\n";
 	my $outFilename = $this->generateFilename();
-	print STDOUT "Creating cluster output file: ".$outFilename."\n";
+	print STDOUT "\tCreating cluster output file: ".$outFilename."\n";
 	my $fh = new FileHandle;
 	die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
 	$fh->print( join( "\t" , ( 	"Cluster" , "Gene/Drug" , "Mutation/Gene" , 
@@ -476,17 +672,20 @@ sub networkClustering {
 							 )
 					)."\n"
 			  );
-	print STDOUT "\nClustering\n\n";
-	my $clusterings = {};
-	$this->link( $clusterings , $distance_matrix );
-	#$this->link( $distance_matrix );
-	foreach my $structure ( sort keys %{$distance_matrix} ) {
-		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
-			my $subClusterID = 0;
-			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-					$fh , $structure , $superClusterID , $subClusterID );
+	foreach my $structure ( %{$this->{'results'}} ) {
+		if ( exists $this->{'results'}->{$structure} ) {
+			my @mutations = uniq( @{$this->{'results'}->{$structure}} );
+			my $nMutations = scalar( uniq( @mutations ) );
+			if ( $nMutations > 0 ) {
+				print STDOUT "\twriting for structure: ".$structure;
+				print STDOUT "\thas ".$nMutations." mutations\n";
+				foreach my $line ( @mutations ) {
+					$fh->print( $line."\n" );
+				}
+			} else {
+				print STDOUT "\tno mutations to write for structure: ".$structure."\n";
+			}
 		}
-		#$this->resetProcessed( $structure );
 	}
 	$fh->close();
 	return;
@@ -502,6 +701,14 @@ sub generateFilename {
 			my $maf = basename( $this->{'maf_file'} );
 			push @outFilename , $maf;
 		}
+		if ( defined $this->{'pairwise_file'} ) {
+			my $clean = basename( $this->{'pairwise_file'} );
+			if ( $clean ne '' and scalar @outFilename > 1 ) {
+				push @outFilename , $clean;
+			} elsif ( $clean ne '' ) {
+				push @outFilename , $clean;
+			}
+		}
 		if ( defined $this->{'drug_clean_file'} ) {
 			my $clean = basename( $this->{'drug_clean_file'} );
 			if ( $clean ne '' and scalar @outFilename > 1 ) {
@@ -510,6 +717,7 @@ sub generateFilename {
 				push @outFilename , $clean;
 			}
 		}
+		push @outFilename , $this->{'vertex_type'};
 		push @outFilename , "l".$this->{'linear_cutoff'};
 		my $m = "a";
 		if ( $this->{'distance_measure'} eq $SHORTESTDISTANCE ) { $m = "s"; }
@@ -615,234 +823,17 @@ sub readDrugClean {
 	return;
 }
 
-## NETWORK CLUSTERING - AGGLOMERATIVE HIERARCHICAL CLUSTERING
-sub link {
-	#$this->link( $clusterings , $distance_matrix );
-	my ( $this, $clusterings , $distance_matrix , $mutations ) = @_;
-	print STDOUT "HotSpot3D::Cluster::link\n";
-	foreach my $structure ( sort keys %{$distance_matrix} ) {
-		print "\t".$structure."\n";
-		foreach my $mutationKey1 ( sort keys %{$distance_matrix->{$structure}} ) {
-			foreach my $mutationKey2 ( sort keys %{$distance_matrix->{$structure}} ) { #->{$mutationKey1}} ) {
-				my $distance;
-				if ( $this->isSameProteinPosition( $mutations , $mutationKey1 , $mutationKey2 ) == 1 ) {
-					$distance = 0;
-				} else {
-					$distance = $this->getElementByKeys( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 );
-					if ( $distance == $MAXDISTANCE ) {
-						next;
-					}
-				}
-				#print join( "\t" , ( $mutationKey1 , $mutationKey2 , $distance ) )."\n";
-				my @mutations = ( $mutationKey1 , $mutationKey2 );
-				my ( $combine1 , $combine2 , $id ); 
-				my @combine;
-				foreach $id ( keys %{$clusterings->{$structure}} ) { #each cluster
-					if ( exists $clusterings->{$structure}->{$id}->{$mutationKey1} ) {
-						push @combine , $id;
-					}
-					if ( exists $clusterings->{$structure}->{$id}->{$mutationKey2} ) {
-						push @combine , $id;
-					}
-				}
-				&numSort( \@combine );
-				if ( scalar @combine > 0 ) { #collapse clusters into one
-					my $collapse_to = $combine[0]; #cluster type
-					#print "collapsing to (".$collapse_to.") ".join( ", " , @combine )."\n";;
-					foreach my $otherClusters ( @combine ) {
-						if ( $otherClusters != $collapse_to ) {
-							foreach my $mutationKey ( keys %{$clusterings->{$structure}->{$otherClusters}} ) {
-								$clusterings->{$structure}->{$collapse_to}->{$mutationKey} = 1;
-								delete $clusterings->{$structure}->{$otherClusters}->{$mutationKey};
-							}
-							delete $clusterings->{$structure}->{$otherClusters};
-						}
-					}
-					$clusterings->{$structure}->{$collapse_to}->{$mutationKey1} = 1;
-					$clusterings->{$structure}->{$collapse_to}->{$mutationKey2} = 1;
-				} else { #new cluster
-					#print "\tnew cluster\n";
-					my @ids = keys %{$clusterings->{$structure}};
-					if ( scalar @ids > 0 ) {
-						&numSort( \@ids );
-						$id = $ids[-1] + 1;
-					} else { $id = 0; }
-					$clusterings->{$structure}->{$id}->{$mutationKey1} = 1;
-					$clusterings->{$structure}->{$id}->{$mutationKey2} = 1;
-				}
-			} #foreach mutation2
-		} #foreach mutation1
-#		my $nsuper = scalar keys %{$clusterings->{$structure}};
-#		print "there are ".$nsuper." superclusters in ".$structure."\n";
-	} #foreach structure
-	#foreach my $s ( sort keys %{$clusterings} ) {
-	#	foreach my $id ( sort keys %{$clusterings->{$s}} ) {
-	#		foreach my $m ( sort keys %{$clusterings->{$s}->{$id}} ) {
-	#			print "clusterings: ".join( "\t" , ( $s , $id , $m ) )."\n";
-	#		}
-	#	}
-	#}
-    return;
-}
-
-sub initializeGeodesics {
-	my ( $this , $clusterings , $superClusterID , $structure , $distance_matrix , $mutations ) = @_;
-	print STDOUT "HotSpot3D::Cluster::initializeGeodesics\n";
-	my $geodesics = {};
-	my $nInitialized = 0;
-	my $nMutations = scalar keys %{$clusterings->{$structure}->{$superClusterID}};
-	#print $nMutations." mutations to initialize geodesics\n";
-	foreach my $mutationKey1 ( sort keys %{$clusterings->{$structure}->{$superClusterID}} ) { #initialize geodesics
-		next if ( $this->hasBeenProcessed( $structure , $mutationKey1 ) );
-	#foreach my $mutationKey1 ( sort keys %{$distance_matrix->{$structure}} ) { #initialize geodesics
-		#print "need to process mutationKey1 = ".$mutationKey1.": \n";
-		foreach my $mutationKey2 ( sort keys %{$clusterings->{$structure}->{$superClusterID}} ) {
-			next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) );
-		#foreach my $mutationKey2 ( sort keys %{$distance_matrix->{$structure}} ) {
-			#next if ( exists $dist{$mutationKey1}{$mutationKey2} );
-			#print "need to process mutationKey2 = ".$mutationKey2.": \n";
-			if ( $this->isSameProteinPosition( $mutations , $mutationKey1 , $mutationKey2 ) == 1 ) {
-				#print "same site: ".$mutationKey1."\t".$mutationKey2."\n";
-				$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} = 0;
-				$geodesics->{$structure}->{$mutationKey2}->{$mutationKey1} = 0;
-				#$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = 0;
-				#$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = 0;
-				$nInitialized += 1;
-			} else {
-				my $distance = $this->getElementByKeys( $distance_matrix , 
-										$structure , $mutationKey1 , 
-										$mutationKey2 );
-				if ( $distance != $MAXDISTANCE ) { #NOTE if amino acids are neighboring, then a distance is given
-					$nInitialized += 1;
-					$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} = $distance;
-					$geodesics->{$structure}->{$mutationKey2}->{$mutationKey1} = $distance;
-					#$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $distance;
-					#$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = $distance;
-					#print join( "\t" , ( "known" , $mutationKey1 , $mutationKey2 , $distance ) )."\n";
-				} #if distance not known
-			}
-		} #foreach mutationKey2
-	} #foreach mutationKey1
-
-#	print "GEODESICS\n";
-#	foreach my $mu1 ( sort keys %{$geodesics->{$structure}} ) {
-#		foreach my $mu2 ( sort keys %{$geodesics->{$structure}} ) {
-#			print "\t".join( "  " , ( $mu1 , $mu2 , $geodesics->{$structure}->{$mu1}->{$mu2} ) )."\n";
-#		}
-#	}
-
-	print "\tnInitialized = ".$nInitialized."\n";
-	return $geodesics;
-	#return $distance_matrix;
-}
-
-sub isRadiusOkay {
-	my ( $this , $geodesics , $structure , $mutationKey1 , $mutationKey2 ) = @_;
-	#print "isRadiusOkay of d(".$mutationKey1.",".$mutationKey2.") = ".$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2}.": ";
-	if ( $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} <= $this->{'max_radius'} ) {
-		#print "OKAY\n";
-		return 1;
-	}
-	#print "TOO LONG\n";
-	return 0;
-}
-
-sub calculateClosenessCentrality {
-	my ( $this , $mutations , $geodesics , $structure , $superClusterID , $subClusterID ) = @_;
-	#my ( $this , $mutations , $geodesics , $structure ) = @_;
-	my $centrality = {};
-	print STDOUT "HotSpot3D::Cluster::calculateClosenessCentrality\n";#.$x." by ";
-	my $max=0;
-	my $centroid = "";
-	my ( $mutationKey1 , $mutationKey2 , $weight );
-	my $x = scalar keys %{$geodesics->{$structure}};
-	foreach $mutationKey1 ( keys %{$geodesics->{$structure}} ) {
-		my $y = scalar keys %{$geodesics->{$structure}->{$mutationKey1}};
-		#print $y."\n";
-		#print "mutationKey1 = ".$mutationKey1."\t";
-#TODO if alternative transcripts have different proref & proalt, then double counted
-		foreach my $refAlt1 ( sort keys %{$mutations->{$mutationKey1}} ) {
-			#print $refAlt1."\n";
-			my $C = 0;
-			my @proteinKeys1 = sort keys %{$mutations->{$mutationKey1}->{$refAlt1}};
-			my $proteinKey1 = shift @proteinKeys1;
-			#print $mutationKey1."|".$proteinKey1."\n";
-			foreach $mutationKey2 ( keys %{$geodesics->{$structure}->{$mutationKey1}}) {
-#TODO take only contributions within radius of centroid
-				#next if ( not $this->isRadiusOkay( $geodesics , $structure , $mutationKey1 , $mutationKey2 ) );
-				foreach my $refAlt2 ( sort keys %{$mutations->{$mutationKey2}} ) {
-					#print $refAlt2."\n";
-					my @proteinKeys2 = sort keys %{$mutations->{$mutationKey2}->{$refAlt2}};
-					my $proteinKey2 = shift @proteinKeys2;
-					#print "\t".$mutationKey2."|".$proteinKey2."\t";
-					$weight = 1;
-					if ( $this->{'vertex_type'} ne $UNIQUE ) {
-						if ( exists $mutations->{$mutationKey2} ) {
-							$weight = $mutations->{$mutationKey2}->{$refAlt2}->{$proteinKey2};
-						}
-					}
-					#print join( "\t" , ( $weight , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\t";
-					if ( $mutationKey1 ne $mutationKey2 ) {
-						$C += $weight/( 2**$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
-					} else { #mutationKey1 is same as mutationKey2
-						if ( $this->{'vertex_type'} eq $WEIGHT ) { 
-							$C += $weight;
-						} else {
-							if ( $refAlt1 ne $refAlt2 ) {
-								$C += $weight;
-							} else {
-								$C += $weight - 1;
-							}
-						}
-					}
-					$centrality->{$superClusterID}->{$subClusterID}->{$mutationKey1} = $C;
-					#$centrality->{$mutationKey1} = $C;
-					if ( $C > $max ) {
-						$max = $C;
-						$centroid = $mutationKey1;
-					}
-					#print join( "\t" , ( "cid=".$superClusterID.".".$subClusterID , "cent=".$centroid , "maxCc=".$max , "Cc=".$C ) )."\n";
-				} #foreach refAlt2
-			} #foreach mutationKey2
-		} #foreach refAlt1
-	} #foreach mutationKey1
-	#print join( "\t" , ( "result from calculation: " , $centroid , $max ) )."\n";
-#	foreach my $super ( sort keys %{$centrality} ) {
-#		foreach my $sub ( sort keys %{$centrality->{$super}} ) {
-#			foreach my $mu ( sort keys %{$centrality->{$super}->{$sub}} ) {
-#				print "c = ".join( "  " , ( $super.".".$sub , $mu , $centrality->{$super}->{$sub}->{$mu} ) )."\n";
-#			}
-#		}
-#	}
-
-	return ( $centroid , $centrality );
-}
-
-#sub determineCentroid {
-#	my ( $this , $centrality , $superClusterID ) = @_;
-#	my $max = 0;
-#	my $centroid = "";
-#	foreach my $mutationKey ( keys %{$centrality->{$superClusterID}} ) {
-#		my $C = $centrality->{$superClusterID}->{$mutationKey};
-#		if ( $C > $max ) {
-#			$max = $C;
-#			$centroid = $mutationKey1;
-#		}
-#	}
-#	return ( $centroid , $max );
-#}
-
 sub checkProcessedDistances {
 	my ( $this , $distance_matrix , $structure ) = @_;
 	my $count = 0;
-	print "CHECK PROCESSED: \n";
+	#print "CHECK PROCESSED: \n";
 	foreach my $mutationKey1 ( keys %{$distance_matrix->{$structure}} ) {
-		print "\t".$mutationKey1;
+		#print "\t".$mutationKey1;
 		if ( not $this->hasBeenProcessed( $structure , $mutationKey1 ) ) {
-			print "no\n";
+			#print "no\n";
 			$count += 1;
-		} else {
-			print "yes\n";
+		#} else {
+			#print "yes\n";
 		}
 	}
 	return $count;
@@ -867,79 +858,6 @@ sub sum {
 	}
 	return $sum;
 }
-
-sub anyFiniteGeodesicsRemaining {
-	my ( $this , $mutations , $geodesics , $structure ) = @_;
-	foreach my $mutationKey1 ( keys %{$geodesics->{$structure}} ) {
-		next if ( $this->hasBeenProcessed( $structure , $mutationKey1 ) );
-		foreach my $mutationKey2 ( keys %{$geodesics->{$structure}->{$mutationKey1}} ) {
-			next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) 
-				and not $this->isRadiusOkay( $geodesics , $structure , $mutationKey1 , $mutationKey2 ) );
-			#my $sumWeights1 = &sum( $this->mutationWeights( $mutations , $mutationKey1 ) );
-			#my $sumWeights2 = &sum( $this->mutationWeights( $mutations , $mutationKey2 ) );
-			#next if ( $sumWeights1 == 1 and $sumWeights2 == 1 );
-			#print "FINITE: ".join( "..." , ( $mutationKey1 , $mutationKey2 , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\n";
-			return 1;
-		}
-	}
-	return 0;
-}
-
-sub determineStructureClusters {
-	my ( $this , $clusterings , $mutations , $distance_matrix ,
-		 $fh , $structure , $superClusterID , $subClusterID ) = @_;
-	print STDOUT "HotSpot3D::Cluster::determineStructureClusters\n";
-	#print "\t".$structure."\t".$superClusterID.".".$subClusterID."\n";
-	my $geodesics = $this->initializeGeodesics( $clusterings , $superClusterID ,
-							$structure , $distance_matrix , $mutations );
-	if ( $this->anyFiniteGeodesicsRemaining( $mutations , $geodesics , $structure ) ) {
-		$this->floydWarshall( $geodesics , $structure );
-		my ( $centroid , $centrality ) = $this->calculateClosenessCentrality( 
-												$mutations , $geodesics , 
-												$structure , $superClusterID , 
-												$subClusterID );
-		#my ( $centroid , $centrality ) = $this->calculateClosenessCentrality( 
-		#										$mutations , $geodesics , 
-		#										$structure );
-		my $writtenLines = $this->writeCluster( $fh , $mutations , $geodesics , $structure , 
-				$superClusterID , $subClusterID , $centroid , $centrality );
-		
-		my $count = $this->checkProcessedDistances( $geodesics , $structure );
-		#print join( "\t" , ( "recluster?" , $count , 
-		#		$superClusterID.".".$subClusterID , $structure ) );
-		if ( $count >= 2 and $writtenLines ) {
-			$subClusterID += 1;
-			#print " yes\n";
-			$this->determineStructureClusters( $clusterings , 
-						$mutations , $geodesics , $fh , $structure , 
-							$superClusterID , $subClusterID );
-		} else {
-			#print " no\n";
-			return 0;
-		}
-	#	my $numstructures = scalar keys %{$distance_matrix->{$structure}};
-	#	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
-	#		print STDOUT "Found ".$numclusters." super-clusters on ".$numstructures." structures\n";
-	#	} else {
-	#		print STDOUT "Found ".$numclusters." super-clusters\n";
-	#	}
-	} 
-	return 1;
-}
-
-#TODO use this method to recalculate closeness centralities of acceptable region 
-#		or else closeness centralities must be described as measured for the remaining
-#		super cluster nodes within range
-#sub carveOutSubCluster {
-#	my ( $this , $mutations , $geodesics , $structure , $centroid ,
-#			$centrality , $superClusterID , $subClusterID ) = @_;
-#	#	$this->carveOutSubCluster( $mutations , $geodesics , $structure , $centroid ,
-#	#			$centrality , $superClusterID , $subClusterID );
-#	my $geods = {};
-#	foreach my $mutationKey ( keys %{$geodesics->{$structure}->{$centroid}} ) {
-#		$geods->{$structure}->{$centroid}->{$mutationKey} = $geodesics->{$structure}->{$centroid}->{$mutationKey};
-#	}
-#}
 
 sub setProcessStatus { # shared
 	my ( $this , $structure , $mutationKey , $status ) = @_;
@@ -972,132 +890,6 @@ sub resetProcessed {
     }
 
     return 1;
-}
-
-sub writeCluster {
-	#$this->writeCluster( $fh , $mutations , $geodesics , $structure , 
-	#		$superClusterID , $subClusterID , $centroid , $centrality );
-	my ( $this , $fh , $mutations , $geodesics , $structure ,
-		 $superClusterID , $subClusterID , $centroid , $centrality ) = @_;
-	my $writtenLines = 0;
-	my @linesToWrite;
-	my $clusterID = $superClusterID;
-	print STDOUT "HotSpot3D::Cluster::writeCluster (".$clusterID.")\n";
-	if ( $this->{'structure_dependence'} eq $DEPENDENT 
-		 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
-		$clusterID = join( "." , ( $superClusterID , $subClusterID , $structure ) );
-	} else {
-		$clusterID = join( "." , ( $superClusterID , $subClusterID ) );
-	}
-	my $geodesic = 0;
-	my $degrees = scalar keys %{$geodesics->{$structure}->{$centroid}}; #TODO update to only count subcluster nodes
-	my $closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$centroid};
-	#my $closenessCentrality = $centrality->{$centroid};
-	my ( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $centroid )};
-	my @alternateAnnotations;
-	my $proteinChanges = {};
-	my ( $reportedTranscript , $reportedAAChange );
-	my $weight; # = $weights->{$proteinKey};
-	foreach my $refAlt ( sort keys %{$mutations->{$centroid}} ) {
-#TODO make sure this works for in_frame_ins
-		my ( $reference , $alternate ) = @{&uncombine( $refAlt )};
-		@alternateAnnotations = sort keys %{$mutations->{$centroid}->{$refAlt}};
-		#print join( "," , ( @alternateAnnotations ) )."\n";
-		my $reported = shift @alternateAnnotations;
-		#print "\t".$reported."\n";
-		$weight = $mutations->{$centroid}->{$refAlt}->{$reported};
-		( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
-		my $alternateAnnotations = join( "|" , @alternateAnnotations );
-		#$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-		push @linesToWrite , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-								   $degrees , $closenessCentrality , 
-								   $geodesic , $weight ,
-								   $chromosome , $start , $stop ,
-								   $reference , $alternate ,
-								   $reportedTranscript , $alternateAnnotations
-								 )
-						)."\n";
-				  #);
-		#$writtenLines += 1;
-	} #foreach refAlt
-	$this->setProcessStatus( $structure , $centroid , 1 );
-	foreach my $mutationKey2 ( sort keys %{$geodesics->{$structure}->{$centroid}} ) {
-		next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) );
-		$geodesic = $geodesics->{$structure}->{$centroid}->{$mutationKey2};
-		next if ( $geodesic > $this->{'max_radius'} ); 
-		#print $centroid." geodesic to ".$mutationKey2."\t".$geodesic."\n";
-		$degrees = scalar keys %{$geodesics->{$structure}->{$mutationKey2}}; #TODO update to only count subcluster nodes
-		$closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$mutationKey2};
-		#$closenessCentrality = $centrality->{$mutationKey2};
-		( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $mutationKey2 )};
-		$proteinChanges = {};
-		foreach my $refAlt ( sort keys %{$mutations->{$mutationKey2}} ) {
-#TODO make sure this works for in_frame_ins
-			my ( $reference , $alternate ) = @{&uncombine( $refAlt )};
-			@alternateAnnotations = sort keys %{$mutations->{$mutationKey2}->{$refAlt}};
-			#print join( "," , ( @alternateAnnotations ) )."\n";
-			my $reported = shift @alternateAnnotations;
-			#print "\t".$reported."\n";
-			$weight = $mutations->{$mutationKey2}->{$refAlt}->{$reported};
-			( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
-			my $alternateAnnotations = join( "|" , @alternateAnnotations );
-			#$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-			push @linesToWrite , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-
-									   $degrees , $closenessCentrality , 
-									   $geodesic , $weight ,
-									   $chromosome , $start , $stop ,
-									   $reference , $alternate ,
-									   $reportedTranscript , $alternateAnnotations
-									 )
-							)."\n";
-					  #);
-			#$writtenLines += 1;
-		} #foreach refAlt
-		#print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
-		$this->setProcessStatus( $structure , $mutationKey2 , 1 );
-	} #foreach other vertex in network
-#	print "LINES TO WRITE = ".(scalar @linesToWrite)."\n";
-	if ( scalar @linesToWrite > 1 ) {
-		foreach my $line ( @linesToWrite ) {
-			$fh->print( $line );
-		}
-		$writtenLines = scalar @linesToWrite;
-	}
-	return $writtenLines;
-}
-
-sub floydWarshall {
-	my ( $this , $geodesics , $structure ) = @_;
-	print STDOUT "HotSpot3D::Cluster::floydWarshall: \n";
-	foreach my $mu_k ( keys %{$geodesics->{$structure}} ) {
-		#print "\t".$mu_k."\n";
-		foreach my $mu_i ( keys %{$geodesics->{$structure}} ) {
-			#print "\t\t".$mu_i."\n";
-			my ( $dist_ik , $dist_ij , $dist_kj );
-			$dist_ik = $this->getElementByKeys( $geodesics , $structure , $mu_i , $mu_k );
-			next if ( $dist_ik == $MAXDISTANCE );
-			foreach my $mu_j ( keys %{$geodesics->{$structure}} ) {
-				if ( exists $geodesics->{$structure}->{$mu_i}->{$mu_j} ) {
-					$dist_ij = $geodesics->{$structure}->{$mu_i}->{$mu_j};
-				} else {
-					$dist_ij = $MAXDISTANCE;
-				}
-				next if ( $dist_ij == 0 );
-				$dist_kj = $this->getElementByKeys( $geodesics , $structure , $mu_k , $mu_j );
-				next if ( $dist_ik == $MAXDISTANCE );
-				if ( $dist_ij > $dist_ik + $dist_kj ) {
-					$geodesics->{$structure}->{$mu_i}->{$mu_j} = $dist_ik + $dist_kj;
-					$geodesics->{$structure}->{$mu_j}->{$mu_i} = $dist_ik + $dist_kj;
-#					print join( " -- " , ( $mu_i , $mu_j , 
-#							$dist_ij , $dist_ik , $dist_kj , 
-#							$geodesics->{$structure}->{$mu_i}->{$mu_j} 
-#							) )."\n";
-				}
-			}
-		}
-	}
-	return;
 }
 
 ## MUTATIONS
@@ -1169,11 +961,11 @@ sub isSameProteinPosition { # shared
 	return 0;
 }
 
-sub checkProteinPosition {
-	my ( $this , $proteinKey1 , $proteinKey2 ) = @_;
-	#print join( "\t" , ( $aaPosition1 , $aaReference1 , $aaPosition2 , $aaReference2 ) )."\t";
-	return 0;
-}
+#sub checkProteinPosition {
+#	my ( $this , $proteinKey1 , $proteinKey2 ) = @_;
+#	#print join( "\t" , ( $aaPosition1 , $aaReference1 , $aaPosition2 , $aaReference2 ) )."\t";
+#	return 0;
+#}
 
 sub checkGenomicPositionNearby {
 	my ( $this , $mutationKey1 , $mutationKey2 ) = @_;
@@ -1291,7 +1083,7 @@ sub setShortestDistance {
 
 	my @infos = split /\|/ , $infos;
 	my $nStructures = scalar @infos;
-	print "HotSpot3D::Cluster::setShortestDistance\n";
+	#print "HotSpot3D::Cluster::setShortestDistance\n";
 	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
 		foreach my $info ( @infos ) {
 			chomp( $info );
@@ -1514,7 +1306,7 @@ Usage: hotspot3d density [options]
 --number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
 --probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100
 --distance-measure           Pair distance to use (shortest or average), default: average
---structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent 
+--structure-dependent        Clusters for each structure or across all structures (dependent or independent), default: independent 
 
 --help                       this message
 
@@ -1539,16 +1331,22 @@ Usage: hotspot3d cluster [options]
 --linear-cutoff              Linear distance cutoff (> peptides), default: 0
 --max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
 --clustering                 Cluster using network or density-based methods (network or density), default: network
---vertex-type                Graph vertex type for network-based clustering (recurrence, unique, or weight), default: recurrence
+--vertex-type                Graph vertex type for network-based clustering (recurrence, unique, site or weight), default: site
+                                 recurrence vertices are the genomic mutations for each sample from the given .maf
+                                 unique vertices are the specific genomic changes
+								 site vertices are the affected protein positions
+								 weight vertices are the genomic mutations with a numerical weighting
 --distance-measure           Pair distance to use (shortest or average), default: average
---structure-dependence       Clusters for each structure or across all structures (dependent or independent), default: independent
---subunit-dependence         Clusters for each subunit or across all subunits (dependent or independent), default: independent
+--structure-dependent        Clusters for each structure or across all structures, default (no flag): independent
+--subunit-dependent          Clusters for each subunit or across all subunits, default (no flag): independent
 --meric-type                 Clusters for each intra-molecular (both monomers and homomers), monomer, homomer, 
                                  inter-molecular (heteromers), heteromer, multimer (simultaneously homomer & heteromer), or any *mer 
                                  (intra, monomer, homomer, inter, heteromer, multimer, or unspecified), default: unspecified
 --transcript-id-header       .maf file column header for transcript id's, default: transcript_name
 --amino-acid-header          .maf file column header for amino acid changes, default: amino_acid_change 
 --weight-header              .maf file column header for mutation weight, default: weight (used if vertex-type = weight)
+--parallel                   Parallelization for structure and subunit dependent runs (none or local), default: none
+--max-processes              Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
 
 --help                       this message
 

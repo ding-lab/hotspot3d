@@ -13,3 +13,8 @@ annotate_clusters_families.pl #expects HGNC download
 # determine cluster presence/representation for PDB structures associated with the gene
 clusterPDBPresence.drug.pl #for drug-mutation pairs/clusters
 clusterPDBPresence.pl #for mutation-mutation pairs/clusters
+
+genePDBPresence.pl #for genes instead of clusters
+
+#determine number of structures for each gene
+nStructures.pl

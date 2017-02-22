@@ -45,6 +45,8 @@ sub new {
 	$this->{'command'} = "";
 	$this->{'_OUTPUT_DIR'} = getcwd;
 	$this->{'_BLAT'} = "blat";
+	$this->{'GRCh'} = undef;
+	$this->{'release'} = undef;
 	$this->{'max_3d_dis'} = 100;
 	$this->{'p_value_cutoff'} = 1;
 	$this->{'min_seq_dis'} = 0;
@@ -63,6 +65,8 @@ sub process {
 	$options = GetOptions (
 		'output-dir=s'	=> \$this->{'_OUTPUT_DIR'},
 		'blat=s'   => \$this->{'_BLAT'},
+		'grch=i'	=> \$this->{'GRCh'},
+		'release=i'	=> \$this->{'release'},
 		'3d-distance-cutoff=i'	=> \$this->{'max_3d_dis'},
 		'p-value-cutoff=i'	=> \$this->{'p_value_cutoff'},
 		'linear-cutoff=i'   => \$this->{'min_seq_dis'},
@@ -94,6 +98,18 @@ sub blat {
 	my $this = shift;
 	if ( @_ ) { $this->{'_BLAT'} = shift; }
 	return $this->{'_BLAT'};
+}
+
+sub grch {
+	my $this = shift;
+	if ( @_ ) { $this->{'GRCh'} = shift; }
+	return $this->{'GRCh'};
+}
+
+sub release {
+	my $this = shift;
+	if ( @_ ) { $this->{'release'} = shift; }
+	return $this->{'release'};
 }
 
 sub pvaluecutoff {
@@ -145,6 +161,12 @@ sub trans {
 	my $this = shift;
 	my $cmd = "hotspot3d trans --output-dir ".$this->outputDir();
 	$cmd .= " --blat ".$this->blat();
+	if ( $this->grch() ) {
+		$cmd .= " --grch ".$this->grch();
+	}
+	if ( $this->release() ) {
+		$cmd .= " --release ".$this->release();
+	}
 	print STDOUT "running: ".$cmd."\n";
 	return system( $cmd );
 }
@@ -218,6 +240,9 @@ Usage: hotspot3d prep [options]
                                    OPTIONAL
 --start                            What step to start on ( calroi , statis , anno , trans , cosmic , prior ), default is calroi
 --blat                             Installation of blat to use for trans (defaults to your system default)
+--grch                             Genome build (37 or 38), defaults to 38 or according to --release input
+--release                          Ensembl release verion (55-87), defaults to 87 or to the latest release according to --grch input
+                                       Note that releases 55-75 correspond to GRCh37 & 76-87 correspond to GRCh38
 --p-value-cutoff                   p_value cutoff(<=) for prior, default is 0.05
 --3d-distance-cutoff               3D distance cutoff (<= Angstroms) for prior, default is 20
 --linear-cutoff                    Linear distance cutoff (> peptides) for prior, default is 0
