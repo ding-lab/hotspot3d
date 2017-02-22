@@ -43,12 +43,16 @@ sub new {
 sub process {
 	my $this = shift;
 
+    my $temp_distance_matrix = {};
+    my $temp_mutations = {};
     my $distance_matrix = {};
     my $mutations = {};
+    my $WEIGHT = "weight";
 
-    $this->readMAF( $mutations );
-    $this->getDrugMutationPairs( $distance_matrix );
-    $this->getMutationMutationPairs( $distance_matrix );
+    $this->readMAF( $temp_mutations );
+    $this->getDrugMutationPairs( $temp_distance_matrix );
+    $this->getMutationMutationPairs( $temp_distance_matrix );
+    $this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
     #$this->initializeSameSiteDistancesToZero( $distance_matrix );
     #$this->networkClustering( $mutations , $distance_matrix );
     $this->setSameSiteDistancesToZero( $distance_matrix, $mutations );
@@ -83,6 +87,11 @@ sub process {
     #####################################################
 
     my $pairwiseFN = "$this->{'distance_measure'}.$this->{pairwise_file_name_only}"; 
+
+    # print "distance matrix\n";
+    # print Dumper $distance_matrix;
+    # print "mutations\n";
+    # print Dumper $mutations;
 
     foreach my $structure ( keys %{$distance_matrix} ) { # run the density calculation for each available structure
         #print "Structure= $structure\n";

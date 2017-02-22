@@ -319,6 +319,7 @@ sub launchClustering {
 			die $this->density_help_text();
 		} else{
 			TGI::Mutpro::Main::Density->new($this);
+			exit;
 		}
 	}
 	return;
