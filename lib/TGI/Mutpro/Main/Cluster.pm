@@ -102,31 +102,20 @@ sub new {
 sub process {
     my $this = shift;
 	$this->setOptions();
-	my $temp_distance_matrix = {};
- 	my $temp_mutations = {};
-	my $distance_matrix = {};
- 	my $mutations = {};
-	my $WEIGHT = "weight";
+	$this->launchClustering(); 
 
-	$this->readMAF( $temp_mutations );
-#	foreach my $mk ( sort keys %{$mutations} ) {
-#		foreach my $ra ( sort keys %{$mutations->{$mk}} ) {
-#			foreach my $pk ( sort keys %{$mutations->{$mk}->{$ra}} ) {
-#				print join( " -- " , ( $mk , $ra , $pk , $mutations->{$mk}->{$ra}->{$pk} ) )."\n";
-#			}
-#		}
-#	}
-	$this->getDrugMutationPairs( $temp_distance_matrix );
-	$this->getMutationMutationPairs( $temp_distance_matrix );
-	$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
-	#%{$mutations} = %{$temp_mutations};
-	#%{$distance_matrix} = %{$temp_distance_matrix};
-	#$this->printMutations( $temp_mutations , "tempmu" );
-	#$this->printMutations( $mutations , "realmu" );
-	#$this->printDistanceMatrix( $temp_distance_matrix , "tempdm" );
-	#$this->printDistanceMatrix( $distance_matrix , "realdm" );
-	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
-	$this->networkClustering( $mutations , $distance_matrix );
+##TODO bring the following commented out region back, and find a way to carry $distance_matrix and $mutations to clustering modules
+	# my $temp_distance_matrix = {};
+ # 	my $temp_mutations = {};
+	# my $distance_matrix = {};
+ # 	my $mutations = {};
+	# my $WEIGHT = "weight";
+
+	# $this->readMAF( $temp_mutations );
+	# $this->getDrugMutationPairs( $temp_distance_matrix );
+	# $this->getMutationMutationPairs( $temp_distance_matrix );
+	# $this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+	# $this->networkClustering( $mutations , $distance_matrix );
 
     return 1;
 }
@@ -302,25 +291,25 @@ sub setOptions {
 	}
 	print STDOUT "====================\n";
 
-	$this->launchClustering( $help );
 	return;
 }
 
 sub launchClustering {
-	my ( $this , $help ) = @_;
+	my $this = shift; # removed my ( $this, $help ) = @_;
 	if ( $this->{'clustering'} eq $NETWORK ) {
-		if ( $help ) {
-			die $this->help_text();
-		} else {
+		# if ( $help ) {
+		# 	die $this->help_text();
+		# } else {
 			TGI::Mutpro::Main::Network->new( $this );
-		}
+			exit;
+		# }
 	} elsif ( $this->{'clustering'} eq $DENSITY ) {
-		if ( $help ) {
-			die $this->density_help_text();
-		} else{
+		# if ( $help ) {
+		# 	die $this->density_help_text();
+		# } else{
 			TGI::Mutpro::Main::Density->new($this);
 			exit;
-		}
+		# }
 	}
 	return;
 }
