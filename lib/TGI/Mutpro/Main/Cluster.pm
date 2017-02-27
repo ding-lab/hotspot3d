@@ -84,6 +84,10 @@ sub new {
     $this->{'subunit_dependence'} = undef;
 #TODO add meric based on protein or gene id, if protein, need hugo.uniprot.pdb.transcript.csv file
     $this->{'meric_type'} = undef;
+
+    $this->{'gene_list_file'} = undef;
+    $this->{'structure_list_file'} = undef;
+    $this->{'listOption'} = undef;
 	
 	$this->{'processed'} = undef;
 	$this->{'distance_matrix'} = undef;
@@ -175,6 +179,12 @@ sub setOptions {
         'parallel=s' => \$this->{'parallel'},
         'max-processes=i' => \$this->{'max_processes'},
         'meric-type=s' => \$this->{'meric_type'},
+        'gene-list-file=s' => \$this->{'gene_list_file'},
+        'structure-list-file=s' => \$this->{'structure_list_file'},
+        'epsilon=f' => \$this->{'Epsilon'},
+        'minPts=f' => \$this->{'MinPts'},
+        'number-of-runs=f' => \$this->{'number_of_runs'},
+        'probability-cut-off=f' => \$this->{'probability_cut_off'},
 
         'help' => \$help,
     );
@@ -276,6 +286,25 @@ sub setOptions {
 	if ( not exists $tempMericHash->{$this->{'meric_type'}} ) {
 		die "Error: meric-type should be one of the following: intra, monomer, homomer, inter, heteromer, multimer, unspecified\n";
 	}
+
+	##### START gene-list and structure-list options
+	if ( defined $this->{'gene_list_file'} ) {
+		if ( not -e $this->{'gene_list_file'} ) { 
+			warn "The input gene list file (".$this->{'gene_list_file'}.") does not exist! ", "\n";
+			die $this->help_text();
+		}		
+	}
+
+	if ( defined $this->{'structure_list_file'} ) {
+		if ( not -e $this->{'structure_list_file'} ) { 
+			warn "The input structure list file (".$this->{'structure_list_file'}.") does not exist! ", "\n";
+			die $this->help_text();
+		}
+	}
+
+	$this->initializeLists();
+	##### END
+
 	print STDOUT "=====Parameters=====\n";
 	print STDOUT " p-value-cutoff        = ".$this->{'p_value_cutoff'}."\n";
 	print STDOUT " 3d-distance-cutoff    = ".$this->{'3d_distance_cutoff'}."\n";
@@ -292,6 +321,46 @@ sub setOptions {
 	print STDOUT "====================\n";
 
 	return;
+}
+
+sub initializeLists {
+	my $this = shift;
+	#print "at initializeLists\n";
+
+	if ( defined $this->{'gene_list_file'} ) {
+		my $fh = new FileHandle;
+		unless( $fh->open( $this->{'gene_list_file'} , "r" ) ) { die "Could not open gene list file $! \n" };
+		while ( my $gene = <$fh> ) {
+    		chomp( $gene );
+    		$this->{'providedGenes'}->{$gene} = 0; # hash with provided gene names as keys, will be used later in filterByProvidedLists
+    	}
+	}
+	if ( defined $this->{'structure_list_file'} ) {
+		my $fh = new FileHandle;
+		unless( $fh->open( $this->{'structure_list_file'} , "r" ) ) { die "Could not open structures list file $! \n" };
+		while ( my $structure = <$fh> ) {
+    		chomp( $structure );
+    		$this->{'providedStructures'}->{$structure} = 0; # hash with provided structure names as keys, will be used later in filterByProvidedLists
+    	}
+	}
+	##
+	if ( (defined $this->{'gene_list_file'}) && (not defined $this->{'structure_list_file'}) ) {
+		$this->{'listOption'} = "GeneListOnly";
+		#print "gene list only\n";
+	}
+	if ( (not defined $this->{'gene_list_file'}) && (defined $this->{'structure_list_file'}) ) {
+		$this->{'listOption'} = "StructureListOnly";
+		warn "HotSpot3D::Cluster::setOptions warning: only the mutations present in the given structures are being considered\n";
+		#print "structure list only\n";
+	}
+	if ( (defined $this->{'gene_list_file'}) && (defined $this->{'structure_list_file'}) ) {
+		$this->{'listOption'} = "BothLists";
+		#print "both lists\n";
+	}
+	if ( (not defined $this->{'gene_list_file'}) && (not defined $this->{'structure_list_file'}) ) {
+		$this->{'listOption'} = "None";
+		#print "no lists\n";
+	}
 }
 
 sub launchClustering {
@@ -449,29 +518,35 @@ sub readPairwise { # shared
 			 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , $domain2 , $cosmic2 , 
 			 $linearDistance , $infos ) = split /\t/ , $_;
 
-		if ( $this->checkMeric( $gene1 , $gene2 , $chain1 , $chain2 ) ) {
-			#print $_."\n";
-			$chain1 =~ s/\[(\w)\]/$1/g;
-			$chain2 =~ s/\[(\w)\]/$1/g;
-			my $proteinMutation = TGI::ProteinVariant->new();
-			my $mutation1 = TGI::Variant->new();
-			$mutation1->gene( $gene1 );
-			$mutation1->chromosome( $chromosome1 );
-			$mutation1->start( $start1 );
-			$mutation1->stop( $stop1 );
-			$proteinMutation->aminoAcidChange( $aa_1 );
-			$mutation1->addProteinVariant( $proteinMutation );
+		if ( $this->checkByProvidedLists( $gene1, $gene2, $infos ) ) { # check to filter out mutation pairs according to a given gene list or structures list or both
+			if ( defined $this->{'structure_list_file'} ) { # if true, get only the pdbIDs which are in this list
+				$infos = $this->filterInfosByGivenStructures( $infos );
+				#print "new infos= $infos\n";
+			}
+			if ( $this->checkMeric( $gene1 , $gene2 , $chain1 , $chain2 ) ) {
+				#print $_."\n";
+				$chain1 =~ s/\[(\w)\]/$1/g;
+				$chain2 =~ s/\[(\w)\]/$1/g;
+				my $proteinMutation = TGI::ProteinVariant->new();
+				my $mutation1 = TGI::Variant->new();
+				$mutation1->gene( $gene1 );
+				$mutation1->chromosome( $chromosome1 );
+				$mutation1->start( $start1 );
+				$mutation1->stop( $stop1 );
+				$proteinMutation->aminoAcidChange( $aa_1 );
+				$mutation1->addProteinVariant( $proteinMutation );
 
-			my $mutation2 = TGI::Variant->new();
-			$mutation2->gene( $gene2 );
-			$mutation2->chromosome( $chromosome2 );
-			$mutation2->start( $start2 );
-			$mutation2->stop( $stop2 );
-			$proteinMutation->aminoAcidChange( $aa_2 );
-			$mutation2->addProteinVariant( $proteinMutation );
-#			print "pair structures ".join( "  " , ( $infos , $chain1 , $chain2 ) )."\n";
-			$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
-								$chain1 , $chain2 , $infos , $pdbCount );
+				my $mutation2 = TGI::Variant->new();
+				$mutation2->gene( $gene2 );
+				$mutation2->chromosome( $chromosome2 );
+				$mutation2->start( $start2 );
+				$mutation2->stop( $stop2 );
+				$proteinMutation->aminoAcidChange( $aa_2 );
+				$mutation2->addProteinVariant( $proteinMutation );
+	#			print "pair structures ".join( "  " , ( $infos , $chain1 , $chain2 ) )."\n";
+				$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
+									$chain1 , $chain2 , $infos , $pdbCount );
+			}
 		}
 	} $fh->getlines;
 	$fh->close();
@@ -484,6 +559,53 @@ sub readPairwise { # shared
 #		}
 #	}
 	return;
+}
+
+sub checkByProvidedLists {
+	my ( $this, $gene1, $gene2, $infos ) = @_;
+	#print join( "  " , ( $gene1 , $gene2 , $infos , "" ) );
+	if ( $this->{'listOption'} eq "None" ) { # no lists given, proceed as usual
+		#print "no lists: process as usual\n";
+		return 1;
+
+	} elsif ( $this->{'listOption'} eq "GeneListOnly" ) {
+		if ( (exists $this->{'providedGenes'}->{$gene1}) && (exists $this->{'providedGenes'}->{$gene2}) ) {
+			#print "gene check okay\n";
+			return 1;
+		} else { return 0; }
+
+	} elsif ( $this->{'listOption'} eq "StructureListOnly" ) {
+		my $newInfos = $this->filterInfosByGivenStructures( $infos );
+		if ( defined $newInfos ) {
+			#print "structure check okay\n";
+			return 1;
+		}else { return 0; }
+
+	} elsif ( $this->{'listOption'} eq "BothLists" ) {
+		my $newInfos = filterInfosByGivenStructures( $this, $infos );
+		if ( (defined $newInfos) && (exists $this->{'providedGenes'}->{$gene1}) && (exists $this->{'providedGenes'}->{$gene2}) ) {
+			#print "both checks okay\n";
+			return 1;
+		} else { return 0; }
+	}
+}
+
+sub filterInfosByGivenStructures { # takes the infos column from pairwise file and filter out the structures that are not present in the structures list
+	my ( $this, $infos ) = @_;
+	my $newInfos = undef;
+	my @infos = split /\|/ , $infos;
+	foreach my $info ( @infos ) {
+		chomp( $info );
+		next if ( $info eq "" ); 
+		my ( $distance , $pdbID , $pvalue ) = split / / , $info;
+		next if ( not exists $this->{'providedStructures'}->{$pdbID} );
+		if ( defined $newInfos ) {
+			$newInfos = join ( "\|", $newInfos, $info );
+		} else {
+			$newInfos = $info;
+		}
+	}
+	return $newInfos;
 }
 
 sub checkMeric {
