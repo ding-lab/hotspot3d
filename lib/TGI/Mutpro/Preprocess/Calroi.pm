@@ -1,9 +1,9 @@
 package TGI::Mutpro::Preprocess::Calroi;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu & Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 1 $
 # $URL: $
 # $Doc: $ generate Region of Interest information for each Uniprot ID 
 #----------------------------------
@@ -31,6 +31,29 @@ sub new {
 
 sub process {
     my $this = shift;
+	$this->setOptions();
+    #### processing ####
+    # generate region of interest information ( ROI )
+	my $annoDir = $this->getOutputDir();
+	my $fhlog = $this->startLog( $annoDir );
+	my $fhuid = $this->getInputFile( );
+	my $allUniprotIds = $this->getUniprotIds( $fhuid );
+	$this->makeROIannotations( $allUniprotIds );
+	return;
+}
+
+sub makeROIannotations {
+	my ( $this , $annoDir , $fhlog , $allUniprotIds );
+
+	my ( $uniprotRef , $annotationRef , $start , $stop , $key , $desc , $entry );
+    foreach $uniprotId ( keys %{$allUniprotIds} ) {
+		$this->makeROIannotationFile( $uniprotId , $annoDir , $fhlog );
+    }
+    $fhlog->close();
+}
+
+sub setOptions {
+	my $this = shift;
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); };
     $options = GetOptions (
@@ -41,54 +64,83 @@ sub process {
     unless( $options ) { die $this->help_text(); };
     unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
     unless( -e $this->{_OUTPUT_DIR} ) { warn 'output directory is not exist  ! ', "\n"; die $this->help_text(); };
-    #### processing ####
-    # generate region of interest information ( ROI )
-    my ( $proDir, $annoDir, $hugoUniproFile, );
-    $proDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
-    $annoDir = "$proDir\/annotationFiles";
-    $hugoUniproFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
-    unless( -e $annoDir ) { mkdir( $annoDir ) || die "can not make ROI annotation directory !\n"; };
+	return;
+}
+
+sub getInputFile {
+	my ( $this , $annoDir ) = @_;
+
+    my $fhuid = new FileHandle;
+    my $hugoUniproFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
+    unless( $fhuid->open("<$hugoUniproFile") ) { die "Could not open uniprot id file !\n" };
+
+	return ( $fhuid , $fhlog );
+}
+
+sub startLog {
+	my ( $this , $annoDir ) = @_;
+
     my $fhlog = new FileHandle;
     unless( $fhlog->open(">$annoDir/ERRORS.LOG") ) { die "Could not open ERROR LOG file !\n" };
-    my ( $line, @entireFile, $uniprotId, %allUniprotIds, $uniprotRef, $annotationRef, $start, $stop, $key, $desc, $entry, $pdb, );
-    my $fhuid = new FileHandle;
-    unless( $fhuid->open("<$hugoUniproFile") ) { die "Could not open uniprot id file !\n" };
+
+	return $fhlog;
+}
+
+sub getOutputDirectory {
+	my $this = shift;
+    my ( $annoDir );
+
+    my $proDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
+    $annoDir = "$proDir\/annotationFiles";
+    unless( -e $annoDir ) { mkdir( $annoDir ) || die "can not make ROI annotation directory !\n"; };
+
+	return $annoDir;
+}
+
+sub getUniprotIds {
+	my ( $this , $fhuid ) = @_;
+	my $allUniprotIds;
+
+    my ( $line , @entireFile , $uniprotId , $pdb );
     @entireFile = <$fhuid>;
     $fhuid->close();
     foreach $line (@entireFile) { 
         chomp $line;
-        ( undef, $uniprotId, $pdb, ) = split /\s+/, $line;
+        ( undef , $uniprotId , $pdb ) = split /\s+/ , $line;
         # Only use Uniprot IDs with PDB structures
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-        $allUniprotIds{$uniprotId} = 1; 
+        $allUniprotIds->{$uniprotId} = 1; 
     }
-    foreach $uniprotId ( sort keys %allUniprotIds ) {
-        $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
-        defined ($uniprotRef) || die "no object for '$uniprotId'";
-        print STDOUT $uniprotId."\n";
-        # The annotation is a ref to array made here:
-        # 'push @domains, 
-        # "$key\t($dmStart, $dmStop)\t$desc'";
-        $annotationRef = $uniprotRef->domainsAfterPosition(1);
-        my $fhoneuid = new FileHandle;
-        unless( $fhoneuid->open("> $annoDir/$uniprotId.annotation.txt") ) { die "Could not open annotation file to write !\n" };
-		$fhoneuid->print( "Feature_Start\tFeature_End\tFeature_Type\tFeature_Description\n" );
-        foreach my $annotation ( @{$annotationRef} ) {
-            if ( $annotation =~ /(\w+)\s+\((\d+)\,\s+(\d+)\)\s+(.*)\.?$/ ) { 
-                $key = $1; $start = $2; $stop = $3; $desc = $4;
-            } else {
-                print $fhlog "ERROR: Could not parse domain description for '$uniprotId': '$entry'";
-                next;
-            }
-            if ( $start > $stop ) { 
-                print $fhlog "ERROR: Start ($start) > Stop ($stop) in '$entry'\n";
-                next;
-            }
-            print $fhoneuid "$start\t$stop\t'$key'\t'$desc'\n";
-        }
-        $fhoneuid->close();
-    }
-    $fhlog->close();
+	return $allUniprotIds;
+}
+
+sub makeROIannotationFile {
+	my ( $this , $uniprotId , $annoDir , $fhlog );
+	$uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
+	defined ($uniprotRef) || die "no object for '$uniprotId'";
+	print STDOUT $uniprotId."\n";
+	# The annotation is a ref to array made here:
+	# 'push @domains, 
+	# "$key\t($dmStart, $dmStop)\t$desc'";
+	$annotationRef = $uniprotRef->domainsAfterPosition(1);
+	my $fhoneuid = new FileHandle;
+	unless( $fhoneuid->open("> $annoDir/$uniprotId.annotation.txt") ) { die "Could not open annotation file to write !\n" };
+	$fhoneuid->print( "Feature_Start\tFeature_End\tFeature_Type\tFeature_Description\n" );
+	foreach my $annotation ( @{$annotationRef} ) {
+		if ( $annotation =~ /(\w+)\s+\((\d+)\,\s+(\d+)\)\s+(.*)\.?$/ ) { 
+			$key = $1; $start = $2; $stop = $3; $desc = $4;
+		} else {
+			print $fhlog "ERROR: Could not parse domain description for '$uniprotId': '$entry'";
+			next;
+		}
+		if ( $start > $stop ) { 
+			print $fhlog "ERROR: Start ($start) > Stop ($stop) in '$entry'\n";
+			next;
+		}
+		print $fhoneuid "$start\t$stop\t'$key'\t'$desc'\n";
+	}
+	$fhoneuid->close();
+	return;
 }
 
 sub help_text {
