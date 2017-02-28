@@ -35,6 +35,7 @@ sub new {
     $this->{geodesics} = {};
     $this->{centroids} = {};
     $this->{genes} = {};
+    $this->{aas} = {};
     bless $this, $class;
     $this->process();
     return $this;
@@ -108,8 +109,12 @@ sub readClustersFile {
 			$this->sum( 'centralities' , $id , $centrality );
 			$this->sum( 'geodesics' , $id , $geodesic );
 			$this->{genes}->{$id}->{$genedrug} = 1;
+                        if (! exists $this->{aas}->{$id}){
+				$this->{aas}->{$id} = ();
+                        } 
 			my @list;
 			if ( $aagene =~ /p\./ ) {
+				push @{$this->{aas}->{$id}}, $aagene; 
 				if ( $geodesic == 0 ) { $this->{centroids}->{$id} = $genedrug.":".$aagene; }
 				$this->sum( 'mutationmass' , $id , 1 );
 				$this->sum( 'recurrencemass' , $id , $recurrence );
@@ -144,7 +149,7 @@ sub writeSummary {
 	$fh->print( "Cluster_ID\tCentroid\tAvg_Degree\tCentrality\tAvg_Centrality\tAvg_Geodesic\tRecurrence_Mass\tAvg_Recurrence" );
 	$fh->print( "\tMutations_(Unique_AAchanges)" );
 	#$fh->print( "\tKnown_Mutations_(Unique_Known)" );
-	$fh->print( "\tTotal_Drugs\tGenes_Drugs" );
+	$fh->print( "\tTotal_Drugs\tGenes_Drugs\tAA_Mutations");
 	#$fh->print( "\tHGNC_Gene_Families\tPfam_Domains\tDrugBank_Classes\tNIH_Classes" );
 	$fh->print( "\n" );
 	foreach my $id ( sort { $a <=> $b } keys %{$this->{mutationmass}} ) {
@@ -172,7 +177,14 @@ sub writeSummary {
 			$fh->print( join( "; " , sort keys %{$this->{genes}->{$id}} )."\t" );
 		} else {
 			$fh->print( "NA\t" );
-		} #list of genes & drugs
+		} 
+		if (exists $this->{aas}->{$id} && $this->{aas}->{$id} ne ""){
+			$fh->print( join("," , uniq(@{$this->{aas}->{$id}}))."\t");
+		} else{
+			$fh->print( "NA\t" );
+		}
+
+		 #list of genes & drugs
 		#if ( exists $family->{$id} && $family->{$id} ne "" ) {
 		#	$fh->print( join( "; " , sort keys %{$family->{$id}} )."\t" );
 		#} else {
