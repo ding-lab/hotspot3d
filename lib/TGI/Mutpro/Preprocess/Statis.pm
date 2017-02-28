@@ -30,6 +30,17 @@ sub new {
 
 sub process {
     my $this = shift;
+	$this->setOptions();
+    #### processing ####
+    # pvalue calculation program
+	my $fh = $this->getInputFile( );
+	my $proDir = $this->getInputDir( );
+	my $pvaluesDir = $this->getOutputDir( $proDir );
+	$this->calculatePValues( $pvaluesDir , $fh , $proDir );
+}
+
+sub setOptions {
+	my $this = shift;
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); };
     $options = GetOptions (
@@ -40,36 +51,60 @@ sub process {
     unless( $options ) { die $this->help_text(); };
     unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
     unless( -e $this->{_OUTPUT_DIR} ) { warn 'output directory is not exist  ! ', "\n"; die $this->help_text(); };
-    #### processing ####
-    # pvalue calculation program
-    my ( $hugoUniprot, $proDir, $pvaluesDir );
-    $hugoUniprot = "$this->{_OUTPUT_DIR}/hugo.uniprot.pdb.csv";
-    $proDir = "$this->{_OUTPUT_DIR}/proximityFiles";
-    $pvaluesDir = "$proDir/pvalues";
-    unless( -e $proDir ) { die "no proximity file directory !\n"; };
-    unless( -e $hugoUniprot ) { die "no hugo uniprot file !\n"; }; 
+	return;
+}
+
+sub getOutputDir {
+	my ( $this , $proDir ) = @_;
+    my $pvaluesDir = "$proDir/pvalues";
     unless( -e $pvaluesDir ) { mkdir($pvaluesDir) || die "can not make pvalues directory !\n"; };
-    my ( $uniprotId, $pdb, );
+	return $pvaluesDir;
+}
+
+sub getInputFile {
+	my $this = shift;
+    my $hugoUniprot = "$this->{_OUTPUT_DIR}/hugo.uniprot.pdb.csv";
+    unless( -e $hugoUniprot ) { die "no hugo uniprot file !\n"; }; 
     my $fh = new FileHandle;
     unless( $fh->open("<$hugoUniprot") ) { die "Could not open hugo uniprot file !\n" };
+	return $fh;
+}
+
+sub getInputDir {
+	my $this = shift;
+    my $proDir = "$this->{_OUTPUT_DIR}/proximityFiles";
+    unless( -e $proDir ) { die "no proximity file directory !\n"; };
+	return $proDir;
+}
+
+sub calculatePValues {
+	my ( $this , $pvaluesDir , $fh , $proDir ) = @_;
     my @entireFile = <$fh>;
     $fh->close();
     my $u = 0;
     foreach my $line (@entireFile) {
         chomp $line;
+		my ( $uniprotId, $pdb, );
         (undef, $uniprotId, $pdb) = split /\t/, $line;
         # Only use Uniprot IDs with PDB structures
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-        print STDOUT $uniprotId."\n";
-        # proximity file
-        my $proximityFile = "$proDir\/$uniprotId\.ProximityFile\.csv";
-        next unless(-e $proximityFile);
-        my $outputFile = "$pvaluesDir\/$uniprotId\.ProximityFile\.csv";
-        # p_value calculating
-        my $numberlines = $this->getPvalue( $proximityFile, $outputFile );
-        #delete file if null
-        if ($numberlines == 0) { unlink( $outputFile ) or warn "failed to delete $outputFile: $!"; }
-    }
+		$this->calculatePValuesOfProtein( $uniprotId , $pvaluesDir , $proDir );
+	}
+	return;
+}
+
+sub calculatePValuesOfProtein {
+	my ( $this , $uniprotId , $pvaluesDir , $proDir ) = @_;
+	print STDOUT $uniprotId."\n";
+	# proximity file
+	my $proximityFile = "$proDir\/$uniprotId\.ProximityFile\.csv";
+	next unless(-e $proximityFile);
+	my $outputFile = "$pvaluesDir\/$uniprotId\.ProximityFile\.csv";
+	# p_value calculating
+	my $numberlines = $this->getPvalue( $proximityFile, $outputFile );
+	#delete file if null
+	if ($numberlines == 0) { unlink( $outputFile ) or warn "failed to delete $outputFile: $!"; }
+	return;
 }
 
 # pvalue calculating
