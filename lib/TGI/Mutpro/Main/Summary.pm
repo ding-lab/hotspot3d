@@ -91,7 +91,7 @@ sub readClustersFile {
 				and defined( $cols{"Degree_Connectivity"} )
 				and defined( $cols{"Closeness_Centrality"} )
 				and defined( $cols{"Geodesic_From_Centroid"} )
-				and defined( $cols{"Recurrence"} ) ) {
+				and defined( $cols{"Recurrence"} || $cols{"Weight"} ) ) {
 				die "Not a valid clusters file!\n";
 			}
 			@cols = ( 	$cols{"Cluster"} , 
@@ -100,7 +100,8 @@ sub readClustersFile {
 						$cols{"Degree_Connectivity"} , 
 						$cols{"Closeness_Centrality"} , 
 						$cols{"Geodesic_From_Centroid"} , 
-						$cols{"Recurrence"} );
+						($cols{"Recurrence"} || $cols{"Weight"})
+						 );
 		} else {
 			my ( $id , $genedrug , $aagene , $degree , $centrality , $geodesic , $recurrence ) = (split( "\t" , $line ))[@cols];
 			$this->sum( 'degrees' , $id , $degree );

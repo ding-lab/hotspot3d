@@ -10,7 +10,7 @@ Usage
 
          Stable:     v0.6.0 
 
-           Beta:     up to v1.3.0
+           Beta:     up to v1.3.1
         
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
