@@ -3,7 +3,7 @@ package TGI::Mutpro::Preprocess::Trans;
 #----------------------------------
 # $Authors: Beifang Niu & Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 2 $
+# $Revision: 3 $
 # $URL: $
 # $Doc: $ transcripts processing and added them in table 
 #----------------------------------
@@ -44,12 +44,92 @@ sub process {
     my $this = shift;
 	$this->setOptions();
     # add transcript annotation for uniprot
-    my ( $peptidesDir, $UniprotIdFile, $peptidesFile, $outputFile, );
-    $peptidesDir = "$this->{_OUTPUT_DIR}\/humanPeptides";
-    $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
-    $peptidesFile = "$peptidesDir\/Homo_sapiens.GRCh".$this->{GRCh}.".".$this->{release}.".pep.all.fa";
-    $outputFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
+	my $entireFile = $this->getInputFile( );
+	my $fhout = $this->getOutputFileHandle( );
+	my $peptides = $this->getPeptides( );
+	$this->mapEnsemblTranscriptsToUniprot( $entireFile , $peptides , $fhout );
+}
+
+sub mapEnsemblTranscriptsToUniprot {
+	my ( $this , $entireFile , $peptides , $fhout ) = @_;
+	my $outputContent = "";
+    foreach my $line ( @{$entireFile} ) {
+        chomp $line;
+		my ( $uniprotId , $pdb );
+        ( undef, $uniprotId, $pdb, ) = split /\s+/, $line;
+        # Only use Uniprot IDs with PDB structures
+        next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
+		my $transcriptContent = $this->mapEnsemblTranscriptsToThisUniprot( $uniprotId , $peptides );
+		$outputContent .= $line."\t".$transcriptContent."\n";
+    }
+	print STDOUT "Writing to hupt\n";
+    print $fhout $outputContent;
+    $fhout->close();
+	return;
+}
+
+sub mapEnsemblTranscriptsToThisUniprot {
+	my ( $this , $uniprotId , $peptides ) = @_;
+	my $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
+	defined ($uniprotRef) || die "no object for '$uniprotId'";
+	# The annotation is a ref to array made here:
+	my $uniprotSequence = $uniprotRef->sequence();
+
+	#print ">uniprotseq\n";
+	#print $uniprotSequence."\n";
+
+	my $enst2ensp = $uniprotRef->transProteinHash(); #non-versioned ENST ids
+	next unless( defined $enst2ensp );
+	my $transcriptContent = "";
+	foreach my $enst ( keys %{$enst2ensp} ) { #non-versioned ENST id
+		#print ">$enst\n";
+		my $ensp = $enst2ensp->{$enst};
+		my $proteinSequence = $this->getVersionedSequence( $peptides , $ensp ); #
+		#print "$proteinSequence\n";
+		next unless(defined $proteinSequence);
+		if ( $uniprotSequence eq $proteinSequence ) {
+			$transcriptContent .= $enst."[1|1-".length($proteinSequence)."|".length($proteinSequence)."],"; 
+		} else {
+			my ( undef, $tmp_uniprot_seq_file ) = tempfile();
+			my $tmp_uniprot_fh = IO::File->new( $tmp_uniprot_seq_file, ">" ) or die "Temporary file could not be created. $!";
+			$tmp_uniprot_fh->print( ">$uniprotId\n$uniprotSequence\n" );
+			my ( undef, $tmp_transcript_protein_seq_file ) = tempfile();
+			my $tmp_transcript_fh = IO::File->new( $tmp_transcript_protein_seq_file, ">" ) or die "Temporary file could not be created. $!";
+			$tmp_transcript_fh->print( ">$enst\n$proteinSequence\n" );
+			$tmp_uniprot_fh->close; $tmp_transcript_fh->close;
+			my ( undef, $tmp_blat_output_file ) = tempfile();
+			my $blat = "blat";
+			system( "$this->{_BLAT} $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
+			# parse blat output
+			my $tmp_parse_cont = ""; 
+			map{ $tmp_parse_cont .= $_.":"; } @{$this->parse_blat_output( $tmp_blat_output_file, $uniprotId, 0.90 )};
+			if ( $tmp_parse_cont ne "" ) { chop( $tmp_parse_cont ); $transcriptContent .= $enst."[".$tmp_parse_cont."],"; };
+			# clean files
+			unlink $tmp_uniprot_seq_file;
+			unlink $tmp_transcript_protein_seq_file;
+			unlink $tmp_blat_output_file; 
+
+		}
+	}
+	if ( $transcriptContent eq "" ) {
+		$transcriptContent = "N\/A";
+	} else {
+		chop( $transcriptContent );
+	}
+	return $transcriptContent;
+}
+
+sub getPeptidesFile {
+	my $this = shift;
+    my $peptidesDir = "$this->{_OUTPUT_DIR}\/humanPeptides";
     unless( -e $peptidesDir ) { mkdir( $peptidesDir ) || die "can not make peptides directory !\n"; };
+    my $peptidesFile = "$peptidesDir\/Homo_sapiens.GRCh".$this->{GRCh}.".".$this->{release}.".pep.all.fa";
+	return $peptidesFile;
+}
+    
+sub getPeptides {
+	my ( $this ) = @_;
+	my $peptidesFile = $this->getPeptidesFile( );
     ## get peptide file 
 	my $url = $this->makeEnsemblFastaURL();
     my $downloadFile = $peptidesFile.".gz";
@@ -58,68 +138,26 @@ sub process {
 	}
     system( "gzip -d $downloadFile" );
     # load peptide seqs
-    my $peptideSeqsRef = $this->loadPeptides( $peptidesFile );
-    my ( @entireFile, $uniprotId, %allUniprotIds, $uniprotRef, $annotationRef, $start, $stop, $key, $desc, $entry, $pdb, );
+    return $this->loadPeptides( $peptidesFile );
+}
+    
+sub getInputFile {
+	my $this = shift;
+	my $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
     my $fhuid = new FileHandle;
     unless( $fhuid->open("<$UniprotIdFile") ) { die "Could not open uniprot id file !\n" };
-    @entireFile = <$fhuid>;
+    my @entireFile = <$fhuid>;
     $fhuid->close();
-    my $outputContent = "";
-    foreach my $line (@entireFile) {
-        chomp $line;
-        ( undef, $uniprotId, $pdb, ) = split /\s+/, $line;
-        # Only use Uniprot IDs with PDB structures
-        next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-        $allUniprotIds{$uniprotId} = 1;
-        $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
-        defined ($uniprotRef) || die "no object for '$uniprotId'";
-        # The annotation is a ref to array made here:
-        my $uniprotSequence = $uniprotRef->sequence();
+	return \@entireFile;
+}
 
-        #print ">uniprotseq\n";
-        #print $uniprotSequence."\n";
-
-        my $enst2ensp = $uniprotRef->transProteinHash(); #non-versioned ENST ids
-        next unless( defined $enst2ensp );
-        my $transcriptContent = "";
-        foreach my $enst ( keys %{$enst2ensp} ) { #non-versioned ENST id
-            #print ">$enst\n";
-            my $ensp = $enst2ensp->{$enst};
-			my $proteinSequence = $this->getVersionedSequence( $peptideSeqsRef , $ensp ); #
-            #print "$proteinSequence\n";
-            next unless(defined $proteinSequence);
-            if ( $uniprotSequence eq $proteinSequence ) {
-                $transcriptContent .= $enst."[1|1-".length($proteinSequence)."|".length($proteinSequence)."],"; 
-            } else {
-                my ( undef, $tmp_uniprot_seq_file ) = tempfile();
-                my $tmp_uniprot_fh = IO::File->new( $tmp_uniprot_seq_file, ">" ) or die "Temporary file could not be created. $!";
-                $tmp_uniprot_fh->print( ">$uniprotId\n$uniprotSequence\n" );
-                my ( undef, $tmp_transcript_protein_seq_file ) = tempfile();
-                my $tmp_transcript_fh = IO::File->new( $tmp_transcript_protein_seq_file, ">" ) or die "Temporary file could not be created. $!";
-                $tmp_transcript_fh->print( ">$enst\n$proteinSequence\n" );
-                $tmp_uniprot_fh->close; $tmp_transcript_fh->close;
-                my ( undef, $tmp_blat_output_file ) = tempfile();
-				my $blat = "blat";
-                system( "$this->{_BLAT} $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
-                # parse blat output
-                my $tmp_parse_cont = ""; 
-                map{ $tmp_parse_cont .= $_.":"; } @{$this->parse_blat_output( $tmp_blat_output_file, $uniprotId, 0.90 )};
-                if ( $tmp_parse_cont ne "" ) { chop( $tmp_parse_cont ); $transcriptContent .= $enst."[".$tmp_parse_cont."],"; };
-                # clean files
-                unlink $tmp_uniprot_seq_file; unlink $tmp_transcript_protein_seq_file; unlink $tmp_blat_output_file; 
-
-            }
-        }
-        if ( $transcriptContent eq "" ) { $transcriptContent = "N\/A";
-        } else { chop( $transcriptContent ); }
-        print STDOUT "$line\t$transcriptContent\n";
-        $outputContent .= "$line\t$transcriptContent\n";
-    }
+sub getOutputFileHandle {
+	my $this = shift;
+	my $outputFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputFile") ) { die "Could not open output file !\n" };
-	print STDOUT "Creating ".$outputFile."\n";
-    print $fhout $outputContent;
-    $fhout->close();
+	print STDOUT "Creating hupt: ".$outputFile."\n";
+	return $fhout;
 }
 
 sub setOptions {
