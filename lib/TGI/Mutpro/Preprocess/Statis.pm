@@ -1,9 +1,9 @@
 package TGI::Mutpro::Preprocess::Statis;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu & Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 1 $
 # $URL: $
 # $Doc: $ statics related infor 
 #----------------------------------
@@ -37,6 +37,7 @@ sub process {
 	my $proDir = $this->getInputDir( );
 	my $pvaluesDir = $this->getOutputDir( $proDir );
 	$this->calculatePValues( $pvaluesDir , $fh , $proDir );
+	return;
 }
 
 sub setOptions {
