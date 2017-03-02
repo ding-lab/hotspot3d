@@ -18,6 +18,7 @@ use LWP::Simple;
 use IO::File;
 use FileHandle;
 use File::Temp qw/ tempfile /;
+use Archive::Extract;
 
 use TGI::Mutpro::Preprocess::Uniprot;
 
@@ -48,6 +49,7 @@ sub process {
 	my $fhout = $this->getOutputFileHandle( );
 	my $peptides = $this->getPeptides( );
 	$this->mapEnsemblTranscriptsToUniprot( $entireFile , $peptides , $fhout );
+	return 0;
 }
 
 sub mapEnsemblTranscriptsToUniprot {
@@ -71,7 +73,7 @@ sub mapEnsemblTranscriptsToUniprot {
 sub mapEnsemblTranscriptsToThisUniprot {
 	my ( $this , $uniprotId , $peptides ) = @_;
 	my $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
-	defined ($uniprotRef) || die "no object for '$uniprotId'";
+	defined ($uniprotRef) || die "HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot error: no object for '$uniprotId'";
 	# The annotation is a ref to array made here:
 	my $uniprotSequence = $uniprotRef->sequence();
 
@@ -81,6 +83,7 @@ sub mapEnsemblTranscriptsToThisUniprot {
 	my $enst2ensp = $uniprotRef->transProteinHash(); #non-versioned ENST ids
 	next unless( defined $enst2ensp );
 	my $transcriptContent = "";
+	print STDOUT $uniprotId." HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot - determining Ensembl->UniProt mapping\n";
 	foreach my $enst ( keys %{$enst2ensp} ) { #non-versioned ENST id
 		#print ">$enst\n";
 		my $ensp = $enst2ensp->{$enst};
@@ -91,10 +94,10 @@ sub mapEnsemblTranscriptsToThisUniprot {
 			$transcriptContent .= $enst."[1|1-".length($proteinSequence)."|".length($proteinSequence)."],"; 
 		} else {
 			my ( undef, $tmp_uniprot_seq_file ) = tempfile();
-			my $tmp_uniprot_fh = IO::File->new( $tmp_uniprot_seq_file, ">" ) or die "Temporary file could not be created. $!";
+			my $tmp_uniprot_fh = IO::File->new( $tmp_uniprot_seq_file, ">" ) or die "HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot error: Temporary file could not be created. $!";
 			$tmp_uniprot_fh->print( ">$uniprotId\n$uniprotSequence\n" );
 			my ( undef, $tmp_transcript_protein_seq_file ) = tempfile();
-			my $tmp_transcript_fh = IO::File->new( $tmp_transcript_protein_seq_file, ">" ) or die "Temporary file could not be created. $!";
+			my $tmp_transcript_fh = IO::File->new( $tmp_transcript_protein_seq_file, ">" ) or die "HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot error: Temporary file could not be created. $!";
 			$tmp_transcript_fh->print( ">$enst\n$proteinSequence\n" );
 			$tmp_uniprot_fh->close; $tmp_transcript_fh->close;
 			my ( undef, $tmp_blat_output_file ) = tempfile();
@@ -112,8 +115,10 @@ sub mapEnsemblTranscriptsToThisUniprot {
 		}
 	}
 	if ( $transcriptContent eq "" ) {
+		print STDOUT $uniprotId." HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot - no mappings\n";
 		$transcriptContent = "N\/A";
 	} else {
+		print STDOUT $uniprotId." HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot - complete\n";
 		chop( $transcriptContent );
 	}
 	return $transcriptContent;
@@ -122,7 +127,7 @@ sub mapEnsemblTranscriptsToThisUniprot {
 sub getPeptidesFile {
 	my $this = shift;
     my $peptidesDir = "$this->{_OUTPUT_DIR}\/humanPeptides";
-    unless( -e $peptidesDir ) { mkdir( $peptidesDir ) || die "can not make peptides directory !\n"; };
+    unless( -e $peptidesDir ) { mkdir( $peptidesDir ) || die "HotSpot3D::Trans::getPeptidesFile error: can not make peptides directory!\n"; };
     my $peptidesFile = "$peptidesDir\/Homo_sapiens.GRCh".$this->{GRCh}.".".$this->{release}.".pep.all.fa";
 	return $peptidesFile;
 }
@@ -133,10 +138,12 @@ sub getPeptides {
     ## get peptide file 
 	my $url = $this->makeEnsemblFastaURL();
     my $downloadFile = $peptidesFile.".gz";
+	my $decompressor = Archive::Extract->new( archive => $downloadFile );
 	if ( not -e $downloadFile ) {
 		getstore( $url, $downloadFile );
 	}
-    system( "gzip -d $downloadFile" );
+	$decompressor->extract( to => $peptidesFile );
+    #system( "gzip -d $downloadFile" );
     # load peptide seqs
     return $this->loadPeptides( $peptidesFile );
 }
@@ -145,7 +152,7 @@ sub getInputFile {
 	my $this = shift;
 	my $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
     my $fhuid = new FileHandle;
-    unless( $fhuid->open("<$UniprotIdFile") ) { die "Could not open uniprot id file !\n" };
+    unless( $fhuid->open("<$UniprotIdFile") ) { die "HotSpot3D::Trans::getInputFile error: Could not open uniprot id file!\n" };
     my @entireFile = <$fhuid>;
     $fhuid->close();
 	return \@entireFile;
@@ -155,7 +162,7 @@ sub getOutputFileHandle {
 	my $this = shift;
 	my $outputFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
     my $fhout = new FileHandle;
-    unless( $fhout->open(">$outputFile") ) { die "Could not open output file !\n" };
+    unless( $fhout->open(">$outputFile") ) { die "HotSpot3D::Trans::getOutputFileHandle error: Could not open output file!\n" };
 	print STDOUT "Creating hupt: ".$outputFile."\n";
 	return $fhout;
 }
@@ -171,11 +178,11 @@ sub setOptions {
         'release=f' => \$this->{release},
         'help' => \$help,
     );
-    if ( $help ) { print STDERR help_text(); exit 0; };
+    if ( $help ) { warn help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
-    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
-    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Trans Error: output directory does not exist  ! ', "\n"; die $this->help_text(); };
-	if ( $this->checkBLAT() ) { warn 'HotSpot3D Trans Error: blat not found - $this->{_BLAT} ! ' , "\n"; die $this->help_text(); }
+    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Trans::setOptions error: You must provide an output directory! ', "\n"; die $this->help_text(); };
+    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Trans::setOptions error: output directory does not exist! ', "\n"; die $this->help_text(); };
+	if ( $this->checkBLAT() ) { warn 'HotSpot3D::Trans::setOptions error: blat not found - $this->{_BLAT}!' , "\n"; die $this->help_text(); }
 	$this->setEnsemblVersions();
 	return;
 }
@@ -188,7 +195,7 @@ sub checkBLAT {
 sub setEnsemblVersions {
 	my ( $this ) = @_;
 	if ( not defined $this->{GRCh} and not defined $this->{release} ) {
-		warn "Ensembl GRCh & release versions not specified, defaulting to latest: GRCh".$LATESTGRCH.".".$LATEST38RELEASE."\n";
+		warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl GRCh & release versions not specified, defaulting to latest: GRCh".$LATESTGRCH.".".$LATEST38RELEASE."\n";
 		$this->{GRCh} = $LATESTGRCH;
 		$this->{release} = $LATEST38RELEASE;
 	} elsif ( not defined $this->{GRCh} ) {
@@ -197,19 +204,19 @@ sub setEnsemblVersions {
 		} elsif ( $this->{release} <= $LATEST37RELEASE and $this->{release} >= $EARLIEST37RELEASE ) {
 			$this->{GRCh} = 37;
 		} elsif ( $this->{release} <= 54 ) {
-			warn "Ensembl releases <= 54 not supported\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions error: Ensembl releases <= 54 not supported\n";
 			die $this->help_text();
 		}
-		warn "Ensembl GRCh version not specified. User specified release ".$this->{release}.", so using GRCh".$this->{GRCh}."\n";
+		warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl GRCh version not specified. User specified release ".$this->{release}.", so using GRCh".$this->{GRCh}."\n";
 	} elsif ( not defined $this->{release} ) {
 		if ( $this->{GRCh} == 38 ) {
-			warn "Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST38RELEASE."\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST38RELEASE."\n";
 			$this->{release} = $LATEST38RELEASE;
 		} elsif ( $this->{GRCh} == 37 ) {
-			warn "Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST37RELEASE."\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST37RELEASE."\n";
 			$this->{release} = 75;
 		} else {
-			warn "Unrecognized GRCh version (user set ".$this->{GRCh}.", not 37 or 38)\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions error: Unrecognized GRCh version (user set ".$this->{GRCh}.", not 37 or 38)\n";
 			die $this->help_text();
 		}
 	} else {
@@ -244,22 +251,22 @@ sub makeEnsemblFastaURL {
 sub loadPeptides {
     my ( $this, $pepfile, ) = @_;
     my $fh = new FileHandle;
-    unless( $fh->open("<$pepfile") ) { die "Could not open peptide file !\n" };
+    unless( $fh->open("<$pepfile") ) { die "HotSpot3D::Trans::loadPeptides error: Could not open peptide file!\n" };
     my @entireFile = <$fh>;
     $fh->close();
     my ( %pep_hash, $content, $name, );
     $content = $name = "";
-    foreach my $a (@entireFile) {
-        if ($a =~ /^>/) {
-			print $a."\n";
+    foreach my $line (@entireFile) {
+        if ($line =~ /^>/) {
+			#print $line."\n";
             $pep_hash{$name} = $content if ($name ne "");
 			if ( $this->{GRCh} == 38 ) {
-				($name) = $a =~ /^>(\w+\.\d+) /;
+				($name) = $line =~ /^>(\w+\.\d+) /;
 			} else {
-				($name) = $a =~ /^>(\w+) /;
+				($name) = $line =~ /^>(\w+) /;
 			}
             $content = "";
-        } else { chomp($a); $content .= $a; }
+        } else { chomp($line); $content .= $line; }
     }
     # last seq 
     if ($content ne "") { $pep_hash{$name} = $content; }
@@ -274,10 +281,11 @@ sub parse_blat_output {
     my ( @homoregions, );
     $f = $index = $iden = 0;
     my $fh = new FileHandle;
-    unless( $fh->open( "<$blat_output" ) ) { die "Could not open blat output file !\n" };
+    unless( $fh->open( "<$blat_output" ) ) { die "HotSpot3D::Trans::parse_blat_output error: Could not open blat output file!\n" };
     foreach ( $fh->getlines ) { chomp; next unless ( /^>/ || $f == 1 ); last if ($f == 1 && /^>/ ); push @top, $_; $f = 1; };
     $fh->close;
     return \@homoregions unless( @top );
+	print STDOUT $uniprotid." HotSpot3D::Trans::parse_blat_output - parsing BLAT output\n";
     foreach (@top) {
         #if ( /^>/ ) { ($pdb, $chain) = /^>(\w+)\_(\w) /; $header{'PDB'} = uc($pdb); $header{'CHAIN'} = uc($chain); }
         if ( /Identities/ ) { $index++; ($iden) = /\((\d+)\%\)/; $homos{$index}{'IDEN'} = $iden; }
