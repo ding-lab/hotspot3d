@@ -46,7 +46,7 @@ sub makeROIannotations {
 	my ( $this , $annoDir , $fhlog , $allUniprotIds );
 
 	my ( $uniprotRef , $annotationRef , $start , $stop , $key , $desc , $entry );
-    foreach $uniprotId ( keys %{$allUniprotIds} ) {
+    foreach my $uniprotId ( keys %{$allUniprotIds} ) {
 		$this->makeROIannotationFile( $uniprotId , $annoDir , $fhlog );
     }
     $fhlog->close();
@@ -74,7 +74,7 @@ sub getInputFile {
     my $hugoUniproFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
     unless( $fhuid->open("<$hugoUniproFile") ) { die "Could not open uniprot id file !\n" };
 
-	return ( $fhuid , $fhlog );
+	return $fhuid;
 }
 
 sub startLog {
@@ -116,17 +116,18 @@ sub getUniprotIds {
 
 sub makeROIannotationFile {
 	my ( $this , $uniprotId , $annoDir , $fhlog );
-	$uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
+	my $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
 	defined ($uniprotRef) || die "no object for '$uniprotId'";
 	print STDOUT $uniprotId."\n";
 	# The annotation is a ref to array made here:
 	# 'push @domains, 
 	# "$key\t($dmStart, $dmStop)\t$desc'";
-	$annotationRef = $uniprotRef->domainsAfterPosition(1);
+	my $annotationRef = $uniprotRef->domainsAfterPosition(1);
 	my $fhoneuid = new FileHandle;
 	unless( $fhoneuid->open("> $annoDir/$uniprotId.annotation.txt") ) { die "Could not open annotation file to write !\n" };
 	$fhoneuid->print( "Feature_Start\tFeature_End\tFeature_Type\tFeature_Description\n" );
 	foreach my $annotation ( @{$annotationRef} ) {
+		my ( $key , $start , $stop , $desc , $entry );
 		if ( $annotation =~ /(\w+)\s+\((\d+)\,\s+(\d+)\)\s+(.*)\.?$/ ) { 
 			$key = $1; $start = $2; $stop = $3; $desc = $4;
 		} else {
