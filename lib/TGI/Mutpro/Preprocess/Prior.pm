@@ -44,12 +44,12 @@ sub process {
         my $cosmicFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
         next unless( -e $cosmicFile );
         my $outputFile = "$prioritizationDir\/$uniprotId\.ProximityFile\.csv";
-        print STDOUT $uniprotId."\n";
         # add annotation infor
         $this->doPrior( $cosmicFile , $outputFile , $uniprotId );
         #delete file if null
     }
     $fhunipro->close();
+	return 0;
 }
 
 sub setOptions {
@@ -63,10 +63,10 @@ sub setOptions {
         'linear-cutoff=i' => \$this->{_1D_CUTOFF},
         'help' => \$help,
     );
-    if ( $help ) { print STDERR help_text(); exit 0; }
+    if ( $help ) { warn help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
-    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide output directory ! ', "\n"; die help_text(); }
-    unless( -d $this->{_OUTPUT_DIR} ) { warn 'You must provide a valid output directory ! ', "\n"; die help_text(); }
+    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Prior::setOptions error: You must provide output directory!', "\n"; die help_text(); }
+    unless( -d $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Prior::setOptions error: You must provide a valid output directory!', "\n"; die help_text(); }
 	return;
 }
 
@@ -77,10 +77,10 @@ sub getInputs {
     $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
     $cosmicDir = "$proximityDir\/cosmicanno";
     $prioritizationDir = "$this->{_OUTPUT_DIR}\/prioritization";
-    unless( -d $cosmicDir ) { warn "You must provide a valid COSMIC annotations directory ! \n"; die help_text(); }
-    unless( -e $prioritizationDir ) { mkdir($prioritizationDir) || die "can not make prioritization result files directory\n"; }
+    unless( -d $cosmicDir ) { warn "HotSpot3D::Prior::getInputs error: You must provide a valid COSMIC annotations directory!\n"; die help_text(); }
+    unless( -e $prioritizationDir ) { mkdir($prioritizationDir) || die "HotSpot3D::Prior::getInputs error: can not make prioritization result files directory\n"; }
     my $fhunipro = new FileHandle;
-    unless( $fhunipro->open("<$UniprotIdFile") ) { die "Could not open Uniprot ID file !\n" };
+    unless( $fhunipro->open("<$UniprotIdFile") ) { die "HotSpot3D::Prior::getInputs error: Could not open Uniprot ID file!\n" };
 	return ( $fhunipro , $proximityDir , $cosmicDir , $prioritizationDir );
 }
 
@@ -88,19 +88,19 @@ sub getInputs {
 # COSMIC annotation results
 sub doPrior {
     my ( $this , $proximityFile , $outputFile , $uniprotId ) = @_;
-	my $outputContent = $this->getProximityInformation( $proximityFile );
-	$this->writeOutput( $outputFile , $outputContent );
+	my $outputContent = $this->getProximityInformation( $uniprotId , $proximityFile );
+	$this->writeOutput( $uniprotId , $outputFile , $outputContent );
 	return;
 }
 
 sub getProximityInformation {
-	my ( $this , $proximityFile ) = @_;
-    print STDOUT "-------$proximityFile---\n";
+	my ( $this , $uniprotId , $proximityFile ) = @_;
     # read COSMIC annotation information
     my $fhproximity = new FileHandle;
-    unless( $fhproximity->open("<$proximityFile") ) { die "Could not open COSMIC annotated proximity file !\n" };
+    unless( $fhproximity->open("<$proximityFile") ) { die "HotSpot3D::Prior::getProximityInformation error: Could not open COSMIC annotated proximity file!\n" };
     # hash for filtering same pairs
     # but keep distances and P_vales
+	print STDOUT $uniprotId." HotSpot3D::Prior::getProximityInformation - collecting proximity data from: ".$proximityFile."\n";
 	my $pValueCutoff = $this->{_PVALUE_CUTOFF};
 	my $spatialCutoff = $this->{_3D_CUTOFF};
 	my $linearCutoff = $this->{_1D_CUTOFF};
@@ -153,10 +153,10 @@ sub getProximityInformation {
 }
 
 sub writeOutput {
-	my ( $this , $outputFile , $outputContent ) = @_;
+	my ( $this , $uniprotId , $outputFile , $outputContent ) = @_;
     my $fhout = new FileHandle;
-    unless( $fhout->open(">$outputFile") ) { die "Could not open prioritization output file to write !\n" };
-	print STDOUT "Creating ".$outputFile."\n";
+    unless( $fhout->open(">$outputFile") ) { die "HotSpot3D::Prior::writeOutput error: Could not open prioritization output file to write: ".$outputFile."\n" };
+	print STDOUT $uniprotId." HotSpot3D::Prior::writeOutput - writing prioritizations to file: ".$outputFile."\n";
     # write prioritization result into file 
 	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
 	$fhout->print( "Feature_Description1\tCOSMIC_Info1\t" );
