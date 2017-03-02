@@ -3,7 +3,7 @@ package TGI::Mutpro::Preprocess::Prior;
 #----------------------------------
 # $Authors: Beifang Niu and Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 2 $
 # $URL: $
 # $Doc: $ do prioritization 
 #----------------------------------
@@ -35,7 +35,6 @@ sub process {
     #### processing ####
     # do prioritization 
 	my ( $fhunipro , $proximityDir , $cosmicDir , $prioritizationDir ) = $this->getInputs();
-    my $u = 0;
     while ( my $line = <$fhunipro> ) {
         chomp $line;
         my ( undef, $uniprotId, ) = split /\t/, $line;
@@ -47,7 +46,7 @@ sub process {
         my $outputFile = "$prioritizationDir\/$uniprotId\.ProximityFile\.csv";
         print STDOUT $uniprotId."\n";
         # add annotation infor
-        $this->doPrior( $cosmicFile, $outputFile, $uniprotId, $this->{_PVALUE_CUTOFF}, $this->{_3D_CUTOFF}, $this->{_1D_CUTOFF} );
+        $this->doPrior( $cosmicFile , $outputFile , $uniprotId );
         #delete file if null
     }
     $fhunipro->close();
@@ -88,64 +87,93 @@ sub getInputs {
 # prioritization based on 
 # COSMIC annotation results
 sub doPrior {
-    my ( $this, $proximityfile, $outputf, $uniprotId, $pvalue, $threed, $lineard, ) = @_;
-    print STDOUT "-------$proximityfile---\n";
+    my ( $this , $proximityFile , $outputFile , $uniprotId ) = @_;
+	my $outputContent = $this->getProximityInformation( $proximityFile );
+	$this->writeOutput( $outputFile , $outputContent );
+	return;
+}
+
+sub getProximityInformation {
+	my ( $this , $proximityFile ) = @_;
+    print STDOUT "-------$proximityFile---\n";
     # read COSMIC annotation information
     my $fhproximity = new FileHandle;
-    unless( $fhproximity->open("<$proximityfile") ) { die "Could not open COSMIC annotated proximity file !\n" };
+    unless( $fhproximity->open("<$proximityFile") ) { die "Could not open COSMIC annotated proximity file !\n" };
     # hash for filtering same pairs
     # but keep distances and P_vales
-    my %ss;
-    while ( my $a = <$fhproximity> ) {
-        next if ($a =~ /^WARNING:/);
-        next if ($a =~ /UniProt_ID1/);
-        chomp($a);
-        my @t = split /\t/, $a;
+	my $pValueCutoff = $this->{_PVALUE_CUTOFF};
+	my $spatialCutoff = $this->{_3D_CUTOFF};
+	my $linearCutoff = $this->{_1D_CUTOFF};
+    my %outputContent;
+    while ( my $line = <$fhproximity> ) {
+        if ($line =~ /^WARNING:/) {
+			warn "HotSpot3D::Prior::doPrior warning: no chains were found for a structure in ".$proximityFile."\n";
+			next;
+		}
+        next if ($line =~ /UniProt_ID1/);
+        chomp($line);
+        my @fields = split /\t/, $line;
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
         $annoOneEnd = $annoTwoEnd = "N\/A";
-		if ( scalar @t < 11 ) {
-			warn "bad line in ".$uniprotId.": ".$a."\n";
+		if ( scalar @fields < 11 ) {
+			warn "HotSpot3D::Prior::doPrior warning: bad line in ".$proximityFile.": ".$line."\n";
 		}
-        next if ( ($t[2] =~ /N\/A/) or 
-                  ($t[3] =~ /N\/A/) or 
-                  ($t[9] =~ /N\/A/) or ($t[10] =~ /N\/A/));
-        next unless ( ($t[2] =~ /\d+/) and
-                      ($t[3] =~ /\d+/) and
-                      ($t[9] =~ /\d+/) and ($t[10] =~ /\d+/) );
-        my $oneEndContent = join("\t", @t[0..6]);
-        my $twoEndContent = join("\t", @t[7..13]);
-        my $proInfo       = join(" ", @t[14..16]);
-        $uniprotCoorOneEnd = $t[2] + $t[3];
-        $uniprotCoorTwoEnd = $t[9] + $t[10];
-        my $tlineard = abs($uniprotCoorOneEnd - $uniprotCoorTwoEnd);
-        next if ( ($t[0] eq $t[7]) and ( $tlineard <= $lineard) );
-        next if ( $t[16] > $pvalue );
-        next if ( $t[14] > $threed );
-        # load infor into %ss hash
-        if ((defined $ss{$oneEndContent}{$twoEndContent}) or (defined $ss{$twoEndContent}{$oneEndContent}) ) {
-            if (defined $ss{$oneEndContent}{$twoEndContent}) {
-                $ss{$oneEndContent}{$twoEndContent}{$proInfo} = 1;
-            } else { $ss{$twoEndContent}{$oneEndContent}{$proInfo} = 1; }
-        } else { $ss{$oneEndContent}{$twoEndContent}{$proInfo} = 1; }
+        next if ( ($fields[2] =~ /N\/A/) or 
+                  ($fields[3] =~ /N\/A/) or 
+                  ($fields[9] =~ /N\/A/) or
+				  ($fields[10] =~ /N\/A/));
+        next unless ( ($fields[2] =~ /\d+/) and
+                      ($fields[3] =~ /\d+/) and
+                      ($fields[9] =~ /\d+/) and
+					  ($fields[10] =~ /\d+/) );
+        my $oneEndContent = join("\t", @fields[0..6]);
+        my $twoEndContent = join("\t", @fields[7..13]);
+        my $proInfo       = join(" ", @fields[14..16]);
+        $uniprotCoorOneEnd = $fields[2] + $fields[3];
+        $uniprotCoorTwoEnd = $fields[9] + $fields[10];
+        my $linearDistance = abs($uniprotCoorOneEnd - $uniprotCoorTwoEnd);
+        next if ( ( $fields[0] eq $fields[7] ) and
+				  ( $linearDistance <= $linearCutoff) );
+        next if ( $fields[16] > $pValueCutoff );
+        next if ( $fields[14] > $spatialCutoff );
+        # load infor into %outputContent hash
+        if ( ( defined $outputContent{$oneEndContent}{$twoEndContent} ) or
+			 ( defined $outputContent{$twoEndContent}{$oneEndContent} ) ) {
+            if (defined $outputContent{$oneEndContent}{$twoEndContent}) {
+                $outputContent{$oneEndContent}{$twoEndContent}{$proInfo} = 1;
+            } else {
+				$outputContent{$twoEndContent}{$oneEndContent}{$proInfo} = 1;
+			}
+        } else {
+			$outputContent{$oneEndContent}{$twoEndContent}{$proInfo} = 1;
+		}
     }
     $fhproximity->close();
+	return \%outputContent;
+}
+
+sub writeOutput {
+	my ( $this , $outputFile , $outputContent ) = @_;
     my $fhout = new FileHandle;
-    unless( $fhout->open(">$outputf") ) { die "Could not open prioritization output file to write !\n" };
-	print STDOUT "Creating ".$outputf."\n";
+    unless( $fhout->open(">$outputFile") ) { die "Could not open prioritization output file to write !\n" };
+	print STDOUT "Creating ".$outputFile."\n";
     # write prioritization result into file 
 	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
 	$fhout->print( "Feature_Description1\tCOSMIC_Info1\t" );
 	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
 	$fhout->print( "Feature_Description2\tCOSMIC_Info2\t" );
 	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
-    foreach my $a (keys %ss) {
-        foreach my $b (keys %{$ss{$a}}) {
-            print $fhout $a."\t".$b."\t";
-            foreach my $c (keys %{$ss{$a}{$b}}) { print $fhout $c."|"; }
+    foreach my $mutation1 (keys %{$outputContent} ) {
+        foreach my $mutation2 (keys %{$outputContent->{$mutation1}}) {
+            print $fhout $mutation1."\t".$mutation2."\t";
+            foreach my $content (keys %{$outputContent->{$mutation1}->{$mutation2}}) {
+				print $fhout $content."|";
+			}
             print $fhout "\n";
         }
     }
     $fhout->close();
+	return;
 }
 
 sub help_text{
