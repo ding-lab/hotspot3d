@@ -40,7 +40,7 @@ sub process {
 	my $pvaluesDir = $this->getPValuesDir( $proximityDir );
 	my ( $annotationFileDir , $annotationDir ) = $this->getAnnotationDirs( $proximityDir );
 	$this->makeAnnotations( $entireFile , $annotationFileDir , $annotationDir , $pvaluesDir , $proximityDir );
-	return;
+	return 0;
 }
 
 sub makeAnnotations {
@@ -50,7 +50,6 @@ sub makeAnnotations {
         chomp $line;
 		my ( $uniprotId , $pdb );
         ( undef, $uniprotId, $pdb, ) = split /\t/, $line;
-        print STDOUT $uniprotId."\n";
         # Only use Uniprot IDs with PDB structures
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
 		$this->getAnnotation( $uniprotId , $annotationFileDir , $annotations );
@@ -74,17 +73,17 @@ sub setOptions {
         'output-dir=s' => \$this->{_OUTPUT_DIR},
         'help' => \$help,
     );
-    if ( $help ) { print STDERR help_text(); exit 0; };
+    if ( $help ) { warn help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
-    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
-    unless( -e $this->{_OUTPUT_DIR} ) { warn 'output directory is not exist  ! ', "\n"; die $this->help_text(); };
+    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Anno::setOptions error: You must provide a output directory!', "\n"; die $this->help_text(); };
+    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Anno::setOptions error: output directory does not exist!', "\n"; die $this->help_text(); };
 	return;
 }
 
 sub getPValuesDir {
 	my ( $this , $proximityDir ) = @_;
     my $pvaluesDir = "$proximityDir\/pvalues";
-    unless( -d $pvaluesDir ) { warn "You must provide a valid p_values annotation directory ! \n"; die help_text(); }
+    unless( -d $pvaluesDir ) { warn "HotSpot3D::Anno::getPValuesDir error: You must provide a valid p_values annotation directory!\n"; die help_text(); }
 	return $pvaluesDir;
 }
 
@@ -97,8 +96,8 @@ sub getAnnotationDirs {
 	my ( $this , $proximityDir ) = @_;
     my $annotationFileDir = "$proximityDir\/annotationFiles";
     my $annotationDir = "$proximityDir\/annotations";
-    unless( -d $annotationFileDir ) { warn "You must provide a valid annotation file directory ! \n"; die help_text(); }
-    unless( -e $annotationDir ) { mkdir( $annotationDir ) || die "can not make annotations directory !\n"; };
+    unless( -d $annotationFileDir ) { warn "HotSpot3D::Anno::getAnnotationDirs error: You must provide a valid annotation file directory!\n"; die help_text(); }
+    unless( -e $annotationDir ) { mkdir( $annotationDir ) || die "HotSpot3D::Anno::getAnnotationDirs error: can not make annotations directory!\n"; };
 	return ( $annotationFileDir , $annotationDir );
 }
 
@@ -106,7 +105,7 @@ sub getInputFile {
 	my $this = shift;
     my $fhuid = new FileHandle;
     my $hugoUniprotf = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
-    unless( $fhuid->open("< $hugoUniprotf") ) { die "Could not open hugo uniprot id file !\n" };
+    unless( $fhuid->open("< $hugoUniprotf") ) { die "HotSpot3D::Anno::getInputFile error: Could not open hugo uniprot id file!\n" };
     my @entireFile = $fhuid->getlines;
     $fhuid->close();
 	return \@entireFile;
@@ -117,13 +116,14 @@ sub getAnnotation {
     my ( $this , $uniprotId , $annotationFileDir , $annotations ) = @_;
 	my $annotationFile = "$annotationFileDir\/$uniprotId\.annotation\.txt";
     my $fhano = new FileHandle;
-    unless( $fhano->open("< $annotationFile") ) { die "Could not open annotation file for ".$uniprotId."!\n" };
+    unless( $fhano->open("< $annotationFile") ) { die "HotSpot3D::Anno::getAnnotation error: Could not open annotation file for ".$uniprotId."!\n" };
+	print STDOUT $uniprotId." HotSpot3D::Anno::getAnnotation - collecting annotations from ".$annotationFile."\n";
 	my $annotation = {};
     while ( my $a = $fhano->getline ) {
         chomp($a);
         my ( $start, $end, $type, $anno, ) = split /\t/, $a;
         $type =~ s/'//g;
-        #print STDERR $type."\n";
+        #warn $type."\n";
         #$anno =~ s/^'|'$|.$//;
         $anno =~ s/^'//; $anno =~ s/'$//; $anno =~ s/.$//;
         #print $anno."\n";
@@ -148,10 +148,10 @@ sub addAnnotation {
 	my $outputFile = "$annotationDir\/$uniprotId\.ProximityFile\.csv";
     # add annotation information
     my $fhin = new FileHandle;
-    unless( $fhin->open("<$proximityFile") ) { die "Could not open proximity file !\n" };
+    unless( $fhin->open("<$proximityFile") ) { die "HotSpot3D::Anno::addAnnotation error: Could not open proximity file: ".$proximityFile."\n" };
     my $fhout = new FileHandle;
-    unless( $fhout->open(">$outputFile") ) { die "Could not open proximity file to add annotation information !\n" };
-	print STDOUT "Creating ".$outputFile."\n";
+    unless( $fhout->open(">$outputFile") ) { die "HotSpot3D::Anno::addAnnotation error: Could not open the file for annotation: ".$outputFile."\n" };
+	print STDOUT $uniprotId." HotSpot3D::Anno::addAnnotation - writing feature annotated file: ".$outputFile."\n";
 	my ( $coord1 , $coord2 , $offset1 , $offset2 );
 	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\tDomain1\t" );
 	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\tDomain2\t" );
@@ -166,7 +166,7 @@ sub addAnnotation {
         next if ($t[1] !~ /^\[[A-Z]\]$/);
         next if ($t[6] !~ /^\[[A-Z]\]$/);
         my $distance = $t[10];
-        if ( $distance !~ /^-?\d+\.?\d*$/ ) { print STDERR "Wrong distance : $distance \n"; next; }
+        if ( $distance !~ /^-?\d+\.?\d*$/ ) { warn "HotSpot3D::Anno::addAnnotation warning: Wrong distance : $distance \n"; next; }
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
         $annoOneEnd = $annoTwoEnd = "N\/A";
 		$t[2] = TGI::Data::CleanNumber::nullIsZero( $t[2] );
@@ -175,10 +175,10 @@ sub addAnnotation {
 		$t[8] = TGI::Data::CleanNumber::nullIsZero( $t[8] );
         $uniprotCoorOneEnd = $t[2] + $t[3];
         $uniprotCoorTwoEnd = $t[7] + $t[8];
-        #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
+        #warn $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
         if ( defined $annotations->{$uniprotId}->{$uniprotCoorOneEnd} ) { $annoOneEnd = $annotations->{$uniprotId}->{$uniprotCoorOneEnd}; }
         if ( defined $annotations->{$uniprotId}->{$uniprotCoorTwoEnd} ) { $annoTwoEnd = $annotations->{$uniprotId}->{$uniprotCoorTwoEnd}; }
-        # print STDERR $annoOneEnd."\t".$annoTwoEnd."\n";
+        # warn $annoOneEnd."\t".$annoTwoEnd."\n";
         foreach my $d (0..4) { print $fhout $t[$d]."\t"; }
         print $fhout $annoOneEnd."\t";
         foreach my $d (5..9) { print $fhout $t[$d]."\t"; }
