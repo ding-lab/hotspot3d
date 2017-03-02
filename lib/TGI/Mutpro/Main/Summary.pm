@@ -36,6 +36,7 @@ sub new {
     $this->{centroids} = {};
     $this->{genes} = {};
     $this->{aas} = {};
+    $this->{transcripts} = {};
     bless $this, $class;
     $this->process();
     return $this;
@@ -92,7 +93,12 @@ sub readClustersFile {
 				and defined( $cols{"Degree_Connectivity"} )
 				and defined( $cols{"Closeness_Centrality"} )
 				and defined( $cols{"Geodesic_From_Centroid"} )
-				and defined( $cols{"Recurrence"} || $cols{"Weight"} ) ) {
+				and defined( $cols{"Recurrence"} || $cols{"Weight"} ) 
+				and defined( $cols{"Chromosome"} ) 
+				and defined( $cols{"Start"} ) 
+				and defined( $cols{"Reference"} ) 
+				and defined( $cols{"Alternate"} ) 
+				and defined( $cols{"Transcript"} ) ) {
 				die "Not a valid clusters file!\n";
 			}
 			@cols = ( 	$cols{"Cluster"} , 
@@ -101,14 +107,21 @@ sub readClustersFile {
 						$cols{"Degree_Connectivity"} , 
 						$cols{"Closeness_Centrality"} , 
 						$cols{"Geodesic_From_Centroid"} , 
-						($cols{"Recurrence"} || $cols{"Weight"})
+						($cols{"Recurrence"} || $cols{"Weight"}) ,
+						$cols{"Chromosome"} , 
+						$cols{"Start"} ,
+						$cols{"Stop"} ,
+						$cols{"Reference"} ,
+						$cols{"Alternate"} ,
+						$cols{"Transcript"} 
 						 );
 		} else {
-			my ( $id , $genedrug , $aagene , $degree , $centrality , $geodesic , $recurrence ) = (split( "\t" , $line ))[@cols];
+			my ( $id , $genedrug , $aagene , $degree , $centrality , $geodesic , $recurrence, $chromosome, $start, $stop, $ref, $alt, $trans, $alt_trans ) = (split( "\t" , $line ))[@cols];
 			$this->sum( 'degrees' , $id , $degree );
 			$this->sum( 'centralities' , $id , $centrality );
 			$this->sum( 'geodesics' , $id , $geodesic );
 			$this->{genes}->{$id}->{$genedrug} = 1;
+			$this->{transcripts}->{$id}->{$trans} = 1;
                         if (! exists $this->{aas}->{$id}){
 				$this->{aas}->{$id} = ();
                         } 
@@ -149,7 +162,7 @@ sub writeSummary {
 	$fh->print( "Cluster_ID\tCentroid\tAvg_Degree\tCentrality\tAvg_Centrality\tAvg_Geodesic\tRecurrence_Mass\tAvg_Recurrence" );
 	$fh->print( "\tMutations_(Unique_AAchanges)" );
 	#$fh->print( "\tKnown_Mutations_(Unique_Known)" );
-	$fh->print( "\tTotal_Drugs\tGenes_Drugs\tAA_Mutations");
+	$fh->print( "\tTotal_Drugs\tGenes_Drugs\tAA_Mutations\tTranscripts");
 	#$fh->print( "\tHGNC_Gene_Families\tPfam_Domains\tDrugBank_Classes\tNIH_Classes" );
 	$fh->print( "\n" );
 	foreach my $id ( sort { $a <=> $b } keys %{$this->{mutationmass}} ) {
@@ -178,11 +191,16 @@ sub writeSummary {
 		} else {
 			$fh->print( "NA\t" );
 		} 
-		if (exists $this->{aas}->{$id} && $this->{aas}->{$id} ne ""){
+		if ( exists $this->{aas}->{$id} && $this->{aas}->{$id} ne ""){
 			$fh->print( join("," , uniq(@{$this->{aas}->{$id}}))."\t");
-		} else{
+		} else {
 			$fh->print( "NA\t" );
 		}
+		if ( exists $this->{transcripts}->{$id} && $this->{transcripts}->{$id} ne ""){
+			$fh->print( join( "; " , sort keys %{$this->{transcripts}->{$id}} )."\t" );
+		} else {
+			$fh->print( "NA\t" );
+		} 
 
 		 #list of genes & drugs
 		#if ( exists $family->{$id} && $family->{$id} ne "" ) {
