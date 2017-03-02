@@ -38,7 +38,7 @@ sub process {
 	my ( $annotationsDir , $cosmicDir ) = $this->getInputDirs( );
 	my $cosmicHashRef = $this->getCOSMICInput( $transMapToUniprot );
 	$this->makeCOSMICAnnotations( $fh , $annotationsDir , $cosmicDir , $cosmicHashRef );
-	return;
+	return 0;
 }
 
 sub makeCOSMICAnnotations {
@@ -49,7 +49,6 @@ sub makeCOSMICAnnotations {
         # Only use Uniprot IDs with PDB structures
         next if ( $uniprotId !~ /\w+/ );
         # proximity file
-        print STDOUT $uniprotId."\n";
         # add annotation infor
         $this->addCosmic( $annotationsDir , $cosmicDir , $cosmicHashRef , $uniprotId );
         #delete file if null
@@ -92,7 +91,7 @@ sub setOptions {
         'output-dir=s' => \$this->{_OUTPUT_DIR},
         'help' => \$help,
     );
-    if ( $help ) { print STDERR help_text(); exit 0; };
+    if ( $help ) { warn help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
     unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: You must provide a output directory! ', "\n"; die $this->help_text(); };
     unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: Output directory does not exist! ', "\n"; die $this->help_text(); };
@@ -113,7 +112,7 @@ sub addCosmic {
     my $fhout = new FileHandle;
 	my $outputFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
     unless( $fhout->open(">$outputFile") ) { die "Could not open output proximity file to write !\n" };
-	print STDOUT "Creating ".$outputFile."\n";
+	print STDOUT $uniprotId." HotSpot3D::Cosmic::addCosmic - writing cosmic annotations to ".$outputFile."\n";
     #print $uniprotId."\n";
 	my $skips = 0;
 	my %structures;
@@ -137,7 +136,7 @@ sub addCosmic {
 		$fields[9] = TGI::Data::CleanNumber::numOnly( $fields[9] );
         $uniprotCoorOneEnd = $fields[2] + $fields[3];
         $uniprotCoorTwoEnd = $fields[8] + $fields[9];
-        #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
+        #warn $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
         if ( defined $cosmicRef->{$uniprotId}->{$uniprotCoorOneEnd} ) {
             $annoOneEnd = "";
             map{ $annoOneEnd .= $_.","; } keys %{$cosmicRef->{$uniprotId}->{$uniprotCoorOneEnd}};
@@ -156,15 +155,15 @@ sub addCosmic {
         $newLine .= "\t";
         $newLine .= $annoTwoEnd."\t";
         $newLine .= join("\t", @fields[12..14]);
-        #print STDERR $newLine."\n";
+        #warn $newLine."\n";
         print $fhout $newLine."\n";
 		$newlines += 1;
     }
     $fhin->close();
-	print STDOUT "Skipped ".$skips." structures\n";
+	print STDOUT $uniprotId." Skipped ".$skips." structures\n";
 	my $nStructures = scalar keys %structures;
-	print STDOUT "Processed ".$nStructures." structures\n";
-	print STDOUT "There are ".$newlines." annotated lines in ".$annotationFile."\n";
+	print STDOUT $uniprotId." Processed ".$nStructures." structures\n";
+	print STDOUT $uniprotId." There are ".$newlines." annotated lines in ".$annotationFile."\n";
     $fhout->close();
 }
 
@@ -218,8 +217,8 @@ sub getCosmicInfor {
         next if ( $tmp_hit_bool == 0 );
         next if (defined $cosmicHash{$uniprot}{$tmp_uniprot_position}{$aac."|".$tissue});
         $cosmicHash{$uniprot}{$tmp_uniprot_position}{$aac."|".$tissue} = 1;
-        #print STDERR $aac."\t".$1."\t".$tissue."\t".$uniprot."\n";
-        #print STDERR $aac."\t".$1."\t".$uniprot."\n";
+        #warn $aac."\t".$1."\t".$tissue."\t".$uniprot."\n";
+        #warn $aac."\t".$1."\t".$uniprot."\n";
     }
     $fhcosmic->close();
     return \%cosmicHash;
