@@ -35,21 +35,18 @@ sub process {
     #### processing ####
     # generate region of interest information ( ROI )
 	my $annoDir = $this->getOutputDir();
-	my $fhlog = $this->startLog( $annoDir );
 	my $fhuid = $this->getInputFile( );
 	my $allUniprotIds = $this->getUniprotIds( $fhuid );
-	$this->makeROIannotations( $allUniprotIds );
-	return;
+	$this->makeROIannotations( $allUniprotIds , $annoDir );
+	return 0;
 }
 
 sub makeROIannotations {
-	my ( $this , $annoDir , $fhlog , $allUniprotIds );
+	my ( $this , $allUniprotIds , $annoDir ) = @_;
 
-	my ( $uniprotRef , $annotationRef , $start , $stop , $key , $desc , $entry );
     foreach my $uniprotId ( keys %{$allUniprotIds} ) {
-		$this->makeROIannotationFile( $uniprotId , $annoDir , $fhlog );
+		$this->makeROIannotationFile( $uniprotId , $annoDir );
     }
-    $fhlog->close();
 }
 
 sub setOptions {
@@ -60,10 +57,10 @@ sub setOptions {
         'output-dir=s' => \$this->{_OUTPUT_DIR},
         'help' => \$help,
     );
-    if ( $help ) { print STDERR help_text(); exit 0; };
+    if ( $help ) { warn help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
-    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
-    unless( -e $this->{_OUTPUT_DIR} ) { warn 'output directory is not exist  ! ', "\n"; die $this->help_text(); };
+    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Calroi::setOptions error: You must provide a output directory!', "\n"; die $this->help_text(); };
+    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Calroi::setOptions error: The output directory does not exist!', "\n"; die $this->help_text(); };
 	return;
 }
 
@@ -71,28 +68,18 @@ sub getInputFile {
 	my ( $this , $annoDir ) = @_;
 
     my $fhuid = new FileHandle;
-    my $hugoUniproFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
-    unless( $fhuid->open("<$hugoUniproFile") ) { die "Could not open uniprot id file !\n" };
+    my $hugoUniprotFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
+    unless( $fhuid->open("<$hugoUniprotFile") ) { die "HotSpot3D::Calroi::getInputFile error: Could not open uniprot id file ".$hugoUniprotFile."!\n" };
 
 	return $fhuid;
 }
 
-sub startLog {
-	my ( $this , $annoDir ) = @_;
-
-    my $fhlog = new FileHandle;
-    unless( $fhlog->open(">$annoDir/ERRORS.LOG") ) { die "Could not open ERROR LOG file !\n" };
-
-	return $fhlog;
-}
-
-sub getOutputDirectory {
+sub getOutputDir {
 	my $this = shift;
-    my ( $annoDir );
 
     my $proDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
-    $annoDir = "$proDir\/annotationFiles";
-    unless( -e $annoDir ) { mkdir( $annoDir ) || die "can not make ROI annotation directory !\n"; };
+    my $annoDir = "$proDir\/annotationFiles";
+    unless( -e $annoDir ) { mkdir( $annoDir ) || die "HotSpot3D::Calroi::getOutputDir error: can not make ROI annotation directory!\n"; };
 
 	return $annoDir;
 }
@@ -115,30 +102,33 @@ sub getUniprotIds {
 }
 
 sub makeROIannotationFile {
-	my ( $this , $uniprotId , $annoDir , $fhlog );
+	my ( $this , $uniprotId , $annoDir ) = @_;
 	my $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
-	defined ($uniprotRef) || die "no object for '$uniprotId'";
-	print STDOUT $uniprotId."\n";
+	defined ($uniprotRef) || die "HotSpot3D::Calroi::makeROIannotationFile error: no object for '$uniprotId'";
 	# The annotation is a ref to array made here:
 	# 'push @domains, 
 	# "$key\t($dmStart, $dmStop)\t$desc'";
 	my $annotationRef = $uniprotRef->domainsAfterPosition(1);
+	my $file = $annoDir."/".$uniprotId.".annotation.txt";
 	my $fhoneuid = new FileHandle;
-	unless( $fhoneuid->open("> $annoDir/$uniprotId.annotation.txt") ) { die "Could not open annotation file to write !\n" };
+	unless( $fhoneuid->open( $file , "w" ) ) {
+		die "HotSpot3D::Calroi::makeROIannotationFile error: Could not open annotation file to write for ".$uniprotId." at ".$file."!\n";
+	};
+	print STDOUT $uniprotId." HotSpot3D::Calroi - Making annotation file ".$file."\n";
 	$fhoneuid->print( "Feature_Start\tFeature_End\tFeature_Type\tFeature_Description\n" );
 	foreach my $annotation ( @{$annotationRef} ) {
-		my ( $key , $start , $stop , $desc , $entry );
+		my ( $key , $start , $stop , $desc );
 		if ( $annotation =~ /(\w+)\s+\((\d+)\,\s+(\d+)\)\s+(.*)\.?$/ ) { 
 			$key = $1; $start = $2; $stop = $3; $desc = $4;
 		} else {
-			print $fhlog "ERROR: Could not parse domain description for '$uniprotId': '$entry'";
+			warn "HotSpot3D::Calroi::makeROIannotationFile warning: Could not parse domain description for '$uniprotId'\n";
 			next;
 		}
 		if ( $start > $stop ) { 
-			print $fhlog "ERROR: Start ($start) > Stop ($stop) in '$entry'\n";
+			warn "HotSpot3D::Calroi::makeROIannotationFile warning: Start ($start) > Stop ($stop) in '$uniprotId'\n";
 			next;
 		}
-		print $fhoneuid "$start\t$stop\t'$key'\t'$desc'\n";
+		$fhoneuid->print( join( "\t" , ( $start , $stop , $key , $desc ) )."\n" );
 	}
 	$fhoneuid->close();
 	return;
