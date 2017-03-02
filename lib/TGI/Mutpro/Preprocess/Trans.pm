@@ -3,7 +3,7 @@ package TGI::Mutpro::Preprocess::Trans;
 #----------------------------------
 # $Authors: Beifang Niu & Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 2 $
+# $Revision: 3 $
 # $URL: $
 # $Doc: $ transcripts processing and added them in table 
 #----------------------------------
@@ -18,6 +18,7 @@ use LWP::Simple;
 use IO::File;
 use FileHandle;
 use File::Temp qw/ tempfile /;
+use Archive::Extract;
 
 use TGI::Mutpro::Preprocess::Uniprot;
 
@@ -44,82 +45,126 @@ sub process {
     my $this = shift;
 	$this->setOptions();
     # add transcript annotation for uniprot
-    my ( $peptidesDir, $UniprotIdFile, $peptidesFile, $outputFile, );
-    $peptidesDir = "$this->{_OUTPUT_DIR}\/humanPeptides";
-    $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
-    $peptidesFile = "$peptidesDir\/Homo_sapiens.GRCh".$this->{GRCh}.".".$this->{release}.".pep.all.fa";
-    $outputFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
-    unless( -e $peptidesDir ) { mkdir( $peptidesDir ) || die "can not make peptides directory !\n"; };
-    ## get peptide file 
-	my $url = $this->makeEnsemblFastaURL();
-    my $downloadFile = $peptidesFile.".gz";
-	if ( not -e $downloadFile ) {
-		getstore( $url, $downloadFile );
-	}
-    system( "gzip -d $downloadFile" );
-    # load peptide seqs
-    my $peptideSeqsRef = $this->loadPeptides( $peptidesFile );
-    my ( @entireFile, $uniprotId, %allUniprotIds, $uniprotRef, $annotationRef, $start, $stop, $key, $desc, $entry, $pdb, );
-    my $fhuid = new FileHandle;
-    unless( $fhuid->open("<$UniprotIdFile") ) { die "Could not open uniprot id file !\n" };
-    @entireFile = <$fhuid>;
-    $fhuid->close();
-    my $outputContent = "";
-    foreach my $line (@entireFile) {
+	my $entireFile = $this->getInputFile( );
+	my $fhout = $this->getOutputFileHandle( );
+	my $peptides = $this->getPeptides( );
+	$this->mapEnsemblTranscriptsToUniprot( $entireFile , $peptides , $fhout );
+	return 0;
+}
+
+sub mapEnsemblTranscriptsToUniprot {
+	my ( $this , $entireFile , $peptides , $fhout ) = @_;
+	my $outputContent = "";
+    foreach my $line ( @{$entireFile} ) {
         chomp $line;
+		my ( $uniprotId , $pdb );
         ( undef, $uniprotId, $pdb, ) = split /\s+/, $line;
         # Only use Uniprot IDs with PDB structures
         next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-        $allUniprotIds{$uniprotId} = 1;
-        $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
-        defined ($uniprotRef) || die "no object for '$uniprotId'";
-        # The annotation is a ref to array made here:
-        my $uniprotSequence = $uniprotRef->sequence();
-
-        #print ">uniprotseq\n";
-        #print $uniprotSequence."\n";
-
-        my $enst2ensp = $uniprotRef->transProteinHash(); #non-versioned ENST ids
-        next unless( defined $enst2ensp );
-        my $transcriptContent = "";
-        foreach my $enst ( keys %{$enst2ensp} ) { #non-versioned ENST id
-            #print ">$enst\n";
-            my $ensp = $enst2ensp->{$enst};
-			my $proteinSequence = $this->getVersionedSequence( $peptideSeqsRef , $ensp ); #
-            #print "$proteinSequence\n";
-            next unless(defined $proteinSequence);
-            if ( $uniprotSequence eq $proteinSequence ) {
-                $transcriptContent .= $enst."[1|1-".length($proteinSequence)."|".length($proteinSequence)."],"; 
-            } else {
-                my ( undef, $tmp_uniprot_seq_file ) = tempfile();
-                my $tmp_uniprot_fh = IO::File->new( $tmp_uniprot_seq_file, ">" ) or die "Temporary file could not be created. $!";
-                $tmp_uniprot_fh->print( ">$uniprotId\n$uniprotSequence\n" );
-                my ( undef, $tmp_transcript_protein_seq_file ) = tempfile();
-                my $tmp_transcript_fh = IO::File->new( $tmp_transcript_protein_seq_file, ">" ) or die "Temporary file could not be created. $!";
-                $tmp_transcript_fh->print( ">$enst\n$proteinSequence\n" );
-                $tmp_uniprot_fh->close; $tmp_transcript_fh->close;
-                my ( undef, $tmp_blat_output_file ) = tempfile();
-				my $blat = "blat";
-                system( "$this->{_BLAT} $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
-                # parse blat output
-                my $tmp_parse_cont = ""; 
-                map{ $tmp_parse_cont .= $_.":"; } @{$this->parse_blat_output( $tmp_blat_output_file, $uniprotId, 0.90 )};
-                if ( $tmp_parse_cont ne "" ) { chop( $tmp_parse_cont ); $transcriptContent .= $enst."[".$tmp_parse_cont."],"; };
-                # clean files
-                unlink $tmp_uniprot_seq_file; unlink $tmp_transcript_protein_seq_file; unlink $tmp_blat_output_file; 
-
-            }
-        }
-        if ( $transcriptContent eq "" ) { $transcriptContent = "N\/A";
-        } else { chop( $transcriptContent ); }
-        print STDOUT "$line\t$transcriptContent\n";
-        $outputContent .= "$line\t$transcriptContent\n";
+		my $transcriptContent = $this->mapEnsemblTranscriptsToThisUniprot( $uniprotId , $peptides );
+		$outputContent .= $line."\t".$transcriptContent."\n";
     }
-    my $fhout = new FileHandle;
-    unless( $fhout->open(">$outputFile") ) { die "Could not open output file !\n" };
-	print STDOUT "Creating ".$outputFile."\n";
+	print STDOUT "Writing to hupt\n";
     print $fhout $outputContent;
     $fhout->close();
+	return;
+}
+
+sub mapEnsemblTranscriptsToThisUniprot {
+	my ( $this , $uniprotId , $peptides ) = @_;
+	my $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
+	defined ($uniprotRef) || die "HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot error: no object for '$uniprotId'";
+	# The annotation is a ref to array made here:
+	my $uniprotSequence = $uniprotRef->sequence();
+
+	#print ">uniprotseq\n";
+	#print $uniprotSequence."\n";
+
+	my $enst2ensp = $uniprotRef->transProteinHash(); #non-versioned ENST ids
+	next unless( defined $enst2ensp );
+	my $transcriptContent = "";
+	print STDOUT $uniprotId." HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot - determining Ensembl->UniProt mapping\n";
+	foreach my $enst ( keys %{$enst2ensp} ) { #non-versioned ENST id
+		#print ">$enst\n";
+		my $ensp = $enst2ensp->{$enst};
+		my $proteinSequence = $this->getVersionedSequence( $peptides , $ensp ); #
+		#print "$proteinSequence\n";
+		next unless(defined $proteinSequence);
+		if ( $uniprotSequence eq $proteinSequence ) {
+			$transcriptContent .= $enst."[1|1-".length($proteinSequence)."|".length($proteinSequence)."],"; 
+		} else {
+			my ( undef, $tmp_uniprot_seq_file ) = tempfile();
+			my $tmp_uniprot_fh = IO::File->new( $tmp_uniprot_seq_file, ">" ) or die "HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot error: Temporary file could not be created. $!";
+			$tmp_uniprot_fh->print( ">$uniprotId\n$uniprotSequence\n" );
+			my ( undef, $tmp_transcript_protein_seq_file ) = tempfile();
+			my $tmp_transcript_fh = IO::File->new( $tmp_transcript_protein_seq_file, ">" ) or die "HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot error: Temporary file could not be created. $!";
+			$tmp_transcript_fh->print( ">$enst\n$proteinSequence\n" );
+			$tmp_uniprot_fh->close; $tmp_transcript_fh->close;
+			my ( undef, $tmp_blat_output_file ) = tempfile();
+			my $blat = "blat";
+			system( "$this->{_BLAT} $tmp_uniprot_seq_file $tmp_transcript_protein_seq_file -t=prot -q=prot -out=blast $tmp_blat_output_file" );
+			# parse blat output
+			my $tmp_parse_cont = ""; 
+			map{ $tmp_parse_cont .= $_.":"; } @{$this->parse_blat_output( $tmp_blat_output_file, $uniprotId, 0.90 )};
+			if ( $tmp_parse_cont ne "" ) { chop( $tmp_parse_cont ); $transcriptContent .= $enst."[".$tmp_parse_cont."],"; };
+			# clean files
+			unlink $tmp_uniprot_seq_file;
+			unlink $tmp_transcript_protein_seq_file;
+			unlink $tmp_blat_output_file; 
+
+		}
+	}
+	if ( $transcriptContent eq "" ) {
+		print STDOUT $uniprotId." HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot - no mappings\n";
+		$transcriptContent = "N\/A";
+	} else {
+		print STDOUT $uniprotId." HotSpot3D::Trans::mapEnsemblTranscriptsToThisUniprot - complete\n";
+		chop( $transcriptContent );
+	}
+	return $transcriptContent;
+}
+
+sub getPeptidesFile {
+	my $this = shift;
+    my $peptidesDir = "$this->{_OUTPUT_DIR}\/humanPeptides";
+    unless( -e $peptidesDir ) { mkdir( $peptidesDir ) || die "HotSpot3D::Trans::getPeptidesFile error: can not make peptides directory!\n"; };
+    my $peptidesFile = "$peptidesDir\/Homo_sapiens.GRCh".$this->{GRCh}.".".$this->{release}.".pep.all.fa";
+	return $peptidesFile;
+}
+    
+sub getPeptides {
+	my ( $this ) = @_;
+	my $peptidesFile = $this->getPeptidesFile( );
+    ## get peptide file 
+	my $url = $this->makeEnsemblFastaURL();
+    my $downloadFile = $peptidesFile.".gz";
+	my $decompressor = Archive::Extract->new( archive => $downloadFile );
+	if ( not -e $downloadFile ) {
+		getstore( $url, $downloadFile );
+	}
+	$decompressor->extract( to => $peptidesFile );
+    #system( "gzip -d $downloadFile" );
+    # load peptide seqs
+    return $this->loadPeptides( $peptidesFile );
+}
+    
+sub getInputFile {
+	my $this = shift;
+	my $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
+    my $fhuid = new FileHandle;
+    unless( $fhuid->open("<$UniprotIdFile") ) { die "HotSpot3D::Trans::getInputFile error: Could not open uniprot id file!\n" };
+    my @entireFile = <$fhuid>;
+    $fhuid->close();
+	return \@entireFile;
+}
+
+sub getOutputFileHandle {
+	my $this = shift;
+	my $outputFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
+    my $fhout = new FileHandle;
+    unless( $fhout->open(">$outputFile") ) { die "HotSpot3D::Trans::getOutputFileHandle error: Could not open output file!\n" };
+	print STDOUT "Creating hupt: ".$outputFile."\n";
+	return $fhout;
 }
 
 sub setOptions {
@@ -133,11 +178,11 @@ sub setOptions {
         'release=f' => \$this->{release},
         'help' => \$help,
     );
-    if ( $help ) { print STDERR help_text(); exit 0; };
+    if ( $help ) { warn help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
-    unless( $this->{_OUTPUT_DIR} ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); };
-    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Trans Error: output directory does not exist  ! ', "\n"; die $this->help_text(); };
-	if ( $this->checkBLAT() ) { warn 'HotSpot3D Trans Error: blat not found - $this->{_BLAT} ! ' , "\n"; die $this->help_text(); }
+    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Trans::setOptions error: You must provide an output directory! ', "\n"; die $this->help_text(); };
+    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D::Trans::setOptions error: output directory does not exist! ', "\n"; die $this->help_text(); };
+	if ( $this->checkBLAT() ) { warn 'HotSpot3D::Trans::setOptions error: blat not found - $this->{_BLAT}!' , "\n"; die $this->help_text(); }
 	$this->setEnsemblVersions();
 	return;
 }
@@ -150,7 +195,7 @@ sub checkBLAT {
 sub setEnsemblVersions {
 	my ( $this ) = @_;
 	if ( not defined $this->{GRCh} and not defined $this->{release} ) {
-		warn "Ensembl GRCh & release versions not specified, defaulting to latest: GRCh".$LATESTGRCH.".".$LATEST38RELEASE."\n";
+		warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl GRCh & release versions not specified, defaulting to latest: GRCh".$LATESTGRCH.".".$LATEST38RELEASE."\n";
 		$this->{GRCh} = $LATESTGRCH;
 		$this->{release} = $LATEST38RELEASE;
 	} elsif ( not defined $this->{GRCh} ) {
@@ -159,19 +204,19 @@ sub setEnsemblVersions {
 		} elsif ( $this->{release} <= $LATEST37RELEASE and $this->{release} >= $EARLIEST37RELEASE ) {
 			$this->{GRCh} = 37;
 		} elsif ( $this->{release} <= 54 ) {
-			warn "Ensembl releases <= 54 not supported\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions error: Ensembl releases <= 54 not supported\n";
 			die $this->help_text();
 		}
-		warn "Ensembl GRCh version not specified. User specified release ".$this->{release}.", so using GRCh".$this->{GRCh}."\n";
+		warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl GRCh version not specified. User specified release ".$this->{release}.", so using GRCh".$this->{GRCh}."\n";
 	} elsif ( not defined $this->{release} ) {
 		if ( $this->{GRCh} == 38 ) {
-			warn "Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST38RELEASE."\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST38RELEASE."\n";
 			$this->{release} = $LATEST38RELEASE;
 		} elsif ( $this->{GRCh} == 37 ) {
-			warn "Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST37RELEASE."\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions warning: Ensembl release versions not specified, defaulting to latest: GRCh".$this->{GRCh}.".".$LATEST37RELEASE."\n";
 			$this->{release} = 75;
 		} else {
-			warn "Unrecognized GRCh version (user set ".$this->{GRCh}.", not 37 or 38)\n";
+			warn "HotSpot3D::Trans::setEnsemblVersions error: Unrecognized GRCh version (user set ".$this->{GRCh}.", not 37 or 38)\n";
 			die $this->help_text();
 		}
 	} else {
@@ -206,22 +251,22 @@ sub makeEnsemblFastaURL {
 sub loadPeptides {
     my ( $this, $pepfile, ) = @_;
     my $fh = new FileHandle;
-    unless( $fh->open("<$pepfile") ) { die "Could not open peptide file !\n" };
+    unless( $fh->open("<$pepfile") ) { die "HotSpot3D::Trans::loadPeptides error: Could not open peptide file!\n" };
     my @entireFile = <$fh>;
     $fh->close();
     my ( %pep_hash, $content, $name, );
     $content = $name = "";
-    foreach my $a (@entireFile) {
-        if ($a =~ /^>/) {
-			print $a."\n";
+    foreach my $line (@entireFile) {
+        if ($line =~ /^>/) {
+			#print $line."\n";
             $pep_hash{$name} = $content if ($name ne "");
 			if ( $this->{GRCh} == 38 ) {
-				($name) = $a =~ /^>(\w+\.\d+) /;
+				($name) = $line =~ /^>(\w+\.\d+) /;
 			} else {
-				($name) = $a =~ /^>(\w+) /;
+				($name) = $line =~ /^>(\w+) /;
 			}
             $content = "";
-        } else { chomp($a); $content .= $a; }
+        } else { chomp($line); $content .= $line; }
     }
     # last seq 
     if ($content ne "") { $pep_hash{$name} = $content; }
@@ -236,10 +281,11 @@ sub parse_blat_output {
     my ( @homoregions, );
     $f = $index = $iden = 0;
     my $fh = new FileHandle;
-    unless( $fh->open( "<$blat_output" ) ) { die "Could not open blat output file !\n" };
+    unless( $fh->open( "<$blat_output" ) ) { die "HotSpot3D::Trans::parse_blat_output error: Could not open blat output file!\n" };
     foreach ( $fh->getlines ) { chomp; next unless ( /^>/ || $f == 1 ); last if ($f == 1 && /^>/ ); push @top, $_; $f = 1; };
     $fh->close;
     return \@homoregions unless( @top );
+	print STDOUT $uniprotid." HotSpot3D::Trans::parse_blat_output - parsing BLAT output\n";
     foreach (@top) {
         #if ( /^>/ ) { ($pdb, $chain) = /^>(\w+)\_(\w) /; $header{'PDB'} = uc($pdb); $header{'CHAIN'} = uc($chain); }
         if ( /Identities/ ) { $index++; ($iden) = /\((\d+)\%\)/; $homos{$index}{'IDEN'} = $iden; }

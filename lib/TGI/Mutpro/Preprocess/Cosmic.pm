@@ -1,9 +1,9 @@
 package TGI::Mutpro::Preprocess::Cosmic;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu & Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 1 $
 # $URL: $
 # $Doc: $ cosmic database processing 
 #----------------------------------
@@ -30,76 +30,113 @@ sub new {
 
 sub process {
     my $this = shift;
-    my ( $help, $options );
-    unless( @ARGV ) { die $this->help_text(); };
-    $options = GetOptions (
-        'output-dir=s' => \$this->{_OUTPUT_DIR},
-        'help' => \$help,
-    );
-    if ( $help ) { print STDERR help_text(); exit 0; };
-    unless( $options ) { die $this->help_text(); };
-    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: You must provide a output directory! ', "\n"; die $this->help_text(); };
-    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: Output directory does not exist! ', "\n"; die $this->help_text(); };
+	$this->setOptions( );
     #### processing ####
     # add COSMIC annotations after get ROI annotation information
     ## do that after get ROI annotation
-    my ( $hugoUniprotFile, $proximityDir, $annotationsDir, $cosmicDir, $cosmicAnno, );
-    $hugoUniprotFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
-    $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
-    $annotationsDir = "$proximityDir\/annotations";
-    $cosmicDir = "$proximityDir\/cosmicanno";
-    $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/cosmic_67_for_HotSpot3D_missense_only.tsv";
-    unless( -d $annotationsDir ) { warn "You must provide a valid annotations directory ! \n"; die help_text(); }
-    unless( -e $cosmicDir ) { mkdir( $cosmicDir ) || die "can not make COSMIC annotated files directory\n"; }
-    my $transMaptoUnipro = $this->getTransMaptoUniprot( $hugoUniprotFile );
-    my $cosmicHashRef = $this->getCosmicInfor( $transMaptoUnipro, $cosmicAnno );
+	my ( $fh , $transMapToUniprot ) = $this->getFileInputs( );
+	my ( $annotationsDir , $cosmicDir ) = $this->getInputDirs( );
+	my $cosmicHashRef = $this->getCOSMICInput( $transMapToUniprot );
+	$this->makeCOSMICAnnotations( $fh , $annotationsDir , $cosmicDir , $cosmicHashRef );
+	return 0;
+}
 
-    my $fh = new FileHandle;
-    unless( $fh->open("<$hugoUniprotFile") ) { die "Could not open hugo uniprot file !\n" };
-    my $u = 0;
+sub makeCOSMICAnnotations {
+	my ( $this , $fh , $annotationsDir , $cosmicDir , $cosmicHashRef ) = @_;
     while ( my $line = <$fh> ) {
         chomp $line;
         my ( undef, $uniprotId, ) = split /\t/, $line;
         # Only use Uniprot IDs with PDB structures
         next if ( $uniprotId !~ /\w+/ );
         # proximity file
-        my $annotationFile = "$annotationsDir\/$uniprotId\.ProximityFile\.csv";
-        next unless( -e $annotationFile );
-        my $outputFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
-        print STDOUT $uniprotId."\n";
         # add annotation infor
-        $this->addCosmic( $annotationFile, $cosmicHashRef, $outputFile, $uniprotId );
+        $this->addCosmic( $annotationsDir , $cosmicDir , $cosmicHashRef , $uniprotId );
         #delete file if null
     }
     $fh->close();
+	return;
+}
+
+sub getCOSMICInput {
+	my ( $this , $transMapToUniprot ) = @_;
+    my $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/cosmic_67_for_HotSpot3D_missense_only.tsv";
+    my $cosmicHashRef = $this->getCosmicInfor( $transMapToUniprot , $cosmicAnno );
+	return $cosmicHashRef;
+}
+
+sub getInputDirs {
+	my $this = shift;
+    my $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
+    my $annotationsDir = "$proximityDir\/annotations";
+    unless( -d $annotationsDir ) { warn "You must provide a valid annotations directory ! \n"; die help_text(); }
+    my $cosmicDir = "$proximityDir\/cosmicanno";
+    unless( -e $cosmicDir ) { mkdir( $cosmicDir ) || die "can not make COSMIC annotated files directory\n"; }
+	return ( $annotationsDir , $cosmicDir );
+}
+
+sub getFileInputs {
+	my $this = shift;
+    my $hugoUniprotFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
+    my $transMapToUniprot = $this->getTransMaptoUniprot( $hugoUniprotFile );
+    my $fh = new FileHandle;
+    unless( $fh->open("<$hugoUniprotFile") ) { die "Could not open hugo uniprot file !\n" };
+	return ( $fh , $transMapToUniprot );
+}
+
+sub setOptions {
+	my $this = shift;
+    my ( $help, $options );
+    unless( @ARGV ) { die $this->help_text(); };
+    $options = GetOptions (
+        'output-dir=s' => \$this->{_OUTPUT_DIR},
+        'help' => \$help,
+    );
+    if ( $help ) { warn help_text(); exit 0; };
+    unless( $options ) { die $this->help_text(); };
+    unless( $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: You must provide a output directory! ', "\n"; die $this->help_text(); };
+    unless( -e $this->{_OUTPUT_DIR} ) { warn 'HotSpot3D Cosmic Error: Output directory does not exist! ', "\n"; die $this->help_text(); };
+	return;
 }
 
 # add Cosmic annotation
 sub addCosmic {
-    my ( $this, $proximityfile, $cosmicRef, $outputf, $uniprotId, ) = @_;
+    my ( $this , $annotationsDir , $cosmicDir , $cosmicRef , $uniprotId ) = @_;
     # add annotation information
+	my $annotationFile = "$annotationsDir\/$uniprotId\.ProximityFile\.csv";
+	unless ( -e $annotationFile ) {
+		warn "HotSpot3D::Cosmic::addCosmic warning: cannot add COSMIC, because there is no annotation file: ".$annotationFile."\n";
+		return;
+	}
     my $fhin = new FileHandle;
-    unless( $fhin->open("<$proximityfile") ) { die "Could not open proximity file !\n" };
+    unless( $fhin->open("<$annotationFile ") ) { die "Could not open proximity file !\n" };
     my $fhout = new FileHandle;
-    unless( $fhout->open(">$outputf") ) { die "Could not open output proximity file to write !\n" };
-	print STDOUT "Creating ".$outputf."\n";
+	my $outputFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
+    unless( $fhout->open(">$outputFile") ) { die "Could not open output proximity file to write !\n" };
+	print STDOUT $uniprotId." HotSpot3D::Cosmic::addCosmic - writing cosmic annotations to ".$outputFile."\n";
     #print $uniprotId."\n";
-    while ( my $a = <$fhin> ) {
-        next if ($a =~ /^WARNING:/);
-        chomp($a);
-        my @t = split /\t/, $a;
+	my $skips = 0;
+	my %structures;
+	my $newlines = 0;
+    while ( my $line = <$fhin> ) {
+        if ($line =~ /^WARNING:/) {
+			$skips += 1;
+		}
+        chomp($line);
+        my @fields = split /\t/, $line;
+		$structures{$fields[13]} += 1;
         my ( $annoOneEnd, $annoTwoEnd, $uniprotCoorOneEnd, $uniprotCoorTwoEnd, );
         $annoOneEnd = $annoTwoEnd = "N\/A";
-        next if ( ($t[2] =~ /N\/A/) or 
-                  ($t[3] =~ /N\/A/) or 
-                  ($t[8] =~ /N\/A/) or ($t[9] =~ /N\/A/));
-		$t[2] = TGI::Data::CleanNumber::numOnly( $t[2] );
-		$t[3] = TGI::Data::CleanNumber::numOnly( $t[3] );
-		$t[8] = TGI::Data::CleanNumber::numOnly( $t[8] );
-		$t[9] = TGI::Data::CleanNumber::numOnly( $t[9] );
-        $uniprotCoorOneEnd = $t[2] + $t[3];
-        $uniprotCoorTwoEnd = $t[8] + $t[9];
-        #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
+        next if ( ($fields[2] =~ /N\/A/) or 
+                  ($fields[3] =~ /N\/A/) or 
+                  ($fields[8] =~ /N\/A/) or
+				  ($fields[9] =~ /N\/A/));
+		$fields[2] = TGI::Data::CleanNumber::numOnly( $fields[2] );
+		$fields[3] = TGI::Data::CleanNumber::numOnly( $fields[3] );
+		$fields[8] = TGI::Data::CleanNumber::numOnly( $fields[8] );
+		$fields[9] = TGI::Data::CleanNumber::numOnly( $fields[9] );
+        $uniprotCoorOneEnd = $fields[2] + $fields[3];
+        $uniprotCoorTwoEnd = $fields[8] + $fields[9];
+        #warn $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
         if ( defined $cosmicRef->{$uniprotId}->{$uniprotCoorOneEnd} ) {
             $annoOneEnd = "";
             map{ $annoOneEnd .= $_.","; } keys %{$cosmicRef->{$uniprotId}->{$uniprotCoorOneEnd}};
@@ -111,17 +148,22 @@ sub addCosmic {
             chop($annoTwoEnd)
         }
         my $newLine = "";
-        $newLine .= join("\t", @t[0..5]);
+        $newLine .= join("\t", @fields[0..5]);
         $newLine .= "\t"; 
         $newLine .= $annoOneEnd."\t";
-        $newLine .= join("\t", @t[6..11]);
+        $newLine .= join("\t", @fields[6..11]);
         $newLine .= "\t";
         $newLine .= $annoTwoEnd."\t";
-        $newLine .= join("\t", @t[12..14]);
-        #print STDERR $newLine."\n";
+        $newLine .= join("\t", @fields[12..14]);
+        #warn $newLine."\n";
         print $fhout $newLine."\n";
+		$newlines += 1;
     }
     $fhin->close();
+	print STDOUT $uniprotId." Skipped ".$skips." structures\n";
+	my $nStructures = scalar keys %structures;
+	print STDOUT $uniprotId." Processed ".$nStructures." structures\n";
+	print STDOUT $uniprotId." There are ".$newlines." annotated lines in ".$annotationFile."\n";
     $fhout->close();
 }
 
@@ -175,8 +217,8 @@ sub getCosmicInfor {
         next if ( $tmp_hit_bool == 0 );
         next if (defined $cosmicHash{$uniprot}{$tmp_uniprot_position}{$aac."|".$tissue});
         $cosmicHash{$uniprot}{$tmp_uniprot_position}{$aac."|".$tissue} = 1;
-        #print STDERR $aac."\t".$1."\t".$tissue."\t".$uniprot."\n";
-        #print STDERR $aac."\t".$1."\t".$uniprot."\n";
+        #warn $aac."\t".$1."\t".$tissue."\t".$uniprot."\n";
+        #warn $aac."\t".$1."\t".$uniprot."\n";
     }
     $fhcosmic->close();
     return \%cosmicHash;
