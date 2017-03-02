@@ -39,7 +39,7 @@ sub process {
 	my $proximityDir = $this->getProximityDir( );
 	my $pvaluesDir = $this->getPValuesDir( $proximityDir );
 	my ( $annotationFileDir , $annotationDir ) = $this->getAnnotationDirs( $proximityDir );
-	$this->makeAnnotations( $entireFile , $annotationFileDir , $annotationDir , $pvaluesDir , $proximityDir )
+	$this->makeAnnotations( $entireFile , $annotationFileDir , $annotationDir , $pvaluesDir , $proximityDir );
 	return;
 }
 
@@ -176,8 +176,8 @@ sub addAnnotation {
         $uniprotCoorOneEnd = $t[2] + $t[3];
         $uniprotCoorTwoEnd = $t[7] + $t[8];
         #print STDERR $uniprotCoorOneEnd."\t".$uniprotCoorTwoEnd."\n";
-        if ( defined $annotation->{$uniprotId}->{$uniprotCoorOneEnd} ) { $annoOneEnd = $annotation->{$uniprotId}->{$uniprotCoorOneEnd}; }
-        if ( defined $annotation->{$uniprotId}->{$uniprotCoorTwoEnd} ) { $annoTwoEnd = $annotation->{$uniprotId}->{$uniprotCoorTwoEnd}; }
+        if ( defined $annotations->{$uniprotId}->{$uniprotCoorOneEnd} ) { $annoOneEnd = $annotations->{$uniprotId}->{$uniprotCoorOneEnd}; }
+        if ( defined $annotations->{$uniprotId}->{$uniprotCoorTwoEnd} ) { $annoTwoEnd = $annotations->{$uniprotId}->{$uniprotCoorTwoEnd}; }
         # print STDERR $annoOneEnd."\t".$annoTwoEnd."\n";
         foreach my $d (0..4) { print $fhout $t[$d]."\t"; }
         print $fhout $annoOneEnd."\t";
