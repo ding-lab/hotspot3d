@@ -52,6 +52,7 @@ sub new {
 	$this->{'min_seq_dis'} = 0;
 	$this->{'start'} = $CALROI; 
 	$this->{'parallel'} = $CPU;
+	$this->{'status'} = 0;
 	bless $this, $class;
 	$this->process();
 	return $this;
@@ -78,6 +79,15 @@ sub process {
 
 	$this->steps();
 	return;
+}
+
+sub checkStatus {
+	my ( $this , $step ) = @_;
+	if ( $this->{'status'} ) {
+		warn "HotSpot3D::AllPreprocess::checkStatus error: prior step (".$step.") failed!\n";
+		exit $this->{'status'};
+	}
+	return $this->{'status'};
 }
 
 sub command {
@@ -136,29 +146,42 @@ sub start {
 	return $this->{'start'};
 }
 
+sub status {
+	my $this = shift;
+	if ( @_ ) { $this->{'status'} = shift; }
+	return $this->{'status'};
+}
+
 sub calroi {
 	my $this = shift;
+	$this->checkStatus( "uppro/calpro" );
 	my $cmd = "hotspot3d calroi --output-dir ".$this->outputDir();
 	print STDOUT "running: ".$cmd."\n";
-	return system( $cmd );
+	$this->status( system( $cmd ) );
+	return;
 }
 
 sub statis {
 	my $this = shift;
+	$this->checkStatus( $CALROI );
 	my $cmd = "hotspot3d statis --output-dir ".$this->outputDir();
 	print STDOUT "running: ".$cmd."\n";
-	return system( $cmd );
+	$this->status( system( $cmd ) );
+	return $this->status();
 }
 
 sub anno {
 	my $this = shift;
+	$this->checkStatus( $STATIS );
 	my $cmd = "hotspot3d anno --output-dir ".$this->outputDir();
 	print STDOUT "running: ".$cmd."\n";
-	return system( $cmd );
+	$this->status( system( $cmd ) );
+	return $this->status();
 }
 
 sub trans {
 	my $this = shift;
+	$this->checkStatus( $ANNO );
 	my $cmd = "hotspot3d trans --output-dir ".$this->outputDir();
 	$cmd .= " --blat ".$this->blat();
 	if ( $this->grch() ) {
@@ -168,24 +191,29 @@ sub trans {
 		$cmd .= " --release ".$this->release();
 	}
 	print STDOUT "running: ".$cmd."\n";
-	return system( $cmd );
+	$this->status( system( $cmd ) );
+	return $this->status();
 }
 
 sub cosmic {
 	my $this = shift;
+	$this->checkStatus( $TRANS );
 	my $cmd = "hotspot3d cosmic --output-dir ".$this->outputDir();
 	print STDOUT "running: ".$cmd."\n";
-	return system( $cmd );
+	$this->status( system( $cmd ) );
+	return $this->status();
 }
 
 sub prior {
 	my $this = shift;
+	$this->checkStatus( $COSMIC );
 	my $cmd = "hotspot3d prior --output-dir ".$this->outputDir();
 	$cmd .= " --p-value-cutoff ".$this->pvaluecutoff();
 	$cmd .= " --3d-distance-cutoff ".$this->max3ddis();
 	$cmd .= " --linear-cutoff ".$this->minseqdis();
 	print STDOUT "running: ".$cmd."\n";
-	return system( $cmd );
+	$this->status( system( $cmd ) );
+	return $this->status();
 }
 
 sub steps {
