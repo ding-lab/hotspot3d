@@ -144,7 +144,10 @@ sub getAnnotation {
 sub addAnnotation {
     my ( $this , $uniprotId , $pvaluesDir , $annotationDir , $annotations ) = @_;
 	my $proximityFile = "$pvaluesDir\/$uniprotId\.ProximityFile\.csv";
-	next unless( -e $proximityFile );
+	if ( not -e $proximityFile ) {
+		warn $uniprotId." HotSpot3D::Anno::addAnnotation warning: skipping because the annotation file does not exist: ".$proximityFile."\n";
+		return;
+	}
 	my $outputFile = "$annotationDir\/$uniprotId\.ProximityFile\.csv";
     # add annotation information
     my $fhin = new FileHandle;
@@ -188,6 +191,7 @@ sub addAnnotation {
     }
     $fhin->close();
     $fhout->close();
+	return;
 }
 
 sub help_text {
