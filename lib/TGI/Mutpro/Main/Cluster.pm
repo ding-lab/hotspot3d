@@ -1459,6 +1459,8 @@ Usage: hotspot3d cluster [options]
 --weight-header              .maf file column header for mutation weight, default: weight (used if vertex-type = weight)
 --parallel                   Parallelization for structure and subunit dependent runs (none or local), default: none
 --max-processes              Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
+--gene-list-file             Choose mutations from the genes given in this list
+--structure-list-file        Choose mutations from the structures given in this list
 
 --help                       this message
 

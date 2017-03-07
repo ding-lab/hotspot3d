@@ -29,6 +29,8 @@ my $SHORTESTDISTANCE = "shortest";
 my $AVERAGEDISTANCE = "average";
 my $INDEPENDENT = "independent";
 my $DEPENDENT = "dependent";
+my $LOCAL = "local";
+my $NONE = "none";
 
 sub new {
     my $class = shift;
@@ -86,13 +88,45 @@ sub process {
 
     #####################################################
 
-    my $pairwiseFN = "$this->{'distance_measure'}.$this->{pairwise_file_name_only}"; 
-
     # print "distance matrix\n";
     # print Dumper $distance_matrix;
     # print "mutations\n";
     # print Dumper $mutations;
 
+    $this->densityClustering( $mutations, $distance_matrix );
+
+    my $numStructure = scalar keys %{ $distance_matrix };
+    print "Density-based clusters are being calculated for $numStructure structures.\n\n";
+   
+}
+
+#####
+#   Functions
+#####
+
+sub densityClustering {
+    my ( $this, $mutations, $distance_matrix ) = @_;
+
+    print STDOUT "HotSpot3D::Cluster::Density::densityClustering\n";
+
+    if ( $this->{'parallel'} eq $LOCAL ) {
+        $this->localParallelDensityClustering( $mutations , $distance_matrix );
+    #} elsif ( $this->{'parallel'} eq $BSUB ) {
+    #   $this->bsubParallelNetworkClustering( $clusterings , $mutations , $distance_matrix );
+    } else {
+        $this->noParallelDensityClustering( $mutations , $distance_matrix );
+    }
+    return;
+}
+
+sub localParallelDensityClustering {
+    my ( $this , $mutations , $distance_matrix ) = @_;
+
+    my $pairwiseFN = "$this->{'distance_measure'}.$this->{pairwise_file_name_only}"; 
+    print STDOUT "\tParallel clustering over structures with up to ".$this->{'max_processes'}." processes\n";
+    my $pm = Parallel::ForkManager->new( $this->{'max_processes'} );
+
+    DATA_LOOP:
     foreach my $structure ( keys %{$distance_matrix} ) { # run the density calculation for each available structure
         #print "Structure= $structure\n";
         # name output files as *.$pdbID.structure.*
@@ -105,21 +139,41 @@ sub process {
         $this->MainOPTICS( $structure , $distance_matrix, $mutations ); # perform OPTICS for the first time
         $this->RunSuperClustersID(); # perform Clustering for the reference run
 
-        print "Reference run: Done.\nStart probability calculation\n";
+        print "Reference run: Done.\nStart probability calculation for $structure\n";
 
         $this->getClusterProbabilities( $structure , $distance_matrix, $mutations ); # perform cluster-membership probability calculation
 
-        print "\nProbability Calculation is Done.\n\n";
+        print "\nProbability Calculation is Done for $structure.\n\n";
     }
+    $pm->wait_all_children;
 
-    my $numStructure = scalar keys %{ $distance_matrix };
-    print "Density-based clusters are being calculated for $numStructure structures.\n\n";
-   
+    return;
 }
 
-#####
-#   Functions
-#####
+sub noParallelDensityClustering {
+    my ( $this , $mutations , $distance_matrix ) = @_;
+    print "Serially clustering over structures\n";
+
+    my $pairwiseFN = "$this->{'distance_measure'}.$this->{pairwise_file_name_only}"; 
+    foreach my $structure ( keys %{$distance_matrix} ) { # run the density calculation for each available structure
+        #print "Structure= $structure\n";
+        # name output files as *.$pdbID.structure.*
+        $this->{pairwise_file_name_only} = "$structure.Structure.$pairwiseFN";
+
+        # call the SetOfNodes hash for each structure
+        $this->{"CurrentSetOfNodes"} = $distance_matrix->{$structure};
+
+        ###### Reference run: start
+        $this->MainOPTICS( $structure , $distance_matrix, $mutations ); # perform OPTICS for the first time
+        $this->RunSuperClustersID(); # perform Clustering for the reference run
+
+        print "Reference run: Done.\nStart probability calculation for $structure\n";
+
+        $this->getClusterProbabilities( $structure , $distance_matrix, $mutations ); # perform cluster-membership probability calculation
+
+        print "\nProbability Calculation is Done for $structure.\n\n";
+    }
+}
 
 sub MainOPTICS {
     my $this = shift;
