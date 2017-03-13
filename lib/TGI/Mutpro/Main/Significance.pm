@@ -22,9 +22,9 @@ sub new {
 	my $class = shift;
 	my $this = {};
 	$this->{'prep-dir'} = undef;
-	$this->{'pairwise-file'} = undef;
-	$this->{'clusters-file'} = undef;
-	$this->{'output-prefix'} = $this->{'clusters-file'};
+	$this->{'pairwise'} = undef;
+	$this->{'clusters'} = undef;
+	$this->{'output'} = "hotspot3d.sigclus";
 	$this->{'simulations'} = 1000000;
 	$this->{'structure'} = undef;
 	bless $this, $class;
@@ -38,9 +38,9 @@ sub process {
 	unless( @ARGV ) { die $this->help_text(); }
 	$options = GetOptions (
 		'prep-dir=s' => \$this->{'prep_dir'},
-		'pairwise-file=s' => \$this->{'pairwise'},
-		'clusters-file=s' => \$this->{'clusters'},
-		'output-prefix=s' => \$this->{'output_prefix'},
+		'pairwise=s' => \$this->{'pairwise'},
+		'clusters=s' => \$this->{'clusters'},
+		'output=s' => \$this->{'output_prefix'},
 		'simulations=i' => \$this->{'simulations'},
 		'structure=s'=> \$this->{'structure'},
 		'help' => \$help,
@@ -116,7 +116,7 @@ sub processHUP{
 			}
 			$uniprot2HUGO{$uniprot}{$hugo} = 1;
 			$HUGO2uniprot{$hugo} = $uniprot;
-			print STDOUT "HUGO: $hugo\n";
+			print "HUGO: $hugo\n";
 		}
 	}
 	$hupHandle->close();
@@ -279,7 +279,6 @@ sub getProx{
 		}
 	}
 		$proxHandle->close();
-<<<<<<< HEAD
 	return \%distances;
 
 }
@@ -320,23 +319,6 @@ sub getDistances{
 			if (! grep $_ eq $uniprot,@uniprotIDs){
 				push @uniprotIDs, $uniprot;  #store all unique uniprotIds in cluster
 				print "$uniprot\n";
-=======
-		
-		foreach my $pdb ( keys %distances ) {
-			print STDOUT "PDB: $pdb\n";#debug
-			foreach my $chain ( keys %{$distances{$pdb}} ) {
-#				print "chain: $chain\n";#debug
-				my @distances = sort {$a <=> $b} @{$distances{$pdb}{$chain}};
-				#my @distances = sort {$a <=> $b} keys %{$distances{$pdb}{$chain}};
-				my $numDistances = scalar( @distances );
-
-				#print STDOUT $tossedPairs{$pdb}{$chain}." pairs thrown out\n";
-				
-				my $fout = $this->{'output_prefix'}.".$hugo."."$pdb".".".$chain.".".$NSIMS."sims.avgDist_pvalue";
-				my $OUT = &getFile( $fout , "w" );
-#				print "Cluster\tGene\tPDB_ID\tChain\tNum_Residues\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n";
-				$OUT->print( "Cluster\tGene\tPDB_ID\tChain\tNum_Residues\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n" );
->>>>>>> 200fe3c0c51793b788ebf35c344157a0c9738612
 				
 			}
 		}
@@ -432,16 +414,14 @@ sub help_text{
 
 Usage: hotspot3d sigclus [options]
 
-                             REQUIRED
---prep-dir                   Preprocessing directory 
---pairwise-file              Pairwise file (pancan19.pairwise)
---clusters-file              Cluster file (pancan19.intra.20..05.10.clusters)
+	--prep-dir			Preprocessing directory 
+	--pairwise			Pairwise file (pancan19.pairwise)
+	--clusters			Cluster file (pancan19.intra.20..05.10.clusters)
+	--output			Output file prefix (pancan19.intra.20..05.10)
 
-                             OPTIONAL
---output-prefix              Output file prefix (pancan19.intra.20..05.10)
---simulations                Number of simulations, default = 1000000
+	--simulations	Number of simulations, default = 1000000
 
---help                       This message
+	--help				This message
 
 HELP
 
