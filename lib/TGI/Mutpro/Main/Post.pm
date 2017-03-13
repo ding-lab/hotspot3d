@@ -21,7 +21,7 @@ use FileHandle;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'maf'} = undef;
+    $this->{'maf_file'} = undef;
     $this->{'input_prefix'} = '3D_Proximity';
 	$this->{'transcript_id_header'} = "transcript_name";
 	$this->{'amino_acid_header'} = "amino_acid_change";
@@ -35,7 +35,7 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
-        'maf-file=s' => \$this->{'maf'},
+        'maf-file=s' => \$this->{'maf_file'},
         'input-prefix=s' => \$this->{'input_prefix'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
@@ -44,7 +44,7 @@ sub process {
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
     my $input_pairwise_file = "$this->{'input_prefix'}.pairwise";
-    unless( $this->{'maf'} and (-e $this->{'maf'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
+    unless( $this->{'maf_file'} and (-e $this->{'maf_file'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
     unless( -e $input_pairwise_file ) { warn 'You must provide a 3D proximity pairwise result file ! ', "\n"; die $this->help_text(); }
     my $fh   = new FileHandle;
     die "Could not open pairwise file !\n" unless( $fh->open( $input_pairwise_file ) );
@@ -110,14 +110,14 @@ sub process {
     } @complex_tmp1;
     %ss = (); 
     my $fh1   = new FileHandle;
-    die "Could not open maf file !\n" unless( $fh1->open( $this->{'maf'} ) );
+    die "Could not open maf file !\n" unless( $fh1->open( $this->{'maf_file'} ) );
 	my $mafi = 0;
 	my $mafhead = $fh1->getline(); chomp( $mafhead );
 	my %mafcols = map {($_, $mafi++)} split( /\t/, $mafhead );
 	unless (    defined($mafcols{"Hugo_Symbol"})
 			and defined($mafcols{"Tumor_Sample_Barcode"})
 			and defined($mafcols{$this->{'amino_acid_header'}}) ) {
-		die "not a valid MAF annotation file with transcript and amino acid change !\n";
+		die "HotSpot3D Post Error: not a valid MAF annotation file with amino acid change!\n";
 	}
 	my @mafcols = (	$mafcols{"Hugo_Symbol"},
 					$mafcols{"Tumor_Sample_Barcode"},
@@ -159,6 +159,7 @@ sub process {
     # output complex collapsed results 
     my $output_collapsed_file = "$this->{'input_prefix'}.pairwise.complex.collapsed";
     die "Could not create complex collapsed output file\n" unless( $fh1->open( ">$output_collapsed_file" ) );
+	print STDOUT "Creating ".$output_collapsed_file."\n";
     foreach my $pdb ( keys %thash ) {
         foreach my $g1 ( keys %{$thash{$pdb}} ) {
             foreach my $g2 ( keys %{$thash{$pdb}{$g1}}  ) {
@@ -242,7 +243,7 @@ sub process {
     } @complex_tmp1;
     %ss = (); 
     $fh1 = new FileHandle;
-    die "Could not open maf file !\n" unless( $fh1->open( $this->{'maf'} ) );
+    die "Could not open maf file !\n" unless( $fh1->open( $this->{'maf_file'} ) );
     map {
 		chomp;
 		my @t = split /\t/, $_;
@@ -280,6 +281,7 @@ sub process {
     # output complex collapsed results 
     $output_collapsed_file = "$this->{'input_prefix'}.pairwise.singleprotein.collapsed";
     die "Could not create singe protein collapsed output file\n" unless( $fh1->open( ">$output_collapsed_file" ) );
+	print STDOUT "Creating ".$output_collapsed_file."\n";
     foreach my $pdb ( keys %thash ) {
         foreach my $g1 ( keys %{$thash{$pdb}} ) {
             foreach my $g2 ( keys %{$thash{$pdb}{$g1}}  ) {
@@ -307,13 +309,15 @@ sub help_text{
 
 Usage: hotspot3d post [options]
 
+						REQUIRED
+--maf-file				Input MAF file (2.3 standard + columns for transcript id & amino acid change)
+--input-prefix			The prefix of proximity searching output files
 
---maf-file              Input MAF file (2.3 standard + columns for transcript id & amino acid change)
---transcript-id-header  MAF file column header for transcript id's, default: transcript_name
---amino-acid-header     MAF file column header for amino acid changes, default: amino_acid_change					
---input-prefix          The prefix of proximity searching output files
+						OPTIONAL
+--transcript-id-header	MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header		MAF file column header for amino acid changes, default: amino_acid_change
 
---help                  this message
+--help					this message
 
 HELP
 

@@ -19,13 +19,16 @@ use IO::File;
 use FileHandle;
 use List::MoreUtils qw( uniq );
 
+my $NETWORK = "network";
+my $DENSITY = "density";
+
 sub new {
     my $class = shift;
     my $this = {};
 	$this->{_CLUSTERS_FILE} = undef;
     $this->{_PAIRWISE_FILE} = undef;
     $this->{_DRUG_PAIRS_FILE} = undef;
-    $this->{_OUTPUT_FILE} = "hotspot3d.visual.pml";
+    $this->{_OUTPUT_FILE} = undef;
     $this->{_OUTPUT_DIR} = getcwd;
     $this->{_PDB_DIR} = getcwd;
     $this->{_PYMOL} = '/usr/bin/pymol';
@@ -44,6 +47,7 @@ sub new {
 	$this->{compounds} = undef;
 	$this->{locations} = undef;
 	$this->{centroids} = undef;
+	$this->{clusters_file_type} = undef;
     bless $this, $class;
     $this->process();
     return $this;
@@ -69,6 +73,7 @@ sub process {
         'compound-style=s' => \$this->{_COMPOUND_STYLE},
         'no-label' => \$this->{_NO_LABEL},
         'bg-color=s' => \$this->{_BG_COLOR},
+        'clusters-file-type=s' => \$this->{clusters_file_type},
         'help' => \$help
     );
     if ( $help ) { warn help_text(); exit 0; }
@@ -92,19 +97,32 @@ sub process {
     unless( -e $this->{_CLUSTERS_FILE} ) { warn ' cluster file is not exist  ! ', "\n"; die $this->help_text(); }
     unless( $this->{_OUTPUT_FILE} || $this->{_OUTPUT_DIR} ) { warn 'You must provide an output file or directory! ', "\n"; die $this->help_text(); }
     map{ $this->{_STAT}{$_} = 0; } qw( num_muts pdb pairs );
-	
-	$this->getMappingLocations(  );
 
-	#$this->checkPDB(  );
+    if ( not defined $this->{clusters_file_type} ) {
+		$this->{clusters_file_type} = $NETWORK;
+		warn "HotSpot3D::Visual::setOptions warning: no clusters-file-type option given, setting to default network\n";
+	}
 
-	unless( $this->{mutations} ) { warn "No proximal pairs were found on ".$this->{_PDB}."\n"; }
-	$this->getClusters(  );
-	unless( $this->{clusters} ) { warn "No cluster to display on ".$this->{_PDB}."\n"; }
-	$this->makePyMOLScript(  );
+	if ( $this->{clusters_file_type} eq $NETWORK ) {
+		$this->getMappingLocations(  );
 
-	$this->execute(  );
+		#$this->checkPDB(  );
 
-    return 1;
+		unless( $this->{mutations} ) { warn "No proximal pairs were found on ".$this->{_PDB}."\n"; }
+		$this->getClusters(  );
+		unless( $this->{clusters} ) { warn "No cluster to display on ".$this->{_PDB}."\n"; }
+		$this->makePyMOLScript(  );
+
+		$this->execute(  );
+
+	    return 1;
+	}
+	elsif ( $this->{clusters_file_type} eq $DENSITY ) { 
+		$this->densityVisual();
+	}
+	else {
+		die "Error: clusters-file-type should be one of the following: network or density (default:network)\n";
+	}
 }
 
 # check PDBs  
@@ -201,6 +219,9 @@ sub getClusters {
 						$ccols{"Geodesic_From_Centroid"} );
 		} else {
 			my ( $id , $gd , $mp , $cc , $gfc ) = ( split /\t/ , $line )[@ccols];
+			if ( $id =~ m/\d+\.\d+\.\w/ ) {
+				next if ( $id !~ m/$this->{_PDB}/ );
+			}
 			my $variant = $gd.":".$mp;
 			if ( exists $this->{mutations}->{$variant} ) {
 				my @positions = keys %{$this->{mutations}->{$variant}};
@@ -282,18 +303,23 @@ sub makePyMOLScript {
 		}
 	}
 	my $fh = new FileHandle;
-	unless( $fh->open( $this->{_OUTPUT_FILE} , "w" ) ) { die "Could not open output file\n"; }
+	my $outFilename; 
+	if ( defined $this->{_OUTPUT_FILE} ) { 
+		$outFilename = $this->{_OUTPUT_FILE};
+	} else {
+		$this->{_OUTPUT_FILE} = $this->{_CLUSTERS_FILE}.".".$this->{_PDB}.".pml";
+		$outFilename = $this->{_OUTPUT_FILE};
+	}
+	unless( $fh->open( $outFilename , "w" ) ) { die "Could not open output file, $outFilename\n"; }
 
 	#viewer
 	$fh->print( "reinitialize everything;\n" );
-	$this->addPDB(  );
-	#if ( -e $this->{_PDB_DIR}.$this->{_PDB} ) {
-		$fh->print( "load ".$this->{_PDB}.".pdb;\n" );
-	#	$fh->print( "#load http://www.rcsb.org/pdb/files/".$this->{_PDB}.".pdb.gz;\n" );
-	#} else {
-	#	$fh->print( "#load ".$this->{_PDB}.".pdb;\n" );
-	#	$fh->print( "load http://www.rcsb.org/pdb/files/".$this->{_PDB}.".pdb.gz;\n" );
-	#}
+	#$this->addPDB(  );
+	if ( -e $this->{_PDB_DIR}."/".$this->{_PDB} ) {
+		$fh->print( "load ".$this->{_PDB_DIR}."/".$this->{_PDB}.".pdb;\n" );
+	} else {
+		$fh->print( "load http://www.rcsb.org/pdb/files/".$this->{_PDB}.".pdb;\n" );
+	}
 	$fh->print( "viewport 480,480;\n" );
 	$fh->print( "preset.publication(\"".$this->{_PDB}."\");\n" );
 	$fh->print( "#show mesh;\n" );
@@ -331,11 +357,292 @@ sub execute {
 	if ( not $this->{_SCRIPT_ONLY} ) {
 		my $pymol = $this->{_PYMOL};
 		my $pml = $this->{_OUTPUT_FILE};
-		print "HotSpot3D ... Visualize!\n\n";
+		print STDOUT "HotSpot3D ... Visualize!\n\n";
 		system( "$pymol $pml" );
 		#pymol <output-file>
 		#-x disables external GUI module
 	}
+}
+
+############################################################################
+########################### Density Visual #################################
+############################################################################
+
+sub densityVisual {
+	my $this = shift;
+
+	my $ClustersFile = $this->{_CLUSTERS_FILE};
+	my $PairwiseFile = $this->{_PAIRWISE_FILE};
+	my $PDB = $this->{_PDB};
+
+	$this->GetFileName(); # obtain the clusters-file-name only; for file-naming purposes
+
+	########################  Reading from *.clusters  #############################
+
+	my @InputClusters;
+
+	open(IN, "<$ClustersFile") || die "Can't open $ClustersFile: $!";
+	while (my $line = <IN>) {
+		if ( not $line =~ /Cluster/ ) {
+			chomp $line;
+			my @tabs3 = split(/\t/,$line);
+			push @InputClusters, [$tabs3[0],$tabs3[1],$tabs3[2],$tabs3[7],$tabs3[8],$tabs3[9]]; # ClusterID, Gene, Mutation, Epsilon_prime, Avg_density, Covering_clusters, last_entry_to_mark_processed
+		}
+	}
+	close(IN);
+
+	###############################################################################
+
+	#print Dumper \@InputClusters;
+
+	# my $this = {};
+	#my @spectrum = ("blue_yellow","rainbow","green_red","red_yellow","blue_green","cyan_red");
+	my $ChainColors = ['pink' , 'palegreen' , 'lightblue' , 'lightmagenta' , 'lightorange' , 'lightpink' , 'paleyellow' , 'lightteal' , 'aquamarine' , 'palecyan'];
+	my $SurfaceColors = ['violetpurple','violet','deeppurple', 'purple','lightmagenta', 'blue', 'lightblue', 'bluewhite', 'oxygen' , 'green', 'deepolive' , 'wheat' , 'lime' , 'brown' , 'orange' , 'yellow', 'salmon' , 'red',  'violetpurple' , 'limon' , 'sand' , 'raspberry' , 'slate', 'red','blue', 'green', 'yellow', 'deepolive' , 'deeppurple' , 'bluewhite' , 'lime' , 'purple' , 'dash' , 'orange' , 'brown' , 'salmon' , 'oxygen' , 'wheat' , 'violetpurple' , 'limon' , 'sand' , 'raspberry' , 'slate','red','blue', 'green', 'yellow', 'deepolive' , 'deeppurple' , 'bluewhite' , 'lime' , 'purple' , 'dash' , 'orange' , 'brown' , 'salmon' , 'oxygen' , 'wheat' , 'violetpurple' , 'limon' , 'sand' , 'raspberry' , 'slate'];
+	#my $spectrumPalette = shift @spectrum;
+	#my $ClusterSurfaceColor = shift $SurfaceColors;
+	my $currentColor = shift @{$SurfaceColors};
+
+
+	for (my $i = 0; $i < scalar @InputClusters; $i++) {
+		my @IDs = split(/\./,$InputClusters[$i][0]);
+		$this->{ClusterStructure}->{$IDs[0]}->{$IDs[1]} = $IDs[2];
+	}
+	#print Dumper \%ClusterStructure;
+
+	getMappingLocations($this);
+	print "Done getting mapping locations.\n";
+
+	#################  Clusters present in the given PDB structure  #####################
+
+	my $OutFile1 = "DensityVisual.$this->{clusters_file_name_only}.$this->{_PDB}.presentClusters";
+	open (OUT, ">$OutFile1");
+
+	for (my $i = 0; $i < scalar @InputClusters; $i++) { 
+		if ( exists $this->{mutations}->{$InputClusters[$i][1].":".$InputClusters[$i][2]}) {
+			print OUT "$InputClusters[$i][0]\t$InputClusters[$i][1]\t$InputClusters[$i][2]\t$InputClusters[$i][3]\t$InputClusters[$i][4]\t$InputClusters[$i][5]\n";
+		}
+	}
+	close (OUT);
+
+	######################################################################################
+
+	print "Preparing the pymol script\n";
+
+	my $fh = new FileHandle;
+	my $outFilename = "DensityVisual.$this->{clusters_file_name_only}.$PDB.pml";
+	$fh->open( $outFilename , "w"  );
+	$fh->print( "reinitialize everything;\n" );
+	$fh->print( "load http://www.rcsb.org/pdb/files/".$PDB.".pdb;\n" );
+
+	$fh->print( "viewport 480,480;\n" );
+	$fh->print( "preset.publication(\"".$PDB."\");\n" );
+	$fh->print( "#show mesh;\n" );
+	$fh->print( "\n" );
+	$fh->print( "bg_color white;\n" );
+	$fh->print( "\n" );
+	foreach my $chain ( keys %{$this->{chains}} ) {
+		my $chain_color = shift @{$ChainColors};
+		$fh->print( "color ".$chain_color.", chain ".$chain.";\n" );
+	}
+
+	my ( $CurrentSC, $CurrentLevel, $CurrentSub, $PrevEntry );
+
+	for (my $i = 0; $i < scalar @InputClusters; $i++) { # Find the first variant which exists in the given PDB structure
+		if ( exists $this->{mutations}->{$InputClusters[$i][1].":".$InputClusters[$i][2]}) {
+			my @IDs = split(/\./,$InputClusters[$i][0]);
+			$CurrentSC = $IDs[0];
+			$CurrentLevel = $IDs[1];
+			$CurrentSub = $IDs[2];
+			$PrevEntry = $i;
+			last;
+		}
+	}
+
+	if (not defined $PrevEntry) {
+		print "******** None of the variants appear in the given PDB structure *********\n";
+	}
+
+	my $ColorIndex = 0; # index to keep track of colors
+
+	for (my $i = $PrevEntry; $i < scalar @InputClusters; $i++) { 
+		my @IDs = split(/\./,$InputClusters[$i][0]);
+		my $variant = $InputClusters[$i][1].":".$InputClusters[$i][2];
+
+		if ( exists $this->{mutations}->{$InputClusters[$i][1].":".$InputClusters[$i][2]}) {
+			if ($IDs[0] == $CurrentSC) {
+				if ($IDs[2] == $CurrentSub && $IDs[1] == $CurrentLevel) {
+					setColors($variant, $InputClusters[$i], $this, $IDs[1], $fh, $currentColor);
+				}
+				else {
+					if ($CurrentSub != 0) { # previous entry was NOT the last entry of a super cluster 
+						if ($InputClusters[$PrevEntry][5] eq 1 || $InputClusters[$PrevEntry][5] eq 2) { # No clusters covered below by this sub
+							$fh->print( "create S.".$currentColor."_".$InputClusters[$PrevEntry][0].", ".$currentColor."_".$InputClusters[$PrevEntry][0]."\n" ); 
+							$fh->print( "set surface_color, ".$currentColor.", S.".$currentColor."_".$InputClusters[$PrevEntry][0]."\n" );
+							$fh->print( "show surface, S.".$currentColor."_".$InputClusters[$PrevEntry][0]."\n" ); 
+						}
+						else {
+							foreach my $sub (split(":",$InputClusters[$PrevEntry][5])) {
+								$fh->print( "sele ".$currentColor."_".$InputClusters[$PrevEntry][0].", (".$currentColor."_".$InputClusters[$PrevEntry][0].", ".$this->{ClusterColors}->{$sub}."_".$sub.");\n" ); 
+							}
+							$fh->print( "create S.".$currentColor."_".$InputClusters[$PrevEntry][0].", ".$currentColor."_".$InputClusters[$PrevEntry][0]."\n" ); 
+							$fh->print( "set surface_color, ".$currentColor.", S.".$currentColor."_".$InputClusters[$PrevEntry][0]."\n" );
+							$fh->print( "show surface, S.".$currentColor."_".$InputClusters[$PrevEntry][0]."\n" );							
+						}
+						$CurrentLevel = $IDs[1];
+						$CurrentSub = $IDs[2];
+					}
+					else { # previous entry WAS the last entry of a super cluster 
+						$CurrentLevel = $IDs[1];
+						$CurrentSub = $IDs[2];
+					}
+					# Done with taking care of the end of previous sub cluster. Now change the color and record the new sub:
+					$ColorIndex++;
+					$currentColor = $SurfaceColors->[$ColorIndex]; 
+					setFirstColors($variant, $InputClusters[$i], $this, $IDs[1], $fh, $currentColor); # set color for the current entry
+				}
+				
+			}
+			else {
+				$ColorIndex = 0; # Start of a new super cluster. Start from the begining
+				$currentColor = $SurfaceColors->[$ColorIndex]; 
+				setFirstColors($variant, $InputClusters[$i], $this, $IDs[1], $fh, $currentColor); 
+				$CurrentSC = $IDs[0];
+				$CurrentLevel = $IDs[1];
+				$CurrentSub = $IDs[2];
+			}
+		$PrevEntry = $i;
+		}	
+	}
+	$fh->close();
+	print "pymol script written\n";
+	print "Done.\n";
+
+	#print Dumper \@InputClusters;
+}
+
+#########
+### Density Visual functions
+#########
+
+sub test3 {
+	my ($fh, $ref) = @_;
+	$fh->print($ref->[0].";\n");
+}
+
+sub setColors {
+	my ( $variant, $ClusterArrayRef, $this, $SecondDigit, $fh, $currentColor ) = @_; # $ClusterArrayRef = $InputClusters[$i]
+	$variant =~ /(\w+)\:\D\.(\D+\d+)\D/g;
+	my $GeneName = $1;
+	my $MutName = $2;
+
+	foreach my $key (keys %{$this->{mutations}->{$variant}}) {
+		my @ChainRes = split(":", $key);
+		my $chain = shift @ChainRes;
+		my $res = shift @ChainRes;
+
+		if ($SecondDigit == 0) { # super cluster
+			# #$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" ); #CHECK whether needed
+			# $fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+			# #$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+
+			### ***** The following three lines show spheres with sand color for all the variants in the super cluster. Some of these variants get assigned another color later.
+			### TO DO: select only outer variants in the super cluster; Add a surface to the last sub cluster
+			$fh->print( "sele sand_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" ); #CHECK whether needed
+			$fh->print( "color sand, (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+		}
+		elsif ($SecondDigit == 1) { # first level
+			$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", (".$currentColor."_".$ClusterArrayRef->[0].", ".$currentColor."_".$GeneName."_".$MutName."_".$chain.");\n" ); # add to the object named by the cluster ID
+			$this->{mutations}->{$variant}->{$chain.":".$res} = 1; #$ClusterArrayRef->[6] = 1; # set as processed
+			$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
+		}
+		elsif ($SecondDigit > 1) { # higher levels   
+			if ( $ClusterArrayRef->[5] eq 2 ) { # this subcluster doesn't cover anything below it (no need to check PROCESSED)
+				$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+				$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+				$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
+				$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", (".$currentColor."_".$ClusterArrayRef->[0].", ".$currentColor."_".$GeneName."_".$MutName."_".$chain.");\n" ); # add to the object named by the cluster ID
+				$this->{mutations}->{$variant}->{$chain.":".$res} = 1; #$ClusterArrayRef->[6] = 1; # set as processed
+				$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
+			}
+			elsif ( $ClusterArrayRef->[5] ne 2 ) {
+				if ($this->{mutations}->{$variant}->{$chain.":".$res} == 0) {
+					$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+					$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+					$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
+					$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", (".$currentColor."_".$ClusterArrayRef->[0].", ".$currentColor."_".$GeneName."_".$MutName."_".$chain.");\n" ); # add to the object named by the cluster ID
+					$this->{mutations}->{$variant}->{$chain.":".$res} = 1; #$ClusterArrayRef->[6] = 1; # set as processed
+					$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
+				}
+				else {$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", (".$currentColor."_".$ClusterArrayRef->[0].", resi ".$res." and chain ".$chain.");\n" );} # add to the object named by the cluster ID	
+				$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces			
+			}
+		}		
+	}	
+}
+
+sub setFirstColors {
+	my ( $variant, $ClusterArrayRef, $this, $SecondDigit, $fh, $currentColor ) = @_; # $ClusterArrayRef = $InputClusters[$i]
+	$variant =~ /(\w+)\:\D\.(\D+\d+)\D/g;
+	my $GeneName = $1;
+	my $MutName = $2;
+
+	foreach my $key (keys %{$this->{mutations}->{$variant}}) {
+		my @ChainRes = split(":", $key);
+		my $chain = shift @ChainRes;
+		my $res = shift @ChainRes;
+
+		if ($SecondDigit == 0) { # super cluster
+			$fh->print( "\n" );
+			$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+		}
+		elsif ($SecondDigit == 1) { # first level
+			$fh->print( "\n" );
+			$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", ".$currentColor."_".$GeneName."_".$MutName."_".$chain.";\n" ); # add to the object named by the cluster ID
+			$this->{mutations}->{$variant}->{$chain.":".$res} = 1; #$ClusterArrayRef->[6] = 1; # set as processed
+			$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
+		}
+		elsif ($SecondDigit > 1) { # higher levels 
+			$fh->print( "\n" );  
+			if ( $ClusterArrayRef->[5] eq 2 ) { # this subcluster doesn't cover anything below it (no need to check PROCESSED)
+				$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+				$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+				$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
+				$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", ".$currentColor."_".$GeneName."_".$MutName."_".$chain.";" );  # add to the object named by the cluster ID
+				$this->{mutations}->{$variant}->{$chain.":".$res} = 1; #$ClusterArrayRef->[6] = 1; # set as processed
+				$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
+			}
+			elsif ( $ClusterArrayRef->[5] ne 2 ) {
+				if ($this->{mutations}->{$variant}->{$chain.":".$res} == 0) {
+					$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+					$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
+					$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
+					$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", ".$currentColor."_".$GeneName."_".$MutName."_".$chain."\n" ); # add to the object named by the cluster ID
+					$this->{mutations}->{$variant}->{$chain.":".$res} = 1; #$ClusterArrayRef->[6] = 1; # set as processed
+					$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
+				}
+				else {$fh->print( "sele ".$currentColor."_".$ClusterArrayRef->[0].", ( resi ".$res." and chain ".$chain.");\n" );} # add to the object named by the cluster ID
+				$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
+				
+			}
+		}		
+	}	
+}
+
+sub GetFileName {
+    my $this = shift;
+
+    my @tempArray = split( "/",$this->{_CLUSTERS_FILE}) ;
+    $this->{clusters_file_name_only} = pop @tempArray;
+
+    return $this;
 }
 
 sub help_text{
@@ -344,27 +651,28 @@ sub help_text{
 
 Usage: hotspot3d visual [options]
 
---pairwise-file        Pairwise file
---drug-pairs-file      Drug pairs file (target/nontarget/hs3dd)
---clusters-file        Clusters file
---pdb                  PDB ID on which to view clusters
---output-file          Output filename for single PyMol script, default: hotspot3d.visual.pml
+                             REQUIRED
+--clusters-file              Clusters file
+--pdb                        PDB ID on which to view clusters
 
---pymol                PyMoL program location, default: /usr/bin/pymol
---output-dir           Output directory for multiple PyMol scripts, current working directory
---pdb-dir              PDB file directory, default: current working directory
+                             AT LEAST ONE
+--pairwise-file              Pairwise file
+--drug-pairs-file            Drug pairs file (target/nontarget/hs3dd)
 
---bg-color             background color, default: white
---mut-color            mutation color, default: red
---mut-style            mutation style, default: spheres
---compound-color       compound color, default: util.cbag
---compound-style       compound style, default: sticks if compound-color, util.cbag otherwise
+                             OPTIONAL
+--output-file                Output filename for single PyMol script, default: hotspot3d.visual.pml
+--pymol                      PyMoL program location, default: /usr/bin/pymol
+--output-dir                 Output directory for multiple PyMol scripts, current working directory
+--pdb-dir                    PDB file directory, default: current working directory
+--bg-color                   background color, default: white
+--mut-color                  mutation color, default: red
+--mut-style                  mutation style, default: spheres
+--compound-color             compound color, default: util.cbag
+--compound-style             compound style, default: sticks if compound-color, util.cbag otherwise
+--script-only                If included (on), pymol is not run with new <output-file> when finished, default: off
+--clusters-file-type         which clustering module created your clusters-file? network or density, default: network
 
---script-only          If included (on), pymol is not run with new <output-file> when finished, default: off
-
---help			this message
-
-Example: hotspot3d visual --pairwise-file=pancan19.pairwise --clusters-file=pancan19.intra.clusters --output-file=draw.3HIZ.pml --pdb=3HIZ
+--help                       this message
 
 Tip: To run an already created .pml file, run pymol <your output-file>
 

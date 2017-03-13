@@ -132,21 +132,30 @@ sub chainStartStop {
     #deal with multiple entries for a chain\n";
     my $pdbId = $self->pdbId();
     foreach $line (split /\n/, $self->entireRecord()) {
-	chomp $line;        
-	# match line like this:
-	# DBREF  2H32 A    1   126  UNP    P12018   VPREB_HUMAN     20    145
-	#
-	# DBREF  2FO0 A    1    14  UNP    P00519-2 ABL1_HUMAN       1     14 
-	# DBREF  2FO0 A   57   531  UNP    P00519-2 ABL1_HUMAN      57    531 
-        if ($line =~ /DBREF\s+$pdbId\s+$chain\s+(\-?\d+)\s+(\d+)\s+/) {
-	    my $tempStart = $1; 
-            my $tempStop =$2;
-	    # Not ideal solution for multiple entries
-	    if (!defined $start || $tempStart < $start) { $start = $tempStart; }
-	    if (!defined $stop ||$tempStop > $stop) { $stop = $tempStop; }
-	}
+		chomp $line;        
+		# match line like this:
+		# DBREF  2H32 A    1   126  UNP    P12018   VPREB_HUMAN     20    145
+		#
+		# DBREF  2FO0 A    1    14  UNP    P00519-2 ABL1_HUMAN       1     14 
+		# DBREF  2FO0 A   57   531  UNP    P00519-2 ABL1_HUMAN      57    531 
+		if ($line =~ /DBREF\s+$pdbId\s+$chain\s+(\-?\d+)\s+(\d+)\s+/) {
+			my $tempStart = $1; 
+			my $tempStop =$2;
+			# Not ideal solution for multiple entries
+			if (!defined $start || $tempStart < $start) { $start = $tempStart; }
+			if (!defined $stop ||$tempStop > $stop) { $stop = $tempStop; }
+		}
     }
     return ($start, $stop);
+}
+
+sub recordExists {
+	my $self = shift;
+	if ( $self->entireRecord() eq "" ) {
+		warn "HotSpot3D::Pdbstructure::chainToUniprotId warning: ".$self->pdbId()." not found\n";
+		return 0;
+	}
+	return 1;
 }
 
 sub chainToUniprotId {
@@ -172,6 +181,9 @@ sub chainToUniprotId {
          $chainId, 
          %ambiguous, );
     my $pdbId = $self->pdbId();
+	if ( $self->recordExists() == 0 ) {
+		return {};
+	}
     foreach $line (split /\n/, $self->entireRecord()) {
 	# match line like this:
 	# DBREF  2H32 A    1   126  UNP    P12018   VPREB_HUMAN     20    145
@@ -189,8 +201,8 @@ sub chainToUniprotId {
 		# DBREF  1LBK B    1   202  UNP    P09211   GTP_HUMAN        1    202             
 		# DBREF  1LBK A  203   208  UNP    P08263   GTA1_HUMAN     208    213             
 		# DBREF  1LBK B  203   208  UNP    P08263   GTA1_HUMAN     208    213     
-		carp "Ambiguous chain to Uniprot in $pdbId: $chain $uniprot $chainToUniprot{$chain}";
-		$ambiguous{$chain} = 1;
+			carp "Ambiguous chain to Uniprot in $pdbId: $chain $uniprot $chainToUniprot{$chain}";
+			$ambiguous{$chain} = 1;
 	    }
 	    # If there is a non-Uniprot id associated with the chain, this will replace it
 	    $chainToUniprot{$chain} = $uniprot; 
@@ -235,9 +247,12 @@ sub makePeptides {
     #my ( $self, $drugport_ref, ) = @_;
     my ( $self ) = @_;
     my ( %peptideObjects, @entireFile, $line, @columns, $chain, $aminoAcid, $position, $x, $y, $z);
+	if ( $self->recordExists() == 0 ) {
+		return {};
+	}
     foreach $line ( split /\n/, $self->entireRecord() ) {
-	chomp $line;
-	$aminoAcid = $position = $x = $y = $z = undef;
+		chomp $line;
+		$aminoAcid = $position = $x = $y = $z = undef;
         ## Beifang Niu 05.14.2013
         # only grab one model if there are multiple models
         # exit when there is a line: 
@@ -251,32 +266,33 @@ sub makePeptides {
         # TODO: choose only lines with HET_GROUP
         #
         last if ( $line =~ /^ENDMDL/ );
-	if ($line !~ /^ATOM|^HETATM/) { next; }
-	my @columns = split //, $line;
-	# Get chain letter and make new Peptide object if necessary
-	$chain = $columns[21];
-	# If there is no chain, then give default value of 'Z'
-	if ( $chain eq " " ) { $chain = "Z"; }
-	if ( !defined $peptideObjects{$chain} ) {
-	    $peptideObjects{$chain} = new TGI::Mutpro::Preprocess::Peptide;
-	    $peptideObjects{$chain}->name($chain);
-	}
-	# Amino acid name
-	foreach (17..19) { $aminoAcid .= $columns[$_]; }
-	# Amino acid position
-	#foreach (22..25) { $position .= $columns[$_]; } 
-	foreach (22..29) { $position .= $columns[$_]; } 	   
-	$position =~ s/\s+//g;
-	# X,Y,Z coordinates of atom in space
-	foreach (30..37) { $x .= $columns[$_]; }   
-	foreach (38..45) { $y .= $columns[$_]; } 
-	foreach (46..53) { $z .= $columns[$_]; } 
-	# Add point to amino acid in peptide
-	$peptideObjects{$chain}->addPointToAminoAcid($aminoAcid, $position, $x, $y, $z);
+		if ($line !~ /^ATOM|^HETATM/) { next; }
+		my @columns = split //, $line;
+		# Get chain letter and make new Peptide object if necessary
+		$chain = $columns[21];
+		# If there is no chain, then give default value of 'Z'
+		if ( $chain eq " " ) { $chain = "Z"; }
+		if ( !defined $peptideObjects{$chain} ) {
+			$peptideObjects{$chain} = new TGI::Mutpro::Preprocess::Peptide;
+			$peptideObjects{$chain}->name($chain);
+		}
+		# Amino acid name
+		foreach (17..19) { $aminoAcid .= $columns[$_]; }
+		# Amino acid position
+		foreach (22..29) { $position .= $columns[$_]; } 	   
+		$position =~ s/\s+//g;
+		# X,Y,Z coordinates of atom in space
+		foreach (30..37) { $x .= $columns[$_]; }   
+		foreach (38..45) { $y .= $columns[$_]; } 
+		foreach (46..53) { $z .= $columns[$_]; } 
+		# Add point to amino acid in peptide
+		$peptideObjects{$chain}->addPointToAminoAcid($aminoAcid, $position, $x, $y, $z);
     }
     # Remove ambiguous amino acids from each peptide 
     # (these are peptide positions with more than one amino acid name)
-    foreach $chain (keys %peptideObjects) { $peptideObjects{$chain}->removeAmbiguousAminoAcids(); }
+    foreach $chain (keys %peptideObjects) {
+		$peptideObjects{$chain}->removeAmbiguousAminoAcids();
+	}
 
     return \%peptideObjects;
 }

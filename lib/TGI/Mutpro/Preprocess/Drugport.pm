@@ -21,7 +21,7 @@ use FileHandle;
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'output_file'} = 'drugport_parsing_output';
+    $this->{'output_file'} = 'drugport_results';
     $this->{'pdb_file_dir'} = undef; 
     $this->{'stat'} = undef;
     $this->{'page'} = "";
@@ -41,8 +41,13 @@ sub process {
     );
     if ( $help ) { print STDERR help_text(); exit 0; };
     unless( $options ) { die $this->help_text(); };
-    unless( $this->{'output_file'} ) { warn 'You must provide a output file for drugport database ! ', "\n"; die $this->help_text(); };
-    unless( $this->{'pdb_file_dir'} and (-e $this->{'pdb_file_dir'})) { warn " $_ is not exist ! \n"; die $this->help_text(); };
+    unless( $this->{'output_file'} ne 'drugport_results' ) {
+		warn "No output file given. Writing DrugPort results to $this->{'output_file'} !\n";
+	}
+    unless( $this->{'pdb_file_dir'} and (-e $this->{'pdb_file_dir'})) {
+		warn " $_ does not exist ! \n";
+		die $this->help_text();
+	}
     #### processing ####
     # parse drugport database
     # drug name and ids
@@ -59,7 +64,7 @@ sub process {
         $content = ""; $id = $_;
         $drug_name = $drug_hash{$id}{'name'};
         $content .= $drug_name."\t".$id."\t";
-        print STDERR $drug_name."\t".$id."\n";
+        print STDOUT $drug_name."\t".$id."\n";
         my ($t2n) = $_ =~ /(\d\d)$/;
         my $drugdata_url = "http://www.ebi.ac.uk/thornton-srv/databases/drugport/drugs/$t2n/$_/database.dat";
         $this->{'page'} = get( $drugdata_url );
@@ -167,10 +172,13 @@ sub help_text {
 
 Usage: hotspot3d drugport [options]
 
---pdb-file-dir          PDB file directory 
---output-file		Output file of drugport parsing
+                             REQUIRED
+--pdb-file-dir               PDB file directory 
 
---help			this message
+                             OPTIONAL
+--output-file                Output file of drugport parsing, default: drugport_results
+
+--help                       this message
 
 HELP
 

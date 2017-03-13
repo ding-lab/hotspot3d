@@ -1,0 +1,3 @@
+bsub -oo prep//Logs/Q13485.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 'hotspot3d calpro --output-dir=prep/ --pdb-file-dir=pdb/ --uniprot-id=Q13485 --3d-distance-cutoff=20 --linear-cutoff=0'
+bsub -oo prep//Logs/Q15796.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 'hotspot3d calpro --output-dir=prep/ --pdb-file-dir=pdb/ --uniprot-id=Q15796 --3d-distance-cutoff=20 --linear-cutoff=0'
+bsub -oo prep//Logs/P84022.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 'hotspot3d calpro --output-dir=prep/ --pdb-file-dir=pdb/ --uniprot-id=P84022 --3d-distance-cutoff=20 --linear-cutoff=0'

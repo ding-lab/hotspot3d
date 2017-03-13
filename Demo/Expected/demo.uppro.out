@@ -1,0 +1,15 @@
+Creating prep//hugo.uniprot.pdb.csv
+Getting genes from hotspot3d/Demo/demo.maf
+
+Reading in hotspot3d/Demo/demo.maf...
+Found 4 (may include header)
+HUGO: SMAD2
+HUGO: SMAD3
+HUGO: SMAD4
+Creating cmd_list_submit_file
+bsub -oo prep//Logs/Q13485.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 'hotspot3d calpro --output-dir=prep/ --pdb-file-dir=pdb/ --uniprot-id=Q13485 --3d-distance-cutoff=20 --linear-cutoff=0 --measure=averageDistance'
+Job <474670> is submitted to default queue <long>.
+bsub -oo prep//Logs/Q15796.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 'hotspot3d calpro --output-dir=prep/ --pdb-file-dir=pdb/ --uniprot-id=Q15796 --3d-distance-cutoff=20 --linear-cutoff=0 --measure=averageDistance'
+Job <474671> is submitted to default queue <long>.
+bsub -oo prep//Logs/P84022.err.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 'hotspot3d calpro --output-dir=prep/ --pdb-file-dir=pdb/ --uniprot-id=P84022 --3d-distance-cutoff=20 --linear-cutoff=0 --measure=averageDistance'
+Job <474672> is submitted to default queue <long>.

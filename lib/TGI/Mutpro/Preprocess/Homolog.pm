@@ -92,7 +92,7 @@ sub process {
         #
         next if ($uniprotId !~ /\w+/ );
         next unless ( $pdb eq "N/A" );
-        print STDERR "*** UNIPROT ID: $uniprotId\n";
+        print STDOUT "*** UNIPROT ID: $uniprotId\n";
         $allUniprotIds{$uniprotId} = 1;
         $uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprotId);
         defined ($uniprotRef) || die "no object for '$uniprotId'";
@@ -156,13 +156,13 @@ sub parse_blastp_output {
     }
     #map { print; print "\n"; } @top;
     #
-    print $header{'PDB'}."_".$header{'CHAIN'}."\n";
+    print STDOUT $header{'PDB'}."_".$header{'CHAIN'}."\n";
     foreach my $d (keys %homos) { 
         next if ( $homos{$d}{'IDEN'} < $iden_cutoff * 100 );
-        print "==".$d."\n";
-        print $homos{$d}{'IDEN'}."\n";
-        print $homos{$d}{'QUESTART'}." ".$homos{$d}{'QUECONT'}." ".$homos{$d}{'QUEEND'}."\n";      
-        print $homos{$d}{'SUBSTART'}." ".$homos{$d}{'SUBCONT'}." ".$homos{$d}{'SUBEND'}."\n";
+        print STDOUT "==".$d."\n";
+        print STDOUT $homos{$d}{'IDEN'}."\n";
+        print STDOUT $homos{$d}{'QUESTART'}." ".$homos{$d}{'QUECONT'}." ".$homos{$d}{'QUEEND'}."\n";      
+        print STDOUT $homos{$d}{'SUBSTART'}." ".$homos{$d}{'SUBCONT'}." ".$homos{$d}{'SUBEND'}."\n";
         my ( @taq, @tas, $tqstart, $tsstart, $i, $j, $k, $open, );
         $tqstart = $i = $homos{$d}{'QUESTART'}; 
         $tsstart = $j = $homos{$d}{'SUBSTART'};
@@ -183,7 +183,7 @@ sub parse_blastp_output {
                         my $tt0 = $i - 1;
                         my $tt1 = $j - 1;
                         push( @homoregions, "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n" );
-                        print "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n";
+                        print STDOUT "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n";
                         #print  "$tqstart,$tt0 -- $tsstart,$tt1\n";
                         $j++; $k++; $open = 1;
                     } else { $j++; $k++; }
@@ -193,7 +193,7 @@ sub parse_blastp_output {
                         my $tt0 = $i - 1;
                         my $tt1 = $j - 1;
                         push( @homoregions, "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n" );
-                        print "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n";
+                        print STDOUT "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n";
                         #print  "$tqstart,$tt0 -- $tsstart,$tt1\n";
                         $i++; $k++; $open = 1;
                     } else { $i++; $k++; }
@@ -205,7 +205,7 @@ sub parse_blastp_output {
             my $tt0 = $i - 1;
             my $tt1 = $j - 1;
             push( @homoregions, "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n" );
-            print "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n";
+            print STDOUT "DBREF\t$header{'PDB'}\t$header{'CHAIN'}\t$tsstart\t$tt1\tUNP\t$uniprotid\tB2MG_HUMAN\t$tqstart\t$tt0\n";
             #print  "$tqstart,$tt0 -- $tsstart,$tt1\n";
         }
     }
@@ -222,10 +222,13 @@ sub help_text {
 
 Usage: hotspot3d homo [options]
 
---output-dir		Output directory of proximity files
---identity              Identities cutoff, default is 30%
+                             REQUIRED
+--output-dir                 Output directory of proximity files
 
---help			this message
+                             OPTIONAL
+--identity                   Identities cutoff, default is 30%
+
+--help                       this message
 
 HELP
 

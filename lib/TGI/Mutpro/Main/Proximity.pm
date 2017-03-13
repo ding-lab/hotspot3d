@@ -1,9 +1,9 @@
 package TGI::Mutpro::Main::Proximity;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu and Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 0.2 $
 # $URL: $
 # $Doc: $ proximity pairs searching (main function)
 #----------------------------------
@@ -16,19 +16,26 @@ use Getopt::Long;
 use IO::File;
 use FileHandle;
 
+use TGI::Mutpro::Preprocess::AminoAcid;
+
+my $PVALUEDEFAULT = 0.05;
+my $DISTANCEDEFAULT = 10;
+my $MAXDISTANCE = 100;
+
 sub new {
     my $class = shift;
     my $this = {};
-    $this->{'maf'} = undef;
+    $this->{'maf_file'} = undef;
     $this->{'skip_silent'} = undef;
     $this->{'missense_only'} = undef;
     $this->{'data_dir'} = undef;
     $this->{'drugport_file'} = undef;
     $this->{'output_prefix'} = '3D_Proximity';
-    $this->{'pvalue_cutoff'} = 0.05;
-    $this->{'3d_cufoff'} = 10;
-    $this->{'1d_cutoff'} = 20;
+    $this->{'p_value_cutoff'} = undef;
+    $this->{'3d_distance_cutoff'} = undef;
+    $this->{'linear_cutoff'} = 0;
     $this->{'stat'} = undef;
+    $this->{'acceptable_types'} = undef;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
     bless $this, $class;
@@ -41,25 +48,38 @@ sub process {
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
-        'maf-file=s' => \$this->{'maf'},
-        'data-dir=s'    => \$this->{'data_dir'},
+        'maf-file=s' => \$this->{'maf_file'},
+        'prep-dir=s'    => \$this->{'data_dir'},
         'output-prefix=s' => \$this->{'output_prefix'},
         'drugport-file=s' => \$this->{'drugport_file'},
         'skip-silent' => \$this->{'skip_silent'},
         'missense-only' => \$this->{'missense_only'},
-        'p-value=f' => \$this->{'pvalue_cutoff'},
-        '3d-dis=i' => \$this->{'3d_cufoff'},
-        'linear-dis=i' => \$this->{'1d_cutoff'},
+        'p-value-cutoff=f' => \$this->{'p_value_cutoff'},
+        '3d-distance-cutoff=i' => \$this->{'3d_distance_cutoff'},
+        'linear-cutoff=i' => \$this->{'linear_cutoff'},
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'help' => \$help,
     );
     if ( $help ) { print STDERR help_text(); exit 0; }
     unless( $options ) { die $this->help_text(); }
+	if ( not defined $this->{'p_value_cutoff'} ) {
+        if ( not defined $this->{'3d_distance_cutoff'} and not defined $this->{'p_value_cutoff'} ) {
+            warn "HotSpot3D Search Warning: no pair distance limit given, setting to default p-value cutoff = 0.05\n";
+            $this->{'p_value_cutoff'} = $PVALUEDEFAULT;
+            $this->{'3d_distance_cutoff'} = $MAXDISTANCE;
+        } else {
+            $this->{'p_value_cutoff'} = 1;
+        }
+    } else {
+        if ( not defined $this->{'3d_distance_cutoff'} ) {
+            $this->{'3d_distance_cutoff'} = $MAXDISTANCE;
+        }
+    }
     unless( $this->{'data_dir'} ) { warn 'You must provide a output directory ! ', "\n"; die help_text(); }
     unless( -d $this->{'data_dir'} ) { warn 'You must provide a valid data directory ! ', "\n"; die help_text(); }
-    unless( $this->{'maf'} and (-e $this->{'maf'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
-    if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
+    unless( $this->{'maf_file'} and (-e $this->{'maf_file'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
+    if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf_file'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
     my $uniprot_file = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
     unless( -e $uniprot_file ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
     my $prior_dir = "$this->{'data_dir'}\/prioritization";
@@ -82,20 +102,21 @@ sub process {
                 proximity_close_eachother
                 );
     map{ $this->{'stat'}{$_} = 0; } @t;
+	$this->setAcceptableMutationTypes();
     # parse uniprot file 
     my $trans_to_uniprot = $this->getTransMaptoUniprot( $uniprot_file );
     $this->{'stat'}{'num_trans_with_uniprot'} = keys %$trans_to_uniprot;
     # parse drugport resuls file
     my $drugport_hash_ref = $this->getDrugportInfo( $this->{'drugport_file'} );
-    my $maf_hash_ref = $this->parseMaf( $this->{'maf'}, $trans_to_uniprot );
+    my $maf_hash_ref = $this->parseMaf( $this->{'maf_file'}, $trans_to_uniprot );
     $this->{'stat'}{'num_uniprot_involved'} = keys %$maf_hash_ref;
     my ( $pairoutref, $cosmicref, $roiref, $drugport_results_ref, $drugport_nonresults_ref ) = $this->proximitySearching( $maf_hash_ref, $prior_dir, $drugport_hash_ref );
-    print STDERR "searching done...\n";
+    print STDOUT "searching done...\n";
     my %filterHash; map {
         chomp; @_ = split /\t/;
         my $geneOne = join("\t", @_[0..8]);
         my $geneTwo = join("\t", @_[9..17]);
-        print STDERR $geneOne."\t".$geneTwo."\n";
+        print STDOUT $geneOne."\t".$geneTwo."\n";
         if ( defined $filterHash{$geneOne}{$geneTwo} ) { $filterHash{$geneOne}{$geneTwo} .= $_[19]; 
         } elsif ( defined $filterHash{$geneTwo}{$geneOne} ) { $filterHash{$geneTwo}{$geneOne} .= $_[19];
         } else { $filterHash{$geneOne}{$geneTwo} .= $_[18] . "\t" . $_[19]; }
@@ -118,32 +139,37 @@ sub process {
     # output pour out
     my $fh   = new FileHandle;
     die "Could not create pairwise close output file\n" unless( $fh->open(">$this->{'output_prefix'}.pairwise") );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".pairwise\n";
     map { map { $fh->print( $_."\n" ); $this->{'stat'}{'proximity_close_eachother'}++; } keys %{$sortedHash{$_}} } sort {$a<=>$b} keys %sortedHash;
     $fh->close();
     # pour out mutations close to cosmic
     die "Could not create cosmic close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.cosmic" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".cosmic\n";
     map { $fh->print( $_."\n" )  } @$cosmicref; $fh->close();
     # pour out mutations close to ROI
     die "Could not create Region of Interest(ROI) close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.roi" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".roi\n";
     map { $fh->print( $_."\n" )  } @$roiref; $fh->close();
     # pour out mutations close to drugs from drugport 
     die "Could not create drugport compound close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.target" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.target\n";
     map { $fh->print( $_."\n" )  } @$drugport_results_ref; $fh->close();
     # pour out mutations close to drugs from drugport (nontarget) 
     die "Could not create drugport compound close output file (nontarget)\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.nontarget" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.nontarget\n";
     map { $fh->print( $_."\n" )  } @$drugport_nonresults_ref; $fh->close();
     # post processing like collapsed clean results
     $this->drug_proximity_postprocessing( $this->{'output_prefix'}, $this->{'drugport_file'} );
-    print STDERR "\n\n##################################################\n";
-    print STDERR "total mutations: " . $this->{'stat'}{'num_muts'} . "\n";
-    print STDERR "expected mutations: " . $this->{'stat'}{'num_expect_format'} . "\n";
-    print STDERR "unexpected format mutations: " . $this->{'stat'}{'num_unexpect_format'} . "\n";
-    print STDERR "mutations with matched uniprot: ". $this->{'stat'}{'num_with_uniprot'} . "\n";
-    print STDERR "total transcripts with valid uniprot sequences : " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
-    print STDERR "total transcripts in maf : " . $this->{'stat'}{'num_trans'} . "\n";
-    print STDERR "total mutations to be analyzed:  " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
-    print STDERR "total uniprots involved: " . $this->{'stat'}{'num_uniprot_involved'} . "\n";
-    print STDERR "\n\n##################################################\n";
+    print STDOUT "\n\n##################################################\n";
+    print STDOUT "total mutations: " . $this->{'stat'}{'num_muts'} . "\n";
+    print STDOUT "expected mutations: " . $this->{'stat'}{'num_expect_format'} . "\n";
+    print STDOUT "unexpected format mutations: " . $this->{'stat'}{'num_unexpect_format'} . "\n";
+    print STDOUT "mutations with matched uniprot: ". $this->{'stat'}{'num_with_uniprot'} . "\n";
+    print STDOUT "total transcripts with valid uniprot sequences : " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
+    print STDOUT "total transcripts in maf : " . $this->{'stat'}{'num_trans'} . "\n";
+    print STDOUT "total mutations to be analyzed:  " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
+    print STDOUT "total uniprots involved: " . $this->{'stat'}{'num_uniprot_involved'} . "\n";
+    print STDOUT "\n\n##################################################\n";
 
     return 1;
 }
@@ -189,10 +215,9 @@ sub parseMaf {
         my $tc = join( "\t", $gene, $chr, $start, $end, $aac );
         $this->{'stat'}{'num_muts'}++;
         $transHash{ $trans } = 1;
-        next if ( ($this->{'skip_silent'}) and ($type eq "Silent") );
-        next if ( ($this->{'missense_only'}) and ($type ne "Missense_Mutation") );
+		next if ( $this->unacceptable( $type ) );
         unless ( $aac =~ /p\.\w\D*\d+/ or $aac =~ /p\.\D*\d+in_frame_ins/i ) {
-            print STDERR "Unexpected format for mutation: '$aac'\n";
+            print STDERR "Unexpected format for mutation ".$gene.":g.".$chr.":".$start.$ref.$vart2." of type ".$type.": '$aac'\n";
             $this->{'stat'}{'num_unexpect_format'}++;
             next;
         }
@@ -259,14 +284,14 @@ sub getDrugportInfo {
 				map{ 
 					my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
 					$pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-					unless ( $pdb and $chain and $loc ) { print $a."\n"; }
+					unless ( $pdb and $chain and $loc ) { print STDOUT $a."\n"; }
 					$drugport_hash{'TARGET'}{uc($pdb)}{$chain}{$loc} = $het;
 				} split /,/,$target_pdb; 
 			}
 			unless ( $not_target_include_compound =~ /NULL/ ) { 
 				map{ 
 					my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-					unless ( $pdb and $chain and $loc ) { print $a."\n"; }
+					unless ( $pdb and $chain and $loc ) { print STDOUT $a."\n"; }
 					$drugport_hash{'NONTARGET'}{uc($pdb)}{$chain}{$loc} = $het;
 				} split /,/, $not_target_include_compound; 
 			}
@@ -276,39 +301,37 @@ sub getDrugportInfo {
 	return \%drugport_hash;
 }
 
-sub filterWater {
-	my ( $residue1 , $residue2 ) = @_;
-	if ( $residue1 =~ /HOH/ || $residue2 =~ /HOH/ ) {
-		return 1;
-	}
-	return 0;
-}
-
 # proximity searching 
 sub proximitySearching {
     my ( $this, $mafHashref, $proximityOutPrefix, $drugportref ) = @_;
     my ( @pairResults, @cosmicclose, @roiclose, @drugport_target_results, @drugport_nontarget_results, );
     my $fh = new FileHandle;
+	my $AA = new TGI::Mutpro::Preprocess::AminoAcid;
     foreach my $a ( keys %$mafHashref ) {
         my $uniprotf = "$proximityOutPrefix\/$a.ProximityFile.csv";
         next unless( -e $uniprotf and $fh->open($uniprotf) ); 
         while ( my $b = <$fh> ) {
+			next if ( $b =~ /UniProt_ID/g );
             chomp( $b ); my @ta = split /\t/, $b;
             my ( $uid1, $chain1, $pdbcor1, $offset1, $residue1, $domain1, $cosmic1, 
                  $uid2, $chain2, $pdbcor2, $offset2, $residue2, $domain2, $cosmic2, 
                  $proximityinfor ) = @ta;
-			if ( &filterWater( $residue1 , $residue2 ) ) { next; }
-            my $uniprotcor1 = $pdbcor1 + $offset1; 
+			my $uniprotcor1 = $pdbcor1 + $offset1;
             my $uniprotcor2 = $pdbcor2 + $offset2;
             my $lineardis = undef;
             if ( $uid1 eq $uid2 ) { $lineardis = abs($uniprotcor1 - $uniprotcor2) } else { $lineardis = "N\/A"; }
             #print $a."\t".$uid2."\t".$uniprotcor1."\t".$uniprotcor2."\t".$lineardis."\n";
             if ( defined $mafHashref->{$a}->{$uniprotcor1} ) {
                 if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
+					#warn "check AA - ".$residue1." - ".$residue2;
+					if ( !( $AA->isAA( $residue1 ) ) || !( $AA->isAA( $residue2 ) ) ) { 
+						#warn " - bad AA pair"."\n";
+						next;
+					}
                     ## close each other
                     foreach my $c ( keys %{$mafHashref->{$a}->{$uniprotcor1}} ) {
                         foreach my $d ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push( @pairResults, join("\t", $c, @ta[1,2,5,6], $d, @ta[8,9,12,13], $lineardis, $proximityinfor) );
                             }
                         }
@@ -318,12 +341,12 @@ sub proximitySearching {
                     map { 
                         my $t_item = join("\t", $_, @ta[1,2,5,6,8,9,12,13], $lineardis, $proximityinfor); 
                         if ( $domain2 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@roiclose, $t_item);
                             }
                         };
                         if ( $cosmic2 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@cosmicclose, $t_item); 
                             }
                         }; 
@@ -334,12 +357,12 @@ sub proximitySearching {
                     map {  
                         my $t_item = join("\t", $_, @ta[8,9,12,13,1,2,5,6], $lineardis, $proximityinfor); 
                         if ( $domain1 !~ /N\/A/ ) { 
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@roiclose, $t_item); 
                             }
                         }; 
                         if ( $cosmic1 !~ /N\/A/ ) {
-                            if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+                            if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
                                 push(@cosmicclose, $t_item); 
                             }
                         } 
@@ -348,6 +371,10 @@ sub proximitySearching {
             }
             # drugport searching
 			if ( $drugportref ) {
+				if ( $AA->isHOH( $residue1 ) || $AA->isHOH( $residue2 ) ) {
+					#warn "bad AA pair: ".$residue1." - ".$residue2."\n";
+					next;
+				}
 				my %pdbs_hash = map{ my @t0 = split / /, $_; ($t0[1], 1) } split /\|/, $proximityinfor;
 				my ( $real_chain1 ) = $chain1 =~ /\[(\w)\]/; my ( $real_chain2 ) = $chain2 =~ /\[(\w)\]/;
 				my ( $e, $iter ); 
@@ -356,7 +383,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 							map { 
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_target_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'TARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) );
 								}
 							} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
@@ -365,7 +392,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
 						if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 							map { 
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_target_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'TARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
 								} 
 							} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
@@ -374,7 +401,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1} ) {
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 							map {
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_nontarget_results, join("\t", $iter, $chain1, $pdbcor1, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain1}->{$pdbcor1}, $_, @ta[8,9,11,12,13], $lineardis, $proximityinfor) ); 
 								}
 							} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
@@ -383,7 +410,7 @@ sub proximitySearching {
 					if ( defined $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2} ) {
 						if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 							map {
-								if ( $this->cutFiltering( $this->{'pvalue_cutoff'}, $this->{'1d_cutoff'}, $this->{'3d_cufoff'}, $lineardis, $proximityinfor) ) {
+								if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
 									push( @drugport_nontarget_results, join("\t", $iter, $chain2, $pdbcor2, $drugportref->{'NONTARGET'}->{$iter}->{$real_chain2}->{$pdbcor2}, $_, @ta[1,2,4,5,6], $lineardis, $proximityinfor) );
 								}
 							} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
@@ -401,11 +428,21 @@ sub proximitySearching {
 # post processing of drug results
 sub drug_proximity_postprocessing {
     my ( $this, $output_prefix, $drugport_parsing_results ) = @_;
-    my $sub_fh_target = new FileHandle; my $sub_fh_drugport_parsing = new FileHandle; my $sub_fh_nontarget = new FileHandle; 
-    die "Could not open drug target output file\n" unless( $sub_fh_target->open( "$output_prefix.drugs.target" ) );
-    die "Could not open drugprot parsing output file\n" unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) );
+	if ( not defined $drugport_parsing_results ) {
+		warn "HotSpot3D Search Warning: Skipping drugport proximity, because no results file given.\n";
+		return;
+	}
+    my $sub_fh_target = new FileHandle;
+	my $sub_fh_drugport_parsing = new FileHandle;
+	my $sub_fh_nontarget = new FileHandle; 
     my $sub_fh_output = new FileHandle;
+	unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) ) {
+		warn "Could not open drugprot parsing output file\n";
+		return 0;
+	}
+    die "Could not open drug target output file\n" unless( $sub_fh_target->open( "$output_prefix.drugs.target" ) );
     die "Could not create clean drug output file\n" unless( $sub_fh_output->open( ">$output_prefix.drugs.target.clean" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.target.clean\n";
     $sub_fh_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Drug_Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Res_Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotation", "Cosmic_Annotation", "Linear_Distance_Between_Drug_and_Mutation", "3D_Distance_Information\n" ) );
     my %ss; map { 
         chomp; my @t = split /\t/; unless( $t[4] =~ /NULL/ ) { 
@@ -433,6 +470,7 @@ sub drug_proximity_postprocessing {
     die "Could not open drugprot parsing output file\n" unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) );
     my $sub_fh_nontarget_output = new FileHandle;
     die "Could not create clean nontarget drug output file\n" unless( $sub_fh_nontarget_output->open( ">$output_prefix.drugs.nontarget.clean" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.nontarget.clean\n";
     $sub_fh_nontarget_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotaiton", "Cosmic_Annotation", "Linear_Distance_Betweeen_Drug_and_Mutation", "3D_Distance_Information\n" ) );
     undef %ss; map { 
         chomp; my @t = split /\t/; unless ( $t[8] =~ /NULL/ ) {
@@ -458,14 +496,40 @@ sub drug_proximity_postprocessing {
 
 # get drugport database information
 sub cutFiltering {
-    my ( $this, $pvalue_cut, $linear_cut, $threed_cut, $linear_dis, $info_proximity ) = @_;
-    my ( $dis_3d, $pvalue ) = (split / /, $info_proximity)[0,2];
+    my ( $this, $linear_dis, $info_proximity ) = @_;
+	my @infos = split( /\|/ , $info_proximity );
+    my ( $dis_3d, $pvalue ) = (split / /, $infos[0])[0,2];
     if ( $linear_dis =~ /N\/A/ ) {
-        return 1 if ( ($dis_3d <= $threed_cut) and ($pvalue <= $pvalue_cut) );
+        return 1 if ( ( $dis_3d <= $this->{'3d_distance_cutoff'} ) 
+				 and ( $pvalue <= $this->{'p_value_cutoff'} ) );
     } else {
-        return 1 if ( ($dis_3d <= $threed_cut) and ($linear_dis >= $linear_cut) and ($pvalue <= $pvalue_cut) );
+        return 1 if ( ( $dis_3d <= $this->{'3d_distance_cutoff'} ) 
+				 and ( $linear_dis >= $this->{'linear_cutoff'} ) 
+				 and ( $pvalue <= $this->{'p_value_cutoff'} ) );
     }
     return undef;
+}
+
+sub setAcceptableMutationTypes {
+	my $this = shift;
+	@{$this->{'acceptable_types'}} = ( "Missense_Mutation" );
+	if ( $this->{'missense_only'} ) {
+		return 1;
+	}
+	push @{$this->{'acceptable_types'}} , "In_Frame_Ins";
+	push @{$this->{'acceptable_types'}} , "In_Frame_Del";
+	if ( not $this->{'skip_silent'} ) {
+		push @{$this->{'accepatble_types'}} , "Silent";
+	}
+	return 1;
+}
+
+sub unacceptable {
+	my ( $this , $type ) = @_;
+	if ( grep{ $_ eq $type } @{$this->{'acceptable_types'}} ) {
+		return 0;
+	}
+	return 1;
 }
 
 sub help_text{
@@ -474,24 +538,25 @@ sub help_text{
 
 Usage: hotspot3d search [options]
 
---maf-file              Input MAF file
---data-dir              HotSpot3D preprocessing results directory
+                             REQUIRED
+--maf-file                   Input MAF file used to search proximity results
+--prep-dir                   HotSpot3D preprocessing results directory
 
---drugport-file         Drugport database parsing results file ( optional )
---output-prefix         Prefix of output files, default: 3D_Proximity 
---skip-silent           skip silent mutations, default: no
---missense-only         missense mutation only, default: no
---p-value               p_value cutoff(<=), default: 0.05
---3d-dis                3D distance cutoff (<=), default: 10
---linear-dis            linear distance cutoff (>=), default: 20 
---transcript-id-header  MAF file column header for transcript id's, default: transcript_name
---amino-acid-header     MAF file column header for amino acid changes, default: amino_acid_change 
+                             OPTIONAL
+--drugport-file              DrugPort database parsing results file
+--output-prefix              Prefix of output files, default: 3D_Proximity 
+--skip-silent                skip silent mutations, default: no
+--missense-only              missense mutation only, default: no
+--p-value-cutoff             p_value cutoff(<=), default: 0.05
+--3d-distance-cutoff         3D distance cutoff (<=), default: 10
+--linear-cutoff              Linear distance cutoff (>= peptides), default: 0 
+--transcript-id-header       MAF file column header for transcript id's, default: transcript_name
+--amino-acid-header          MAF file column header for amino acid changes, default: amino_acid_change 
 
---help			this message
+--help                       this message
 
 HELP
 
 }
 
 1;
-

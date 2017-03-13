@@ -1,153 +1,240 @@
 HotSpot3D
 ===========
 
-This 3D proximity tool can be used to identify mutation hotspots from the linear protein sequence and correlates the hotspots with known or potentially interacting domains and mutations. Mutation-mutation and mutation-drug clusters can also be identified and viewed.
+This 3D proximity tool can be used to identify mutation hotspots from linear protein sequence and correlate the hotspots with known or potentially interacting domains, mutations, or drugs. Mutation-mutation and mutation-drug clusters can also be identified and viewed.
 
 Usage
 -----
 
         Program:     HotSpot3D - 3D mutation proximity analysis program.
-        Version:     V0.4
-         Author:     Beifang Niu, John Wallis, Adam D Scott, & Sohini Sengupta
 
-          Usage:     hotspot3d <command> [options]
+         Stable:     v0.6.0 
 
-Key commands:
+           Beta:     up to v1.5.0
+        
+         Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
-        search    --  3D mutation proximity searching
-		post      --  Post-processing on pairwise data
-        cluster   --  Determine clusters from HotSpot3D inter, intra, and druggable pairwise data 
-		sigclus   --  Determine significance of clusters
-		summary   --  Determine cluster-level measures
-        visual    --  Visulization of 3D proximity
+  Usage: hotspot3d <command> [options]
 
-        drugport  --  Parse drugport database 
-        uppro     --  Update proximity files
-        calpro    --  Calculate proximity file for one UniProt ID
-        calroi    --  Generate region of interest (ROI) information
-        statis    --  Calculate p_values for pairs of mutations
-        anno      --  Add region of interest (ROI) annotation
-        trans     --  Add transcript annotation 
-        homo      --  Add homology PDB structures 
-        cosmic    --  Add COSMIC annotation to proximity file
-        prior     --  Prioritization
-        help      --  this message
+           Preprocessing
+             drugport  --  0) Parse drugport database (OPTIONAL)
+             uppro     --  1) Update proximity files
+             prep      --  2) Run preprocessing steps 2a-2f
+                 calroi    --  2a) Generate region of interest (ROI) information
+                 statis    --  2b) Calculate p_values for pairs of mutations
+                 anno      --  2c) Add region of interest (ROI) annotation
+                 trans     --  2d) Add transcript annotation
+                 cosmic    --  2e) Add COSMIC annotation to proximity file
+                 prior     --  2f) Prioritization
 
-SUPPORT
-For user support please mail adamscott@wustl.edu
+           Analysis
+		     main      --  Run analysis steps a-f (beta)
+                 search    --  a) 3D mutation proximity searching
+                 cluster   --  b) Determine mutation-mutation and mutation-drug clusters
+                 sigclus   --  c) Determine significance of clusters (BETA/OPTIONAL)
+                 summary   --  d) Summarize clusters (OPTIONAL)
+                 visual    --  e) Visulization of 3D proximity (OPTIONAL)
+
+Support
+-------
+
+For user support please email adamscott@wustl.edu
+
+
+Update
+------
+
+To reinstall code of the same version (in some cases, may need --sudo):
+
+	cpanm --reinstall HotSpot3D-#.tar.gz
 
 
 Install (Ubuntu 14.04.01)
 -------
 
-Prerequisites:
+Make sure that you have cpanm:
 
-In order to install HotSpot3D package, first install CPANM
-(cpanm - get, unpack build and install modules from CPANM)
-NOTE: Some steps may require adding --force to install successfully.
+	cpan App::cpanminus
 
-        sudo apt-get install cpanminus
+For configuration, we recommend using local::lib:
 
-Another way to install cpanminus is to just download it, as per the installer
-        
-        curl -LO http://xrl.us/cpanm
-        chmod +x cpanm
+	cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
 
-Or by using cpan
+Dependencies include the modules: LWP::Simple, Test::Most, List::Util, List::MoreUtils, Parallel::ForkManager
 
-		cpan App::cpanminus
+	cpanm LWP::Simple
 
-Intall Perl5 local lib
+	cpanm Test::Most
 
-        cpanm --local-lib=~/perl5 local::lib && eval $(perl -I ~/perl5/lib/perl5/ -Mlocal::lib)
+	cpanm List::Util
 
-Intall LWP::Simple module
+	cpanm List::MoreUtils
 
-        sudo apt-get install libwww-perl
-
-Intall Test::Most module
-        
-        wget http://search.cpan.org/CPAN/authors/id/O/OV/OVID/Test-Most-0.34.tar.gz
-        cpanm Test-Most-0.34.tar.gz
+	cpanm Parallel::ForkManager
 
 Install HotSpot3D package: 
         
-        git clone https://github.com/ding-lab/hotspot3d
-        cd hotspot3d
-        cpanm HotSpot3D-#.#.tar.gz
+	git clone https://github.com/ding-lab/hotspot3d
 
-(Installations under some organizations may use an internal perl version.
+	cd hotspot3d
+
+For the latest stable version:
+
+	git checkout v0.6.0
+    
+	cpanm HotSpot3D-0.6.0.tar.gz
+
+For the latest beta version:
+
+	git checkout v1.4.1
+    
+	cpanm HotSpot3D-1.4.1.tar.gz
+
+Final note: Installations under some organizations may use an internal perl version. 
 To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
-from: #!/org/bin/perl
-to: #!/usr/bin/perl)
+    
+	from: #!/org/bin/perl
+    
+	to: #!/usr/bin/perl
 
-example
--------
 
-Preprocessing procedure
+Configure Environment
+---------------------
 
-1. Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
+	It is helpful to add your perl5 lib directory, and to add your perl5 bin directory.
 
-        hotspot3d drugport --pdb-file-dir=pdb_files_dir --output-file=drugport_parsing_results_file
+	You can add the following lines to your ~/.bash_profile. Then run 'source ~/.bash_profile'.
 
-2. Run 3D proximity calculation ( this step needs one output directory to store all of the data from the pre-processing procedure
-and one directory which contains pdb files downloaded from the PDB website. This step will automatically download PDB files if
-the necessary PDB file is not yet in the pdb files directory) :
+		export PERL5LIB=~/perl5/lib/perl5/:${PERL5LIB}
 
-        hotspot3d uppro --output-dir=preprocessing_output --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file --max-3d-dis=100 1>hotspot3d.preprocessing.t.err 2>hotspot3d.preprocessing.t.out
+		export PERL5BIN=~/perl5/bin/:${PERL5BIN}
 
-3. Calculate protein domain information for each UniProt ID : 
+		export PATH=~/perl5/bin/:${PATH}
 
-        hotspot3d calroi --output-dir=preprocessing_output
+	Add cosmic v67 information to 3D proximity results :
 
-4. Significance determination calculation :  
+		mkdir preprocessing_dir/cosmic
 
-        hotspot3d statis --output-dir=preprocessing_output
+		cp COSMIC/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_dir/cosmic/
 
-5. Add protein domain annotation information to 3D proximity information :
+		cd ./preprocessing_dir/cosmic/ 
 
-        hotspot3d anno --output-dir=preprocessing_output
+		bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
 
-6. Choose transcripts based on the alignment between Uniprot sequence and human peptides sequences :
 
-        hotspot3d trans --output-dir=preprocessing_output
+Example - Preprocessing
+-----------------------
 
-7. Add cosmic v67 information to 3D proximity results :
+1. (Optional) Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
 
-        mkdir preprocessing_output/cosmic
-        cp COSMIc/cosmic_67_for_HotSpot3D_missense_only.tsv.bz2 ./preprocessing_output/cosmic/
-        cd ./preprocessing_output/cosmic/ 
-        bzip2 -d cosmic_67_for_HotSpot3D_missense_only.tsv.bz2
-        hotspot3d cosmic --output-dir=preprocessing_output
+		hotspot3d drugport --pdb-file-dir=pdb_files_dir
 
-8. Prioritization :
+2. Run 3D proximity calculation that also updates any existing preprocessed data (default launches LSF jobs) :
 
-        hotspot3d prior --output-dir=preprocessing_output --p-value=0.1 --3d-dis=20 --linear-dis=0.5
+		hotspot3d uppro --output-dir=preprocessing_dir --pdb-file-dir=pdb_files_dir --drugport-file=drugport_parsing_results_file 1>hotspot3d.uppro.err 2>hotspot3d.uppro.out
 
+3. Run automated preprocessing for other measurments and annotations (can alternatively run steps 2a-2f individually) :
+
+		hotspot3d prep --output-dir=preprocessing_dir
+
+
+Example - Analysis
+------------------
 
 3D proximity searching based on prioritization results and visualization
 
 1. Proximity searching (acquire proximity information for input mutations):
 
-        hotspot3d search --maf-file=pancan19_input.maf --data-dir=preprocessing_output --output-prefix=pancan19 --skip-silent 1>pancan19.t.out 2>pancan19.t.err
+		hotspot3d search --maf-file=your.maf --prep-dir=preprocessing_dir
 
-2. Post-processing of pairwise data (required for cluster step):
+2. Cluster pairwise data:
 
-		hotspot3d post --maf-file=pancan19_input.maf --input-prefix=pancan19
+		hotspot3d cluster --pairwise-file=3D_Proximity.pairwise --maf-file=your.maf
 
-3. Cluster pairwise data:
+3. Cluster significance calculation:
 
-        hotspot3d cluster --inter-intra-proximity-file=interactions_file --data-location-file=location_data --output-file=clustering.out --target-nontarget-file=drug_data_file
+		hotspot3d sigclus --prep-dir=preprocessing_dir --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
-4. Cluster significance calculation:
+4. Clustering Summary:
 
-        hotspot3d sigclus --prep-dir=preprocessing_output --pairwise=pairwise_file --clusters=clusters_file --output=output_file
+		hotspot3d summary --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters
 
-5. Clustering Summary:
+5. Visualization (works with PyMol):
 
-        hotspot3d summary --clusters-file=cluster_file --output-file=output_summary
+		hotspot3d visual --pairwise-file=3D_Proximity.pairwise --clusters-file=3D_Proximity.pairwise.singleprotein.collapsed.clusters --pdb=3XSR
 
-6. Visualization:
+Annotations
+-----------
 
-        hotspot3d visual --pymol-dir=/usr/bin/pymol --output-dir=pymol_out --pdb-dir=pdb_files_dir
+Check out scripts/ for various annotation scripts to add more details to the .clusters file.
 
+HGNC download can be found here: http://www.genenames.org/cgi-bin/genefamilies/.
+
+Information on the Ensembl .gtf can be found here: http://useast.ensembl.org/info/website/upload/gff.html, and downloads can be found at the Ensembl ftp site, ftp://ftp.ensembl.org/pub/.
+
+See the scripts/README.annotations for more details.
+
+Tips
+----
+
+Mutation file - Standard .maf with custom coding transcript and protein annotations (ENST00000275493 and p.L858R)
+
+There are only a handful of columns necessary from .maf files. They are:
+
+		Hugo_Symbol
+		
+		Chromosome
+		
+		Start_Position
+		
+		End_Position
+		
+		Variant_Classification
+		
+		Reference_Allele
+		
+		Tumor_Seq_Allele1
+		
+		Tumor_Seq_Allele2
+		
+		Tumor_Sample_Barcode
+
+And two non-standard columns:
+
+		a transcript ID column
+		
+		a protein peptide change column (HGVS p. single letter abbreviations, ie p.T790M)
+
+Current Annotation Support:
+
+		Transcript ID - Ensembl coding transcript ID's (ENST)
+
+		Gene name - HUGO symbol
+
+Clustering with different pairs data:
+
+		For monomers, you need to include the option '--meric-type monomer'
+
+		For homomers, you need to include the option '--meric-type homomer'
+
+		For heteromers, you need to include the option '--meric-type heteromer'
+
+		For both homomers & heteromers simultaneously, you need to include the option '--meric-type multimer'
+
+		For no regard to *mer status, you can include the option 
+		'--meric-type unspecified', although this is run by default without the option
+
+		For DrugPort only, do not input the .pairwise file; input only DrugPort pairs file.
+
+		For *mer+DrugPort include the .pairwise file with the DrugPort pairs file, 
+		and include the appropriate --meric-type as described above.
+
+Clustering based on different distance measures:
+
+        There are some pairs found on multiple structures. 
+		In HotSpot3D versions v0.6.2 and earlier, 
+		clustering only used the shortest distance among different structures 
+		(shortest structure distance, SSD). 
+		In HotSpot3D versions v0.6.3 and later, 
+		clustering can be done using the average distance among different structures 
+		(average structure distance, ASD), and this is now default.
