@@ -316,12 +316,13 @@ sub getDistances{
 
 		my $best_pdb=$bestStruc->{$clus}->[1]; #store best PDB for cluster
 		my @uniprotIDs;
-
+		print "$clus\n";
 		foreach my $gene(@{$clus_store->{$clus}}){				
 			my $uniprot = $HUGO2uniprotref->{$gene};
+			print"$gene\t$uniprot\n";	
 			if (! grep $_ eq $uniprot,@uniprotIDs){
 				push @uniprotIDs, $uniprot;  #store all unique uniprotIds in cluster
-				print "$uniprot\n";
+			#	print "$uniprot\n";
 				
 			}
 		}
@@ -421,6 +422,7 @@ Usage: hotspot3d sigclus [options]
 	--pairwise			Pairwise file (pancan19.pairwise)
 	--clusters			Cluster file (pancan19.intra.20..05.10.clusters)
 	--output			Output file prefix (pancan19.intra.20..05.10)
+	--structure			Output file from clusterPDBPresence.pl (update this description later)
 
 	--simulations	Number of simulations, default = 1000000
 
