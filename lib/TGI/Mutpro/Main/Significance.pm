@@ -176,26 +176,29 @@ sub getStructure{
 	my %bestStruc;
 	while ( my $line = <$strucHandle> ) {
 		chomp($line);
-		my ($clus,$PDB,$hugo1,$count)=(split(/\t/,$line))[0,1,2,5];
-	#	print"$hugo1\n";
-		my $hugo=(split(/\|/,$hugo1))[0];
-#		print"$hugo\n";
-		my @pair=(int($count),$PDB);
-		if (exists $clus_store->{$clus} ){
-			if (exists $bestStruc{$clus}){
-					my $test=$bestStruc{$clus}->[0];
-					if($count> $test){
-					$bestStruc{$clus}=\@pair;
+		if($line!~/Cluster/){
+			my ($clus,$PDB,$hugo1,$count)=(split(/\t/,$line))[0,1,2,5];
+		#	print"$hugo1\n";
+			my $hugo=(split(/\|/,$hugo1))[0];
+	#		print"$hugo\n";
+			my @pair=(int($count),$PDB);
+			if (exists $clus_store->{$clus} ){
+				if (exists $bestStruc{$clus}){
+						my $test=$bestStruc{$clus}->[0];
+						if($count> $test){
+						$bestStruc{$clus}=\@pair;
 
+					}
+				}
+
+				else{
+					$bestStruc{$clus}=\@pair;
 				}
 			}
-
-			else{
-				$bestStruc{$clus}=\@pair;
-			}
 		}
+
+	#	print"loop working\n";
 	}
-		print"loop working\n";
 
 	
 	$strucHandle->close();
