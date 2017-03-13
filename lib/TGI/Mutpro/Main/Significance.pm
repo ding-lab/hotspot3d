@@ -249,6 +249,7 @@ sub getProx{
 
 	my %distances;
 	my $uniprotRef=$uniprotIDs->[0]; #pick 1 uniprot ID to get distances
+	my $uni_length=scalar @{$uniprotIDs};
 	my $proxFile = $proximity_d.$uniprotRef.".ProximityFile.csv";
 #	print "proxfile: $proxFile\n"; #debug
 	my $proxHandle = &getFile( $proxFile , "r" );
@@ -259,14 +260,14 @@ sub getProx{
 		chomp $line;
 #		delete $recurrence{$clusterid};			
 		my ( $up1 , $chain1 , $res1 , $aa1 , $up2 , $chain2 , $res2 , $aa2 , $dist , $pdb , $pval ) = (split( /\t/ , $line ))[0..2,4,7..9,11,14..16];
-		my $key1="$res1:$chain1";
-		my $key2="$res2:$chain2";
+		my $key1="$up1:$res1:$chain1";
+		my $key2="$up2:$res2:$chain2";
 #		print ("$aa1\t$aa2\t$pdb\t$best_pdb\t$key1\t$key2\n");	
 		if (exists $AAref->{$aa1} && exists $AAref->{$aa2} && $pdb eq $best_pdb && !exists $paircheck{$pdb}{$key1}{$key2} && !exists $paircheck{$pdb}{$key2}{$key1}) {
 			if(grep $_ eq $up2,@{$uniprotIDs}){ #if 2nd uniprot id is in uniprots that are in cluster
 				
-				&checkKey($key1,\%res_count,$pdb,\%distances);	
-				&checkKey($key2,\%res_count,$pdb,\%distances);	
+				&checkKey($key1,\%res_count,$pdb,\%distances, $uni_length);	
+				&checkKey($key2,\%res_count,$pdb,\%distances, $uni_length);	
 
 				push @{$distances{$pdb}} , $dist;
 				#print "WE GOT ONE\n";#debug
@@ -284,12 +285,15 @@ sub getProx{
 
 
 sub checkKey{
-	my ($key,$res_count,$pdb, $distances)=@_;
+	my ($key,$res_count,$pdb, $distances,$uni_length)=@_;
 
 	if (! grep $_ eq $key,@{$res_count->{$pdb}}){
 
 		push @{$res_count->{$pdb}}, $key;
-		push @{$distances->{$pdb}}, 0;
+
+		if ($uni_length==1){ #only push 0 distance if it's intramolecular cluster
+			push @{$distances->{$pdb}}, 0;
+		}
 	}
 
 	return 1;
