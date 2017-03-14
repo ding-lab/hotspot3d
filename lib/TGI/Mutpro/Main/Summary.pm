@@ -165,7 +165,7 @@ sub writeSummary {
 	$fh->print( "\tTotal_Drugs\tGenes_Drugs\tAA_Mutations\tTranscripts");
 	#$fh->print( "\tHGNC_Gene_Families\tPfam_Domains\tDrugBank_Classes\tNIH_Classes" );
 	$fh->print( "\n" );
-	foreach my $id ( sort { $a <=> $b } keys %{$this->{mutationmass}} ) {
+	foreach my $id ( sort { $a cmp $b } keys %{$this->{mutationmass}} ) {
 		$fh->print( $id."\t" ); #Cluster_ID
 		if ( exists $this->{centroids}->{$id} ) {
             $fh->print( $this->{centroids}->{$id}."\t" ); #Centroid
