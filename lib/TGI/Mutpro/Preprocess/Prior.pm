@@ -158,10 +158,10 @@ sub writeOutput {
     unless( $fhout->open(">$outputFile") ) { die "HotSpot3D::Prior::writeOutput error: Could not open prioritization output file to write: ".$outputFile."\n" };
 	print STDOUT $uniprotId." HotSpot3D::Prior::writeOutput - writing prioritizations to file: ".$outputFile."\n";
     # write prioritization result into file 
-	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
-	$fhout->print( "Feature_Description1\tCOSMIC_Info1\t" );
-	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
-	$fhout->print( "Feature_Description2\tCOSMIC_Info2\t" );
+	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\t" );
+	$fhout->print( "Residue_Name1\tFeature1\tCOSMIC1\t" );
+	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\t" );
+	$fhout->print( "Residue_Name2\tFeature2\tCOSMIC2\t" );
 	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
     foreach my $mutation1 (keys %{$outputContent} ) {
         foreach my $mutation2 (keys %{$outputContent->{$mutation1}}) {

@@ -118,7 +118,6 @@ sub getAnnotation {
     my $fhano = new FileHandle;
     unless( $fhano->open("< $annotationFile") ) { die "HotSpot3D::Anno::getAnnotation error: Could not open annotation file for ".$uniprotId."!\n" };
 	print STDOUT $uniprotId." HotSpot3D::Anno::getAnnotation - collecting annotations from ".$annotationFile."\n";
-	my $annotation = {};
     while ( my $a = $fhano->getline ) {
         chomp($a);
         my ( $start, $end, $type, $anno, ) = split /\t/, $a;
@@ -128,11 +127,11 @@ sub getAnnotation {
         $anno =~ s/^'//; $anno =~ s/'$//; $anno =~ s/.$//;
         #print $anno."\n";
         if ( $type eq "DISULFID" ) {
-            $annotation->{$uniprotId}->{$start} = $anno;
-            $annotation->{$uniprotId}->{$end} = $anno;
+            $annotations->{$uniprotId}->{$start} = $anno;
+            $annotations->{$uniprotId}->{$end} = $anno;
         } else {
 			foreach my $b ($start..$end) {
-				$annotation->{$uniprotId}->{$b} = $anno;
+				$annotations->{$uniprotId}->{$b} = $anno;
 			}
 		}
     }
@@ -156,8 +155,10 @@ sub addAnnotation {
     unless( $fhout->open(">$outputFile") ) { die "HotSpot3D::Anno::addAnnotation error: Could not open the file for annotation: ".$outputFile."\n" };
 	print STDOUT $uniprotId." HotSpot3D::Anno::addAnnotation - writing feature annotated file: ".$outputFile."\n";
 	my ( $coord1 , $coord2 , $offset1 , $offset2 );
-	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\tDomain1\t" );
-	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\tDomain2\t" );
+	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\t" );
+	$fhout->print( "Residue_Name1\tFeature1\t" );
+	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\t" );
+	$fhout->print( "Residue_Name2\tFeature2\t" );
 	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
     while ( my $a = $fhin->getline ) {
         next if ($a =~ /^WARNING:/);

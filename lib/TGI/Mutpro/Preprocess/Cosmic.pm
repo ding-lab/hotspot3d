@@ -117,8 +117,14 @@ sub addCosmic {
 	my $skips = 0;
 	my %structures;
 	my $newlines = 0;
+	$fhout->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\t" );
+	$fhout->print( "Residue_Name1\tFeature1\tCOSMIC1\t" );
+	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\t" );
+	$fhout->print( "Residue_Name2\tFeature2\tCOSMIC2\t" );
+	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
     while ( my $line = <$fhin> ) {
-        if ($line =~ /^WARNING:/) {
+		if ( $line =~ /UniProt_ID1/ ) { next; }
+        if ($line =~ /^WARNING:/ ) {
 			$skips += 1;
 		}
         chomp($line);
