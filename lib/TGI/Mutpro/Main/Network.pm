@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Network;
 #----------------------------------
 # $Authors: Adam Scott, Sohini Sengupta, & Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 6 $
+# $Revision: 6.1 $
 # $URL: $
 # $Doc: $ determine mutation clusters from HotSpot3D inter, intra, and druggable data
 # 
@@ -101,7 +101,6 @@ sub networkClustering {
 	} else {
 		$this->noParallelNetworkClustering( $clusterings , $mutations , $distance_matrix );
 	}
-	$this->writeClustersFile();
 	return;
 }
 
@@ -109,6 +108,7 @@ sub localParallelNetworkClustering {
 	my ( $this , $clusterings , $mutations , $distance_matrix ) = @_;
 	print STDOUT "HotSpot3D::Cluster::localParallelNetworkClustering\n";
 	print STDOUT "\tparallel clustering over structures with up to ".$this->{'max_processes'}." processes\n";
+	my $fh = $this->writeHeader();
 	my $tempDir = File::Temp->newdir( TEMPLATE => 'hs3dXXXXX' );
 	my $pm = Parallel::ForkManager->new( $this->{'max_processes'} , $tempDir );
 	my %finalLines;
@@ -117,7 +117,10 @@ sub localParallelNetworkClustering {
 			my ( $pid , $exit_code , $ident , $exit_signal , $core_dump , $data ) = @_;
 			if ( defined $data ) {
 				if ( exists $clusterings->{$data->[0]} ) {
-					$finalLines{$data->[0]} = $data->[1];
+					foreach my $superClusterID ( sort keys %{$data->[1]} ) {
+						print STDOUT $superClusterID;
+						$this->writeClustersFile( $fh , $data->[1]->{$superClusterID} );
+					}
 				}
 			} else {
 				print qq|No data from child $pid!\n|;
@@ -127,31 +130,24 @@ sub localParallelNetworkClustering {
 	DATA_LOOP:
 	foreach my $structure ( sort keys %{$distance_matrix} ) {
 		my $pid = $pm->start and next DATA_LOOP;
-		my %lines;
 		#my $lines = "";
+		my $superLines = {};
 		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
-			my @lines;
+			my $lines = {};
 			my $subClusterID = 0;
 			#$lines .= $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
 					#$structure , $superClusterID , $subClusterID , () );
-			$lines{$superClusterID} = $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-					$structure , $superClusterID , $subClusterID , \@lines );
+			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+					$structure , $superClusterID , $subClusterID , $lines );
+			$superLines->{$superClusterID} = $lines;
 		}
-		my @finalLines;
-		foreach my $superClusterID ( keys %lines ) {
-			push @finalLines , @{$lines{$superClusterID}};
-		}
-		my @pair = ( $structure , \@finalLines );
+		print STDOUT "children: ".(scalar keys %{$superLines})."\n";
+		my @pair = ( $structure , $superLines );
 		#my @pair = ( $structure , $lines );
 		$pm->finish( 0 , \@pair );
 	}
 	$pm->wait_all_children;
-	foreach my $structure ( keys %finalLines ) {
-		#if ( exists $this->{'distance_matrix'}->{$structure} ) {
-			#$this->{'results'}->{$structure} = join( "\n" , @{$lines{$structure}} )."\n";
-			$this->{'results'}->{$structure} = $finalLines{$structure};
-		#}
-	}
+	$fh->close();
 	return;
 }
 
@@ -169,112 +165,42 @@ sub localParallelNetworkClustering {
 #	}
 #	return;
 #}
+#
+sub writeHeader {
+	my ( $this ) = shift;
+	print STDOUT "HotSpot3D::Cluster::writeHeader\n";
+    my $outFilename = $this->generateFilename();
+    print STDOUT "\tCreating cluster output file: ".$outFilename."\n";
+    my $fh = new FileHandle;
+    die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
+    $fh->print( join( "\t" , (  "Cluster" , "Gene/Drug" , "Mutation/Gene" ,
+                                "Degree_Connectivity" , "Closeness_Centrality" ,
+                                "Geodesic_From_Centroid" , "Weight" ,
+                                "Chromosome" , "Start" , "Stop" ,
+                                "Reference" , "Alternate" ,
+                                "Transcript" , "Alternative_Transcripts"
+                             )
+                    )."\n"
+              );
+	return $fh
+}
 
 sub noParallelNetworkClustering {
 	my ( $this , $clusterings , $mutations , $distance_matrix ) = @_;
 	print STDOUT "serially clustering over structures\n";
+	my $fh = $this->writeHeader();
 	foreach my $structure ( sort keys %{$distance_matrix} ) {
-		my %lines;
-		#my $lines = "";
 		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
-			my @lines;
+			my $lines = {};
 			my $subClusterID = 0;
-			$lines{$superClusterID} = $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-					$structure , $superClusterID , $subClusterID , \@lines );
-			# $lines .= $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-			#		$structure , $superClusterID , $subClusterID , 0 );
-		}
-		#$this->{'results'}->{$structure} = join( "\n" , @lines );
-		#$this->{'results'}->{$structure}  = $lines;
-		foreach my $superClusterID ( keys %lines ) {
-			push @{$this->{'results'}->{$structure}} , @{$lines{$superClusterID}};
+			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
+					$structure , $superClusterID , $subClusterID , $lines );
+			$this->writeClustersFile( $fh , $lines );
 		}
 	}
+	$fh->close();
 	return;
 }
-
-#sub writeClustersFile {
-#	my ( $this ) = @_;
-#	print STDOUT "HotSpot3D::Cluster::writeClustersFile\n";
-#	my $outFilename = $this->generateFilename();
-#	print STDOUT "\tCreating cluster output file: ".$outFilename."\n";
-#	my $fh = new FileHandle;
-#	die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
-#	$fh->print( join( "\t" , ( 	"Cluster" , "Gene/Drug" , "Mutation/Gene" , 
-#								"Degree_Connectivity" , "Closeness_Centrality" , 
-#								"Geodesic_From_Centroid" , "Weight" , 
-#								"Chromosome" , "Start" , "Stop" , 
-#								"Reference" , "Alternate" ,
-#								"Transcript" , "Alternative_Transcripts"
-#							 )
-#					)."\n"
-#			  );
-#	foreach my $structure ( %{$this->{'results'}} ) {
-#		if ( exists $this->{'results'}->{$structure} ) {
-#			my @mutations = uniq( @{$this->{'results'}->{$structure}} );
-#			my $nMutations = scalar( uniq( @mutations ) );
-#			if ( $nMutations > 0 ) {
-#				print STDOUT "\twriting for structure: ".$structure;
-#				print STDOUT "\thas ".$nMutations." mutations\n";
-#				foreach my $line ( @mutations ) {
-#					$fh->print( $line."\n" );
-#				}
-#			} else {
-#				print STDOUT "\tno mutations to write for structure: ".$structure."\n";
-#			}
-#		}
-#	}
-#	$fh->close();
-#	return;
-#}
-#
-#sub generateFilename {
-#	my $this = shift;
-#	my @outFilename;
-#	if ( $this->{'output_prefix'} ) {
-#		push @outFilename , $this->{'output_prefix'};
-#	} else {
-#		if ( $this->{'maf_file'} ) {
-#			my $maf = basename( $this->{'maf_file'} );
-#			push @outFilename , $maf;
-#		}
-#		if ( defined $this->{'pairwise_file'} ) {
-#			my $clean = basename( $this->{'pairwise_file'} );
-#			if ( $clean ne '' and scalar @outFilename > 1 ) {
-#				push @outFilename , $clean;
-#			} elsif ( $clean ne '' ) {
-#				push @outFilename , $clean;
-#			}
-#		}
-#		if ( defined $this->{'drug_clean_file'} ) {
-#			my $clean = basename( $this->{'drug_clean_file'} );
-#			if ( $clean ne '' and scalar @outFilename > 1 ) {
-#				push @outFilename , $clean;
-#			} elsif ( $clean ne '' ) {
-#				push @outFilename , $clean;
-#			}
-#		}
-#		push @outFilename , $this->{'vertex_type'};
-#		push @outFilename , "l".$this->{'linear_cutoff'};
-#		my $m = "a";
-#		if ( $this->{'distance_measure'} eq $SHORTESTDISTANCE ) { $m = "s"; }
-#		if ( $this->{'3d_distance_cutoff'} != $MAXDISTANCE ) {
-#            if ( $this->{'p_value_cutoff'} != 1 ) {
-#                push @outFilename , "p".$this->{'p_value_cutoff'};
-#                push @outFilename , $m."d".$this->{'3d_distance_cutoff'};
-#            } else {
-#                push @outFilename , $m."d".$this->{'3d_distance_cutoff'};
-#            }
-#        } else {
-#            if ( $this->{'p_value_cutoff'} != 1 ) {
-#                push @outFilename , "p".$this->{'p_value_cutoff'};
-#            }
-#        }
-#		push @outFilename , "r".$this->{'max_radius'};
-#	}
-#	push @outFilename , "clusters";
-#	return join( "." , @outFilename );
-#}
 
 ## NETWORK CLUSTERING - AGGLOMERATIVE HIERARCHICAL CLUSTERING
 sub link {
@@ -523,27 +449,19 @@ sub determineStructureClusters {
 												$mutations , $geodesics , 
 												$structure , $superClusterID , 
 												$subClusterID );
-		#my ( $centroid , $centrality ) = $this->calculateClosenessCentrality( 
-		#										$mutations , $geodesics , 
-		#										$structure );
-		#my $writtenLines = $this->writeCluster( $mutations , $geodesics , $structure , 
-		my ( $writtenLines , $lines ) = $this->writeCluster( $mutations , $geodesics , $structure , 
-				$superClusterID , $subClusterID , $centroid , $centrality );
+		my $writtenLines = $this->collectOutputLines( $mutations , $geodesics , $structure , 
+				$superClusterID , $subClusterID , $centroid , $centrality , $linesToWrite );
 		
 		my $count = $this->checkProcessedDistances( $geodesics , $structure );
 		#print join( "\t" , ( "recluster?" , $count , 
 		#		$superClusterID.".".$subClusterID , $structure ) );
 		if ( $count >= 2 and $writtenLines ) {
-			push @{$linesToWrite} , @{$lines};
 			#$linesToWrite .= join( "\n" , @{$lines} );
 			$subClusterID += 1;
 			#print " yes\n";
-			#$linesToWrite .= $this->determineStructureClusters( $clusterings , 
-								#$mutations , $geodesics , $structure , 
-								#$superClusterID , $subClusterID , $linesToWrite )};
-			push @{$linesToWrite} , @{$this->determineStructureClusters( $clusterings , 
-								$mutations , $geodesics , $structure , 
-								$superClusterID , $subClusterID , $linesToWrite )};
+			$this->determineStructureClusters( $clusterings , 
+					$mutations , $geodesics , $structure , 
+					$superClusterID , $subClusterID , $linesToWrite );
 		#} else {
 			#print " no\n";
 			#return $linesToWrite;
@@ -555,7 +473,7 @@ sub determineStructureClusters {
 	#		print STDOUT "Found ".$numclusters." super-clusters\n";
 	#	}
 	} 
-	return $linesToWrite;
+	return;
 }
 
 #TODO use this method to recalculate closeness centralities of acceptable region 
@@ -572,15 +490,14 @@ sub determineStructureClusters {
 #	}
 #}
 
-sub writeCluster {
-	#$this->writeCluster( $fh , $mutations , $geodesics , $structure , 
+sub collectOutputLines {
+	#$this->collectOutputLines( $fh , $mutations , $geodesics , $structure , 
 	#		$superClusterID , $subClusterID , $centroid , $centrality );
 	my ( $this , $mutations , $geodesics , $structure ,
-		 $superClusterID , $subClusterID , $centroid , $centrality ) = @_;
+		 $superClusterID , $subClusterID , $centroid , $centrality , $linesToWrite ) = @_;
 	my $writtenLines = 0;
-	my @linesToWrite;
 	my $clusterID = $superClusterID;
-	#print STDOUT "HotSpot3D::Cluster::writeCluster\n"; 
+	#print STDOUT "HotSpot3D::Cluster::collectOutputLines\n"; 
 	if ( $this->{'structure_dependence'} eq $DEPENDENT 
 		 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
 		$clusterID = join( "." , ( $superClusterID , $subClusterID , $structure ) );
@@ -597,6 +514,9 @@ sub writeCluster {
 	my $proteinChanges = {};
 	my ( $reportedTranscript , $reportedAAChange );
 	my $weight; # = $weights->{$proteinKey};
+	my $inLines = scalar keys %{$linesToWrite};
+	my $outLines = 0;
+	my @cluster;
 	foreach my $refAlt ( sort keys %{$mutations->{$centroid}} ) {
 #TODO make sure this works for in_frame_ins
 		my ( $reference , $alternate ) = @{ TGI::Mutpro::Main::Cluster::uncombine( $refAlt ) };
@@ -608,7 +528,7 @@ sub writeCluster {
 		( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
 		my $alternateAnnotations = join( "|" , @alternateAnnotations );
 		#$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-		push @linesToWrite , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
+		push @cluster , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
 								   $degrees , $closenessCentrality , 
 								   $geodesic , $weight ,
 								   $chromosome , $start , $stop ,
@@ -641,7 +561,7 @@ sub writeCluster {
 			( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
 			my $alternateAnnotations = join( "|" , @alternateAnnotations );
 			#$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-			push @linesToWrite , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
+			push @cluster , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
 
 									   $degrees , $closenessCentrality , 
 									   $geodesic , $weight ,
@@ -656,13 +576,26 @@ sub writeCluster {
 		#print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
 		$this->setProcessStatus( $structure , $mutationKey2 , 1 );
 	} #foreach other vertex in network
-#	print "LINES TO WRITE = ".(scalar @linesToWrite)."\n";
-	if ( scalar @linesToWrite > 1 ) {
-		#$this->{'results'}->{$structure} .= join( "\n" , @linesToWrite );
-		#$fh->print( $line );
-		$writtenLines = scalar @linesToWrite;
+	$outLines = $this->limitSubClusterSize( \@cluster );
+	if ( $outLines == 0 ) {
+		return 0;
 	}
-	return ( $writtenLines , \@linesToWrite );
+	$writtenLines = $outLines - $inLines;
+	foreach my $line ( @cluster ) {
+		$linesToWrite->{$line} = 1;
+	}
+	#print "LINES TO WRITE = ".(scalar $writtenLines)."\n";
+	return $writtenLines;
+}
+
+sub limitSubClusterSize {
+	my ( $this , $results ) = @_;
+	my $outLines = scalar @{$results};
+	my $minClusterSize = 2;
+	if ( $outLines < $minClusterSize ) {
+		return 0;
+	}
+	return $outLines;
 }
 
 sub floydWarshall {

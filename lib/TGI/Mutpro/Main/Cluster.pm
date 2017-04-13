@@ -513,10 +513,10 @@ sub readPairwise { # shared
 	my $fh = new FileHandle;
 	unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
 	my $pdbCount;
-	map {
+	foreach my $line ( <$fh> ) {
 		my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aa_1 , $chain1 , $loc_1 , $domain1 , $cosmic1 , 
 			 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , $domain2 , $cosmic2 , 
-			 $linearDistance , $infos ) = split /\t/ , $_;
+			 $linearDistance , $infos ) = split /\t/ , $line;
 
 		if ( $this->checkByProvidedLists( $gene1, $gene2, $infos ) ) { # check to filter out mutation pairs according to a given gene list or structures list or both
 			if ( defined $this->{'structure_list_file'} ) { # if true, get only the pdbIDs which are in this list
@@ -524,7 +524,6 @@ sub readPairwise { # shared
 				#print "new infos= $infos\n";
 			}
 			if ( $this->checkMeric( $gene1 , $gene2 , $chain1 , $chain2 ) ) {
-				#print $_."\n";
 				$chain1 =~ s/\[(\w)\]/$1/g;
 				$chain2 =~ s/\[(\w)\]/$1/g;
 				my $proteinMutation = TGI::ProteinVariant->new();
@@ -548,7 +547,7 @@ sub readPairwise { # shared
 									$chain1 , $chain2 , $infos , $pdbCount );
 			}
 		}
-	} $fh->getlines;
+	}
 	$fh->close();
 #	print "DISTANCE MATRIX\n";
 #	foreach my $s ( sort keys %{$distance_matrix} ) {
@@ -688,10 +687,10 @@ sub readMAF{ # shared
 		};
 		push @mafcols , $mafcols{$this->{"weight_header"}};
 	}
-	map {
-		chomp;
-		my @line = split /\t/;
-		#print $_."\n";
+	my $nMutations = 0;
+	foreach my $line ( <$fh> ) {
+		chomp( $line );
+		my @line = split /\t/ , $line;
 		if ( $#line >= $mafcols[-1] && $#line >= $mafcols[-2] ) { #makes sure custom maf cols are in range
 			my ( $gene , $chromosome , $start , $stop , $classification , $reference ,
 				 $alternate , $barID , $transcript_name , $aachange );
@@ -719,10 +718,12 @@ sub readMAF{ # shared
 				$proteinMutation->aminoAcidChange( $aachange );
 				$mutation->addProteinVariant( $proteinMutation );
 				$this->setMutation( $mutations , $mutation , $barID , $weight );
+				$nMutations++;
 			} #if mutation is missense or in frame
 		} #if columns in range
-	} $fh->getlines; #map
+	}
 	$fh->close();
+	print STDOUT $nMutations." mutations from .maf\n";
 	return;
 }
 
@@ -769,24 +770,16 @@ sub getMutationInfo {
 }
 
 sub writeClustersFile {
-	my ( $this ) = @_;
-	print STDOUT "HotSpot3D::Cluster::writeClustersFile\n";
-	my $outFilename = $this->generateFilename();
-	print STDOUT "\tCreating cluster output file: ".$outFilename."\n";
-	my $fh = new FileHandle;
-	die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
-	$fh->print( join( "\t" , ( 	"Cluster" , "Gene/Drug" , "Mutation/Gene" , 
-								"Degree_Connectivity" , "Closeness_Centrality" , 
-								"Geodesic_From_Centroid" , "Weight" , 
-								"Chromosome" , "Start" , "Stop" , 
-								"Reference" , "Alternate" ,
-								"Transcript" , "Alternative_Transcripts"
-							 )
-					)."\n"
-			  );
-	foreach my $structure ( %{$this->{'results'}} ) {
-		if ( exists $this->{'results'}->{$structure} ) {
-			my @mutations = uniq( @{$this->{'results'}->{$structure}} );
+	my ( $this , $fh , $results ) = @_;
+	#print STDOUT "HotSpot3D::Cluster::writeClustersFile\n";
+	#print Dumper( $results );
+	foreach my $line ( sort keys %{$results} ) {
+		$fh->print( $line."\n" );
+	}
+	return;
+	foreach my $structure ( %{$results} ) {
+		if ( exists $results->{$structure} ) {
+			my @mutations = uniq( @{$results->{$structure}} );
 			my $nMutations = scalar( uniq( @mutations ) );
 			if ( $nMutations > 0 ) {
 				print STDOUT "\twriting for structure: ".$structure;
@@ -799,7 +792,6 @@ sub writeClustersFile {
 			}
 		}
 	}
-	$fh->close();
 	return;
 }
 
@@ -900,10 +892,10 @@ sub readDrugClean {
 							$drugcols{"Mutation_Location_In_PDB"} ,
 							$drugcols{"3D_Distance_Information"} );
 		my $pdbCount = {};
-		map { 
-				chomp;
-				my @line = split /\t/; 
-				map{ $_ =~ s/"//g } @line;
+		foreach my $line ( <$fh> ) { 
+				chomp( $line );
+				my @line = split /\t/ , $line;
+				map{ $line =~ s/"//g } @line;
 				my ( $drug, $pdb , $chain1 , $gene, 
 					 $chromosome , $start , $stop , $aaChange , $chain2 , 
 					 $loc, $infos ) = @line[@wantrxcols];
@@ -929,7 +921,7 @@ sub readDrugClean {
 				$this->setDistance( $distance_matrix , $soCalledMutation , 
 									$mutation , $chain1 , $chain2 , 
 									$infos , $pdbCount );
-		} $fh->getlines; 
+		}
 		$fh->close();
 	} #if drug pairs included
 	return;
