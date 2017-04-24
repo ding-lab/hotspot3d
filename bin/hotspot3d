@@ -2,13 +2,13 @@
 #----------------------------------
 # $Authors: Beifang Niu & Adam D Scott
 # $Date: 2013-08-08 13:22:08 -0500 (Thu Aug  8 13:22:08 CDT 2013) $
-# $Revision: 1.6.1 $
+# $Revision: 1.7.0 $
 # $URL: $
 #----------------------------------
 use strict;
 use warnings;
 
-our $VERSION = 'V1.6.1';
+our $VERSION = 'V1.7.0';
 
 use Carp;
 use FileHandle;

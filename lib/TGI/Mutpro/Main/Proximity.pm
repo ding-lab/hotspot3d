@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Proximity;
 #----------------------------------
 # $Authors: Beifang Niu and Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 0.2 $
+# $Revision: 0.3 $
 # $URL: $
 # $Doc: $ proximity pairs searching (main function)
 #----------------------------------
@@ -29,6 +29,7 @@ sub new {
     $this->{'skip_silent'} = undef;
     $this->{'missense_only'} = undef;
     $this->{'data_dir'} = undef;
+    $this->{'uniprot_file'} = undef;
     $this->{'drugport_file'} = undef;
     $this->{'output_prefix'} = '3D_Proximity';
     $this->{'p_value_cutoff'} = undef;
@@ -45,6 +46,193 @@ sub new {
 
 sub process {
     my $this = shift;
+	my ( $prior_dir ) = $this->setOptions();
+	$this->initializeStats();
+	$this->setAcceptableMutationTypes();
+	
+	my $trans_to_uniprot = $this->getTranscriptsToUniprot();
+
+	my $drugport_hash_ref = $this->getDrugport();
+
+    my $maf_hash_ref = $this->parseMaf( $this->{'maf_file'}, $trans_to_uniprot );
+
+    print STDOUT "searching...\n";
+    my ( $pairoutref, $cosmicref, $roiref, $drugport_results_ref, $drugport_nonresults_ref ) = $this->proximitySearching( $maf_hash_ref, $prior_dir, $drugport_hash_ref );
+    print STDOUT "searching done...\n";
+
+	my $sortedHash = $this->gatherOutput( $pairoutref );
+
+	$this->writeMutationMutationPairwise( $sortedHash );
+	$this->writeMutationCOSMIC( $cosmicref );
+	$this->writeMutationROI( $roiref );
+	$this->writeMutationDrugTarget( $drugport_results_ref );
+	$this->writeMutationDrugNontarget( $drugport_nonresults_ref );
+    $this->drug_proximity_postprocessing( $this->{'output_prefix'}, $this->{'drugport_file'} );
+
+	$this->printSummaryStats();
+
+    return 1;
+}
+
+sub printSummaryStats {
+	my $this = shift;
+    print STDOUT "\n\n##################################################\n";
+    print STDOUT "total mutations: " . $this->{'stat'}{'num_muts'} . "\n";
+    print STDOUT "expected mutations: " . $this->{'stat'}{'num_expect_format'} . "\n";
+    print STDOUT "unexpected format mutations: " . $this->{'stat'}{'num_unexpect_format'} . "\n";
+    print STDOUT "mutations with matched uniprot: ". $this->{'stat'}{'num_with_uniprot'} . "\n";
+    print STDOUT "total transcripts with valid uniprot sequences : " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
+    print STDOUT "total transcripts in maf : " . $this->{'stat'}{'num_trans'} . "\n";
+    print STDOUT "total mutations to be analyzed:  " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
+    print STDOUT "total uniprots involved: " . $this->{'stat'}{'num_uniprot_involved'} . "\n";
+    print STDOUT "\n\n##################################################\n";
+	return;
+}
+
+sub writeMutationDrugNontarget {
+	my ( $this , $drugport_nonresults_ref ) = @_;
+    # pour out mutations close to drugs from drugport (nontarget) 
+    my $fh   = new FileHandle;
+    die "Could not create drugport compound close output file (nontarget)\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.nontarget" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.nontarget\n";
+    map { $fh->print( $_."\n" )  } @$drugport_nonresults_ref; $fh->close();
+	return;
+}
+
+sub writeMutationDrugTarget {
+	my ( $this , $drugport_results_ref ) = @_;
+    # pour out mutations close to drugs from drugport 
+    my $fh   = new FileHandle;
+    die "Could not create drugport compound close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.target" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.target\n";
+    map { $fh->print( $_."\n" )  } @$drugport_results_ref; $fh->close();
+	return;
+}
+
+sub writeMutationROI {
+	my ( $this , $roiref ) = @_;
+    # pour out mutations close to ROI
+    my $fh   = new FileHandle;
+    die "Could not create Region of Interest(ROI) close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.roi" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".roi\n";
+    map { $fh->print( $_."\n" )  } @$roiref; $fh->close();
+	return;
+}
+
+sub writeMutationCOSMIC {
+	my ( $this , $cosmicref ) = @_;
+    # pour out mutations close to cosmic
+    my $fh   = new FileHandle;
+    die "Could not create cosmic close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.cosmic" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".cosmic\n";
+    map { $fh->print( $_."\n" )  } @$cosmicref; $fh->close();
+	return;
+}
+
+sub writeMutationMutationPairwise {
+	my ( $this , $sortedHash ) = @_;
+    # output pour out
+    my $fh   = new FileHandle;
+    die "Could not create pairwise close output file\n" unless( $fh->open(">$this->{'output_prefix'}.pairwise") );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".pairwise\n";
+    map {
+		map {
+			$fh->print( $_."\n" );
+			$this->{'stat'}{'proximity_close_eachother'}++;
+		} keys %{$sortedHash->{$_}};
+	} sort {$a<=>$b} keys %{$sortedHash};
+    $fh->close();
+	return;
+}
+
+sub gatherOutput {
+	my ( $this , $pairoutref ) = @_;
+    my $filterHash = {};
+	$this->getMutationMutationPairs( $pairoutref , $filterHash );
+	# pour out proximity pairs
+    my %sortedHash;
+    map {
+		my $mutation1Info = $_;
+		map {
+            my $mutation2Info = $_;
+            my @t = split /\t/, $filterHash->{$mutation1Info}->{$mutation2Info};
+            my $lDistance = $t[0];
+            my %ss = map{ ($_, 1) } split /\|/, $t[1];
+            my ( %dd, $miniP, $pvaluePart ); $pvaluePart = "";
+            foreach my $d (keys %ss) {
+				my @t0 = split / /, $d; $dd{$t0[2]}{$d} = 1;
+			}
+            my @t1 = sort {$a<=>$b} keys %dd;
+            $miniP = $t1[0];
+            foreach my $c ( @t1 ) {
+				foreach my $g ( keys %{$dd{$c}} ) {
+					$pvaluePart .= $g . "|";
+				}
+			}
+            $sortedHash{$miniP}{"$mutation1Info\t$mutation2Info\t$lDistance\t$pvaluePart"} = 1;
+        } keys %{$filterHash->{$mutation1Info}};
+    } keys %{$filterHash};
+	return \%sortedHash;
+}
+
+sub getMutationMutationPairs {
+	my ( $this , $pairoutref , $filterHash ) = @_;
+	map {
+		chomp; @_ = split /\t/;
+		my $mutation1Info = join("\t", @_[0..8]);
+		my $mutation2Info = join("\t", @_[9..17]);
+		print STDOUT $mutation1Info."\t".$mutation2Info."\n";
+		if ( defined $filterHash->{$mutation1Info}->{$mutation2Info} ) {
+			$filterHash->{$mutation1Info}->{$mutation2Info} .= $_[19]; 
+		} elsif ( defined $filterHash->{$mutation2Info}->{$mutation1Info} ) {
+			$filterHash->{$mutation2Info}->{$mutation1Info} .= $_[19];
+		} else {
+			$filterHash->{$mutation1Info}->{$mutation2Info} .= $_[18] . "\t" . $_[19];
+		}
+	} @$pairoutref;
+	return;
+}
+
+sub getDrugport {
+    # parse drugport resuls file
+	my $this = shift;
+    my $drugport_hash_ref = $this->getDrugportInfo( $this->{'drugport_file'} );
+	return $drugport_hash_ref;
+}
+
+sub getTranscriptsToUniprot {
+	my $this = shift;
+    # parse uniprot file 
+    my $trans_to_uniprot = $this->getTransMaptoUniprot( $this->{'uniprot_file'} );
+    $this->{'stat'}{'num_trans_with_uniprot'} = keys %$trans_to_uniprot;
+	return $trans_to_uniprot;
+}
+
+sub initializeStats {
+	my $this = shift;
+    my @t = qw( num_muts
+                num_missense
+                num_silent
+                num_with_uniprot
+                num_unexpect_format
+                num_expect_format
+                num_trans 
+                num_uniprot_involved
+                num_trans_with_uniprot
+                num_uniprot_with_trans
+                num_aa_posmatch
+                num_nearmatch
+                num_aa_nearmatch
+                num_novel
+                num_nt_novel
+                proximity_close_eachother
+                );
+    map{ $this->{'stat'}{$_} = 0; } @t;
+	return;
+}
+
+sub setOptions {
+	my ( $this ) = shift;
     my ( $help, $options );
     unless( @ARGV ) { die $this->help_text(); }
     $options = GetOptions (
@@ -80,102 +268,16 @@ sub process {
     unless( -d $this->{'data_dir'} ) { warn 'You must provide a valid data directory ! ', "\n"; die help_text(); }
     unless( $this->{'maf_file'} and (-e $this->{'maf_file'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
     if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf_file'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
-    my $uniprot_file = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
-    unless( -e $uniprot_file ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
+    $this->{'uniprot_file'} = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
+    unless( -e $this->{'uniprot_file'} ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
     my $prior_dir = "$this->{'data_dir'}\/prioritization";
     unless( -d $prior_dir ) { die "the Prioritization directory $prior_dir does not exist ! \n"; };
-    my @t = qw( num_muts
-                num_missense
-                num_silent
-                num_with_uniprot
-                num_unexpect_format
-                num_expect_format
-                num_trans 
-                num_uniprot_involved
-                num_trans_with_uniprot
-                num_uniprot_with_trans
-                num_aa_posmatch
-                num_nearmatch
-                num_aa_nearmatch
-                num_novel
-                num_nt_novel
-                proximity_close_eachother
-                );
-    map{ $this->{'stat'}{$_} = 0; } @t;
-	$this->setAcceptableMutationTypes();
-    # parse uniprot file 
-    my $trans_to_uniprot = $this->getTransMaptoUniprot( $uniprot_file );
-    $this->{'stat'}{'num_trans_with_uniprot'} = keys %$trans_to_uniprot;
-    # parse drugport resuls file
-    my $drugport_hash_ref = $this->getDrugportInfo( $this->{'drugport_file'} );
-    my $maf_hash_ref = $this->parseMaf( $this->{'maf_file'}, $trans_to_uniprot );
-    $this->{'stat'}{'num_uniprot_involved'} = keys %$maf_hash_ref;
-    my ( $pairoutref, $cosmicref, $roiref, $drugport_results_ref, $drugport_nonresults_ref ) = $this->proximitySearching( $maf_hash_ref, $prior_dir, $drugport_hash_ref );
-    print STDOUT "searching done...\n";
-    my %filterHash; map {
-        chomp; @_ = split /\t/;
-        my $geneOne = join("\t", @_[0..8]);
-        my $geneTwo = join("\t", @_[9..17]);
-        print STDOUT $geneOne."\t".$geneTwo."\n";
-        if ( defined $filterHash{$geneOne}{$geneTwo} ) { $filterHash{$geneOne}{$geneTwo} .= $_[19]; 
-        } elsif ( defined $filterHash{$geneTwo}{$geneOne} ) { $filterHash{$geneTwo}{$geneOne} .= $_[19];
-        } else { $filterHash{$geneOne}{$geneTwo} .= $_[18] . "\t" . $_[19]; }
-    } @$pairoutref;
-    # pour out proximity pairs
-    my %sortedHash;
-    map { my $e = $_;  map {
-            my $f = $_;
-            my @t = split /\t/, $filterHash{$e}{$f};
-            my $lDistance = $t[0];
-            my %ss = map{ ($_, 1) } split /\|/, $t[1];
-            my ( %dd, $miniP, $pvaluePart ); $pvaluePart = "";
-            foreach my $d (keys %ss) { my @t0 = split / /, $d; $dd{$t0[2]}{$d} = 1; }
-            my @t1 = sort {$a<=>$b} keys %dd;
-            $miniP = $t1[0];
-            foreach my $c ( @t1 ) { foreach my $g ( keys %{$dd{$c}} ) { $pvaluePart .= $g . "|"; } }
-            $sortedHash{$miniP}{"$e\t$f\t$lDistance\t$pvaluePart"} = 1;
-        } keys %{$filterHash{$e}};
-    } keys %filterHash;
-    # output pour out
-    my $fh   = new FileHandle;
-    die "Could not create pairwise close output file\n" unless( $fh->open(">$this->{'output_prefix'}.pairwise") );
-	print STDOUT "Creating ".$this->{'output_prefix'}.".pairwise\n";
-    map { map { $fh->print( $_."\n" ); $this->{'stat'}{'proximity_close_eachother'}++; } keys %{$sortedHash{$_}} } sort {$a<=>$b} keys %sortedHash;
-    $fh->close();
-    # pour out mutations close to cosmic
-    die "Could not create cosmic close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.cosmic" ) );
-	print STDOUT "Creating ".$this->{'output_prefix'}.".cosmic\n";
-    map { $fh->print( $_."\n" )  } @$cosmicref; $fh->close();
-    # pour out mutations close to ROI
-    die "Could not create Region of Interest(ROI) close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.roi" ) );
-	print STDOUT "Creating ".$this->{'output_prefix'}.".roi\n";
-    map { $fh->print( $_."\n" )  } @$roiref; $fh->close();
-    # pour out mutations close to drugs from drugport 
-    die "Could not create drugport compound close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.target" ) );
-	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.target\n";
-    map { $fh->print( $_."\n" )  } @$drugport_results_ref; $fh->close();
-    # pour out mutations close to drugs from drugport (nontarget) 
-    die "Could not create drugport compound close output file (nontarget)\n" unless( $fh->open( ">$this->{'output_prefix'}.drugs.nontarget" ) );
-	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.nontarget\n";
-    map { $fh->print( $_."\n" )  } @$drugport_nonresults_ref; $fh->close();
-    # post processing like collapsed clean results
-    $this->drug_proximity_postprocessing( $this->{'output_prefix'}, $this->{'drugport_file'} );
-    print STDOUT "\n\n##################################################\n";
-    print STDOUT "total mutations: " . $this->{'stat'}{'num_muts'} . "\n";
-    print STDOUT "expected mutations: " . $this->{'stat'}{'num_expect_format'} . "\n";
-    print STDOUT "unexpected format mutations: " . $this->{'stat'}{'num_unexpect_format'} . "\n";
-    print STDOUT "mutations with matched uniprot: ". $this->{'stat'}{'num_with_uniprot'} . "\n";
-    print STDOUT "total transcripts with valid uniprot sequences : " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
-    print STDOUT "total transcripts in maf : " . $this->{'stat'}{'num_trans'} . "\n";
-    print STDOUT "total mutations to be analyzed:  " . $this->{'stat'}{'num_trans_with_uniprot'} . "\n";
-    print STDOUT "total uniprots involved: " . $this->{'stat'}{'num_uniprot_involved'} . "\n";
-    print STDOUT "\n\n##################################################\n";
-
-    return 1;
+	return ( $prior_dir );
 }
+
 # parse maf file 
 sub parseMaf {
-    my ( $this, $maf, $tuHashref )  = @_;
+    my ( $this, $maf, $trans_to_uniprot )  = @_;
     my $fh = new FileHandle;
     unless( $fh->open($maf) ) { die "Could not open MAF format mutation file\n" };
     my $i = 0; my %fth;
@@ -209,10 +311,10 @@ sub parseMaf {
                  $fth{$this->{"amino_acid_header"}} );
     my ( %mafHash, %transHash );
     # reading file content
-    while ( my $ll = $fh->getline ) {
-        chomp( $ll );
-        my ( $gene, $chr, $start, $end, $ref, $vart1, $vart2, $type, $trans, $aac ) = (split /\t/, $ll)[@cols];
-        my $tc = join( "\t", $gene, $chr, $start, $end, $aac );
+    while ( my $line = $fh->getline ) {
+        chomp( $line );
+        my ( $gene, $chr, $start, $end, $ref, $vart1, $vart2, $type, $trans, $aac ) = (split /\t/, $line)[@cols];
+        my $mutationKey = join( "\t", $gene, $chr, $start, $end, $aac );
         $this->{'stat'}{'num_muts'}++;
         $transHash{ $trans } = 1;
 		next if ( $this->unacceptable( $type ) );
@@ -226,22 +328,24 @@ sub parseMaf {
         } else { $position = $aac =~ /p\.\D*(\d+)in_frame_ins/i };
         next unless( (defined $position) and ($position =~ /^\d+$/) );
         $this->{'stat'}{'num_expect_format'}++;
-        next unless( defined $tuHashref->{$trans} );
-        my $tmp_uniprot_id = $tuHashref->{$trans}->{'UNIPROT'};
+        next unless( defined $trans_to_uniprot->{$trans} );
+        my $tmp_uniprot_id = $trans_to_uniprot->{$trans}->{'UNIPROT'};
         my $tmp_hit_bool = 0; my $tmp_uniprot_position;
-        foreach my $tmp_pos ( keys %{$tuHashref->{$trans}->{'POSITION'}} ){
-            if ( ($position >= $tmp_pos) and ($position <= $tuHashref->{$trans}->{'POSITION'}->{$tmp_pos}->{'TEND'}) ) {
-                $tmp_uniprot_position = $position - $tmp_pos + $tuHashref->{$trans}->{'POSITION'}->{$tmp_pos}->{'UBEGIN'};
+        foreach my $tmp_pos ( keys %{$trans_to_uniprot->{$trans}->{'POSITION'}} ){
+            if ( ($position >= $tmp_pos) and ($position <= $trans_to_uniprot->{$trans}->{'POSITION'}->{$tmp_pos}->{'TEND'}) ) {
+                $tmp_uniprot_position = $position - $tmp_pos + $trans_to_uniprot->{$trans}->{'POSITION'}->{$tmp_pos}->{'UBEGIN'};
                 $tmp_hit_bool = 1; 
                 last;
             } 
         }
         next if ( $tmp_hit_bool == 0 );
-        $mafHash{ $tmp_uniprot_id }{ $tmp_uniprot_position }{ $tc } = 1;
+        $mafHash{ $tmp_uniprot_id }{ $tmp_uniprot_position }{ $mutationKey } = 1;
         $this->{'stat'}{'num_with_uniprot'}++;
     }
-    $this->{'stat'}{'num_trans'} = keys %transHash;
     $fh->close();
+
+    $this->{'stat'}{'num_trans'} = keys %transHash;
+    $this->{'stat'}{'num_uniprot_involved'} = keys %mafHash;
 
     return \%mafHash;
 }
@@ -428,6 +532,7 @@ sub proximitySearching {
 # post processing of drug results
 sub drug_proximity_postprocessing {
     my ( $this, $output_prefix, $drugport_parsing_results ) = @_;
+    # post processing like collapsed clean results
 	if ( not defined $drugport_parsing_results ) {
 		warn "HotSpot3D Search Warning: Skipping drugport proximity, because no results file given.\n";
 		return;
