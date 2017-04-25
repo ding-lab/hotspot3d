@@ -53,6 +53,23 @@ sub new {
     return $self;
 }
 
+sub convertNameToSingle {
+	my $this = shift;
+	if ( @_ ) {
+		my $aa = shift;
+		if ( $this->isAA( $aa ) ) {
+			return $this->{'ACCEPTED'}->{$aa};
+		}
+		warn "AminoAcid::convertNameToSingle - warnging: ".$aa." is not a three letter amino acid name\n";
+		return $aa;
+	}
+	if ( $this->isAA( $this->name() ) ) {
+		return $this->{'ACCEPTED'}->{$this->name()};
+	}
+	warn "AminoAcid::convertNameToSingle - warnging: ".$this->name()." is not a three letter amino acid name\n";
+	return $this->name();
+}
+
 sub ambiguous {
     my $self = shift;
     if (@_) { $self->{AMBIGUOUS} = shift; }

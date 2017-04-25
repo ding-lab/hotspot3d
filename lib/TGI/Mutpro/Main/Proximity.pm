@@ -60,7 +60,9 @@ sub process {
 	my $maf_hash_ref = $this->parseMaf( $this->{'maf_file'}, $trans_to_uniprot );
 
 	print STDOUT "searching...\n";
-	my ( $pairoutref, $cosmicref, $roiref, $drugport_results_ref, $drugport_nonresults_ref ) = $this->proximitySearching( $maf_hash_ref, $prior_dir, $drugport_hash_ref , $site_hash_ref );
+	my ( $pairoutref , $cosmicref , $roiref , 
+		 $drugport_results_ref , $drugport_nonresults_ref ,
+		 $siteSiteRef , $mutationSiteRef ) = $this->proximitySearching( $maf_hash_ref , $prior_dir , $drugport_hash_ref , $site_hash_ref );
 	print STDOUT "searching done...\n";
 
 	my $sortedHash = $this->gatherOutput( $pairoutref );
@@ -70,6 +72,8 @@ sub process {
 	$this->writeMutationROI( $roiref );
 	$this->writeMutationDrugTarget( $drugport_results_ref );
 	$this->writeMutationDrugNontarget( $drugport_nonresults_ref );
+	$this->writeSiteSite( $siteSiteRef );
+	$this->writeMutationSite( $mutationSiteRef );
 	$this->drug_proximity_postprocessing( $this->{'output_prefix'}, $this->{'drugport_file'} );
 
 	$this->printSummaryStats();
@@ -90,6 +94,50 @@ sub printSummaryStats {
 	print STDOUT "total uniprots involved: " . $this->{'stat'}{'num_uniprot_involved'} . "\n";
 	print STDOUT "\n\n##################################################\n";
 	return;
+}
+
+sub writeMutationSite {
+	my ( $this , $mutationSite ) = @_;
+	# pour out mutations close to sites
+	my $fh   = new FileHandle;
+	die "Could not create mutation-site output file\n" unless( $fh->open( ">$this->{'output_prefix'}.musites" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".musites\n";
+	my $header = $this->mutationSiteHeader( );
+	$fh->print( $header."\n" );
+	map { $fh->print( $_."\n" )  } @$mutationSite; $fh->close();
+	return;
+}
+
+sub mutationSiteHeader {
+	my $this = @_;
+	my @header = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" , "Mutation1" ,
+				   "Chain1" , "Position1" , "Feature1" , "COSMIC1" ,
+				   "Gene2" , "Transcript2" , "TranscriptPosition2" , "Site2" , 
+				   "Chain2" , "Position2" , "Feature2" , "COSMIC2" ,
+				   "LinearDistance" , "DistanceInfo" );
+	return join( "\t" , @header );
+}
+
+sub writeSiteSite {
+	my ( $this , $siteSite ) = @_;
+	# pour out sites close to sites
+	my $fh   = new FileHandle;
+	die "Could not create site-site output file\n" unless( $fh->open( ">$this->{'output_prefix'}.sites" ) );
+	print STDOUT "Creating ".$this->{'output_prefix'}.".sites\n";
+	my $header = $this->siteSiteHeader( );
+	$fh->print( $header."\n" );
+	map { $fh->print( $_."\n" )  } @$siteSite; $fh->close();
+	return;
+}
+
+sub siteSiteHeader {
+	my $this = @_;
+	my @header = ( "Gene1" , "Transcript1" , "TranscriptPosition1" , "Site1" , 
+				   "Chain1" , "Position1" , "Feature1" , "COSMIC1" ,
+				   "Gene2" , "Transcript2" , "TranscriptPosition2" , "Site2" , 
+				   "Chain2" , "Position2" , "Feature2" , "COSMIC2" ,
+				   "LinearDistance" , "DistanceInfo" );
+	return join( "\t" , @header );
 }
 
 sub writeMutationDrugNontarget {
@@ -118,8 +166,19 @@ sub writeMutationROI {
 	my $fh   = new FileHandle;
 	die "Could not create Region of Interest(ROI) close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.roi" ) );
 	print STDOUT "Creating ".$this->{'output_prefix'}.".roi\n";
+	my $header = $this->ROIHeader( );
+	$fh->print( $header."\n" );
 	map { $fh->print( $_."\n" )  } @$roiref; $fh->close();
 	return;
+}
+
+sub ROIHeader {
+	my $this = @_;
+	my @header = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" , "Mutation1" ,
+				   "Chain1" , "Position1" , "Feature1" , "COSMIC1" ,
+				   "Chain2" , "Position2" , "Feature2" , "COSMIC2" ,
+				   "LinearDistance" , "DistanceInfo" );
+	return join( "\t" , @header );
 }
 
 sub writeMutationCOSMIC {
@@ -128,8 +187,19 @@ sub writeMutationCOSMIC {
 	my $fh   = new FileHandle;
 	die "Could not create cosmic close output file\n" unless( $fh->open( ">$this->{'output_prefix'}.cosmic" ) );
 	print STDOUT "Creating ".$this->{'output_prefix'}.".cosmic\n";
+	my $header = $this->COSMICHeader( );
+	$fh->print( $header."\n" );
 	map { $fh->print( $_."\n" )  } @$cosmicref; $fh->close();
 	return;
+}
+
+sub COSMICHeader {
+	my $this = @_;
+	my @header = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" , "Mutation1" ,
+				   "Chain1" , "Position1" , "Feature1" , "COSMIC1" ,
+				   "Chain2" , "Position2" , "Feature2" , "COSMIC2" ,
+				   "LinearDistance" , "DistanceInfo" );
+	return join( "\t" , @header );
 }
 
 sub writeMutationMutationPairwise {
@@ -138,6 +208,8 @@ sub writeMutationMutationPairwise {
 	my $fh   = new FileHandle;
 	die "Could not create pairwise close output file\n" unless( $fh->open(">$this->{'output_prefix'}.pairwise") );
 	print STDOUT "Creating ".$this->{'output_prefix'}.".pairwise\n";
+	my $header = $this->pairwiseHeader( );
+	$fh->print( $header."\n" );
 	map {
 		map {
 			$fh->print( $_."\n" );
@@ -146,6 +218,16 @@ sub writeMutationMutationPairwise {
 	} sort {$a<=>$b} keys %{$sortedHash};
 	$fh->close();
 	return;
+}
+
+sub pairwiseHeader {
+	my $this = @_;
+	my @header = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" , "Mutation1" ,
+				   "Chain1" , "Position1" , "Feature1" , "COSMIC1" ,
+				   "Gene2" , "Chromosome2" , "Start2" , "Stop2" , "Mutation2" ,
+				   "Chain2" , "Position2" , "Feature2" , "COSMIC2" ,
+				   "LinearDistance" , "DistanceInfo" );
+	return join( "\t" , @header );
 }
 
 sub gatherOutput {
@@ -236,6 +318,7 @@ sub setOptions {
 		'prep-dir=s'	=> \$this->{'data_dir'},
 		'output-prefix=s' => \$this->{'output_prefix'},
 		'drugport-file=s' => \$this->{'drugport_file'},
+		'site-file=s' => \$this->{'site_file'},
 		'skip-silent' => \$this->{'skip_silent'},
 		'missense-only' => \$this->{'missense_only'},
 		'p-value-cutoff=f' => \$this->{'p_value_cutoff'},
@@ -264,6 +347,7 @@ sub setOptions {
 	unless( -d $this->{'data_dir'} ) { warn 'You must provide a valid data directory ! ', "\n"; die help_text(); }
 	unless( $this->{'maf_file'} and (-e $this->{'maf_file'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
 	if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf_file'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
+	if ( $this->{'site_file'} ) { unless( -e $this->{'site_file'} ) { warn "site-file provided, but it does not exist!\n"; die $this->help_text(); } }
 	$this->{'uniprot_file'} = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
 	unless( -e $this->{'uniprot_file'} ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
 	my $prior_dir = "$this->{'data_dir'}\/prioritization";
@@ -385,7 +469,7 @@ sub getSites {
 	my ( $this , $trans_to_uniprot ) = @_;
 	my $sites = {};
 	my $fh = new FileHandle;
-	unless( $fh->open( $this->{'sites_file'} ) ) { die "Could not open sites file\n" };
+	unless( $fh->open( $this->{'site_file'} ) ) { die "Could not open sites file\n" };
 	my $i = 0; my %fth;
 	while ( my $ll = $fh->getline ) {
 	   if ( $ll =~ m/^Hugo_Symbol/ ) { chomp( $ll );
@@ -414,7 +498,7 @@ sub getSites {
 		next if ( $tmp_hit_bool == 0 );
 		my $mutationKey = join( "\t", $gene , $transcript , $position , $tmp_uniprot_position , $type );
 		my $uniprotID = $trans_to_uniprot->{$transcript}->{'UNIPROT'};
-		$sites->{ $uniprotID }{ $tmp_uniprot_position }{ $mutationKey } = 1;
+		$sites->{ $uniprotID }{ $tmp_uniprot_position } = $mutationKey;
 	}
 	$fh->close();
 	return $sites;
@@ -572,10 +656,12 @@ sub proximitySearching {
 				} #if drugport
 				if ( $sites ) {
 					if ( $this->siteExists( $sites , $uid1 , $uniprotcor1 ) ) {
+						#print "a site1: ".$sites->{$uid1}->{$uniprotcor1}."\n"; 
 						my ( $gene , $transcript , $position , $uposition , $type ) = split( /\t/ , $sites->{$uid1}->{$uniprotcor1} );
-						my $res = $AA->convertAA( $residue1 );
-						my $sitePart1 = join( "\t" , $gene , $transcript , $position , $uposition , $res , @line[1,2] , $type , $line[6] );
+						my $res = "p.".$AA->convertNameToSingle( $residue1 ).$uposition;
+						my $sitePart1 = join( "\t" , $gene , $transcript , $position , $res , @line[1,2] , $type , $line[6] );
 						if ( $this->siteExists( $sites , $uid2 , $uniprotcor2 ) ) { #site-site
+							#print "a site2: ".$sites->{$uid2}->{$uniprotcor2}."\n"; 
 							#my $mutationKey = join( "\t", $gene, $chr, $start, $end, $aac );
 							#foreach my $mutationKey1 ( keys %{$mafHashref->{$uniprotID}->{$uniprotcor1}} ) {
 							#	foreach my $mutationKey2 ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
@@ -588,11 +674,13 @@ sub proximitySearching {
 							#my $muPart1 = join( "\t" , @line[1,2,5,6] ); #chain, position, domain, cosmic
 							#my $muPart2 = join( "\t" , @line[8,9,12,13] );
 							( $gene , $transcript , $position , $uposition , $type ) = split( /\t/ , $sites->{$uid2}->{$uniprotcor2} );
-							$res = $AA->convertAA( $residue2 );
-							my $sitePart2 = join( "\t" , $gene , $transcript , $position , $uposition , $res , @line[8,9] , $type , $line[13] );
+							$res = "p.".$AA->convertNameToSingle( $residue2 ).$uposition;
+							my $sitePart2 = join( "\t" , $gene , $transcript , $position , $res , @line[8,9] , $type , $line[13] );
 							push( @siteSiteResults , join( "\t" , ( $sitePart1 , $sitePart2 , $lineardis , $proximityinfor ) ) );
 						}
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
+							my $muKeys = join( "|" , keys( %{$mafHashref->{$uid2}->{$uniprotcor2}} ) ); 
+							print "mutation: ".join( "\t" , ( $muKeys, $muPart2 , $sitePart1 , $lineardis , $proximityinfor ) );
 							foreach my $mutationKey ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
 								if ( $this->cutFiltering( $lineardis , $proximityinfor ) ) {
 									push( @mutationSiteResults , join( "\t" , ( $mutationKey , $muPart2 , $sitePart1 , $lineardis , $proximityinfor ) ) );
@@ -601,9 +689,10 @@ sub proximitySearching {
 						}
 					} elsif ( $this->siteExists( $sites , $uid2 , $uniprotcor2 ) ) {
 						if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
+							#print "b site2: ".$sites->{$uid2}->{$uniprotcor2}."\n"; 
 							my ( $gene , $transcript , $position , $uposition , $type ) = split( /\t/ , $sites->{$uid2}->{$uniprotcor2} );
-							my $res = $AA->convertAA( $residue2 );
-							my $sitePart = join( "\t" , $gene , $transcript , $position , $uposition , $res , @line[8,9] , $type , $line[13] );
+							my $res = "p.".$AA->convertNameToSingle( $residue2 ).$uposition;
+							my $sitePart = join( "\t" , $gene , $transcript , $position , $res , @line[8,9] , $type , $line[13] );
 							foreach my $mutationKey ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
 								if ( $this->cutFiltering( $lineardis , $proximityinfor ) ) {
 									push( @mutationSiteResults , join( "\t" , ( $mutationKey , $muPart2 , $sitePart , $lineardis , $proximityinfor ) ) );
@@ -617,7 +706,9 @@ sub proximitySearching {
 		$fh->close();
 	}
 
-	return ( \@pairResults, \@cosmicclose, \@roiclose, \@drugport_target_results, \@drugport_nontarget_results );
+	return ( \@pairResults , \@cosmicclose , \@roiclose , 
+			 \@drugport_target_results , \@drugport_nontarget_results ,
+			 \@siteSiteResults , \@mutationSiteResults );
 }
 
 sub siteExists {
