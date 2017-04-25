@@ -480,23 +480,23 @@ sub getSites {
 	unless (	defined( $fth{ "Hugo_Symbol" } ) 
 			and defined( $fth{ "Position" } )								
 			and defined( $fth{ $this->{ "transcript_id_header" } } )
-			and defined( $fth{ "Type" } )
+			and defined( $fth{ "Feature" } )
 	) {
 		die "not a valid site file with gene, transcript, and position!\n";
 	}
 	my @cols = ( $fth{ "Hugo_Symbol" } ,
 				 $fth{ "Position" } ,
 				 $fth{ $this->{ "transcript_id_header" } } ,
-				 $fth{ "Type" }
+				 $fth{ "Feature" }
 			   );
 	# reading file content
 	while ( my $line = $fh->getline ) {
 		chomp( $line );
-		my ( $gene , $position , $transcript , $type ) = (split /\t/, $line)[@cols];
+		my ( $gene , $position , $transcript , $feature ) = (split /\t/, $line)[@cols];
 		next if ( not exists $trans_to_uniprot->{$transcript} );
 		my ( $tmp_hit_bool , $tmp_uniprot_position ) = $this->getPositionMatch( $trans_to_uniprot , $transcript , $position );
 		next if ( $tmp_hit_bool == 0 );
-		my $mutationKey = join( "\t", $gene , $transcript , $position , $tmp_uniprot_position , $type );
+		my $mutationKey = join( "\t", $gene , $transcript , $position , $tmp_uniprot_position , $feature );
 		my $uniprotID = $trans_to_uniprot->{$transcript}->{'UNIPROT'};
 		$sites->{ $uniprotID }{ $tmp_uniprot_position } = $mutationKey;
 	}
@@ -661,18 +661,6 @@ sub proximitySearching {
 						my $res = "p.".$AA->convertNameToSingle( $residue1 ).$uposition;
 						my $sitePart1 = join( "\t" , $gene , $transcript , $position , $res , @line[1,2] , $type , $line[6] );
 						if ( $this->siteExists( $sites , $uid2 , $uniprotcor2 ) ) { #site-site
-							#print "a site2: ".$sites->{$uid2}->{$uniprotcor2}."\n"; 
-							#my $mutationKey = join( "\t", $gene, $chr, $start, $end, $aac );
-							#foreach my $mutationKey1 ( keys %{$mafHashref->{$uniprotID}->{$uniprotcor1}} ) {
-							#	foreach my $mutationKey2 ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
-							#		if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
-							#			push( @pairResults , join( "\t" , $mutationKey1 , $muPart1 , $mutationKey2 , $muPart2 , $lineardis , $proximityinfor ) );
-							#		}
-							#	}
-							#} 
-							#my $mutationKey = join( "\t", $gene , $transcript , $position , $tmp_uniprot_position , $type );
-							#my $muPart1 = join( "\t" , @line[1,2,5,6] ); #chain, position, domain, cosmic
-							#my $muPart2 = join( "\t" , @line[8,9,12,13] );
 							( $gene , $transcript , $position , $uposition , $type ) = split( /\t/ , $sites->{$uid2}->{$uniprotcor2} );
 							$res = "p.".$AA->convertNameToSingle( $residue2 ).$uposition;
 							my $sitePart2 = join( "\t" , $gene , $transcript , $position , $res , @line[8,9] , $type , $line[13] );
