@@ -939,10 +939,10 @@ sub generateFilename {
 
 sub readMutationSites {
 	my ( $this , $mutations , $distance_matrix ) = @_;
-    if ( defined $this->{'musite_file'} ) { #if musite pairs included
+    if ( defined $this->{'musites_file'} ) { #if musite pairs included
 		print STDOUT "HotSpot3D::Cluster::readMutationSites\n";
 		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'musite_file'} , "r" ) ) {
+		unless( $fh->open( $this->{'musites_file'} , "r" ) ) {
 			die "Could not open musite pairs data file $! \n"
 		};
 		my $msi = 0;
@@ -1015,11 +1015,11 @@ sub readMutationSites {
 			$proteinMutation->transcript( $transcript2 );
 			$proteinMutation->aminoAcidChange( $site2 );
 			$site->addProteinVariant( $proteinMutation );
-			my $weight2 = 1;
-			$this->setMutation( $mutations , $site2 , $feature2 , $weight2 );
 			$this->setDistance( $distance_matrix , $site , 
 								$mutation , $chain1 , $chain2 , 
 								$infos , $pdbCount );
+			my $weight2 = 1;
+			$this->setMutation( $mutations , $site , $feature2 , $weight2 );
 			$nMuSitePairs++;
 		}
 		$fh->close();
@@ -1122,8 +1122,8 @@ sub readSites {
 		}
 		$fh->close();
 		print STDOUT $nSitePairs." site-site pairs from .sites\n";
+		print $this->printMutations( $mutations , "sitesite" );
 	} #if musite pairs included
-	print $this->printMutations( $mutations , "sitesite" );
 	return;
 }
 
