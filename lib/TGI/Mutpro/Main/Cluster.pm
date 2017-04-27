@@ -65,6 +65,7 @@ sub new {
     my $class = shift;
     my $this = {};
     $this->{'maf_file'} = undef;
+    $this->{'site_file'} = undef;
     $this->{'pairwise_file'} = undef;
     $this->{'drug_clean_file'} = undef;
     $this->{'sites_file'} = undef;
@@ -176,6 +177,7 @@ sub setOptions {
         'probability-cut-off=f' => \$this->{'probability_cut_off'},
         'distance-measure=s' => \$this->{'distance_measure'},
         'maf-file=s' => \$this->{'maf_file'},
+        'site-file=s' => \$this->{'site_file'},
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'weight-header=s' => \$this->{'weight_header'},
@@ -242,7 +244,16 @@ sub setOptions {
 			$this->{'3d_distance_cutoff'} = $MAXDISTANCE;
 		}
 	}
+	if ( defined $this->{'site_file'} ) {
+		if ( not -e $this->{'site_file'} ) { 
+			warn "The input site file (".$this->{'site_file'}.") does not exist! ", "\n";
+			die $this->help_text();
+		}
+	} else {
+		warn "HotSpot3D::Cluster::setOptions warning: no site-file included (cannot produce site-site clusters)!\n";
+	}
 	if ( defined $this->{'sites_file'} ) {
+		#$this->requireSite();
 		if ( not -e $this->{'sites_file'} ) { 
 			warn "The input site-site pair file (".$this->{'sites_file'}.") does not exist! ", "\n";
 			die $this->help_text();
@@ -251,6 +262,8 @@ sub setOptions {
 		warn "HotSpot3D::Cluster::setOptions warning: no sites-file included (cannot produce site-site clusters)!\n";
 	}
 	if ( defined $this->{'musites_file'} ) {
+		#$this->requireSite();
+		$this->requireMAF();
 		if ( not -e $this->{'musites_file'} ) { 
 			warn "The input mutation-site pair file (".$this->{'musites_file'}.") does not exist! ", "\n";
 			die $this->help_text();
@@ -259,6 +272,7 @@ sub setOptions {
 		warn "HotSpot3D::Cluster::setOptions warning: no musites-file included (cannot produce mutation-site clusters)!\n";
 	}
 	if ( defined $this->{'drug_clean_file'} ) {
+		$this->requireMAF();
 		if ( not -e $this->{'drug_clean_file'} ) { 
 			warn "The input drug pairs file (".$this->{'drug_clean_file'}.") does not exist! ", "\n";
 			die $this->help_text();
@@ -267,6 +281,7 @@ sub setOptions {
 		warn "HotSpot3D::Cluster::setOptions warning: no drug-clean-file included (cannot produce drug-mutation clusters)!\n";
 	}
     if ( defined $this->{'pairwise_file'} ) {
+		$this->requireMAF();
 		if ( not -e $this->{'pairwise_file'} ) { 
 			warn "HotSpot3D::Cluster::setOptions error: the input pairwise file (".$this->{'pairwise_file'}.") does not exist!\n";
 			die $this->help_text();
@@ -294,14 +309,6 @@ sub setOptions {
 		warn "distance-measure option not recognized as \'shortest\' or \'average\'\n";
 		warn "Using default distance-measure = \'average\'\n";
 		$this->{'distance_measure'} = $AVERAGEDISTANCE;
-	}
-	unless( $this->{'maf_file'} ) {
-		warn 'You must provide a .maf file! ', "\n";
-		die $this->help_text();
-	}
-	unless( -e $this->{'maf_file'} ) {
-		warn "The input .maf file )".$this->{'maf_file'}.") does not exist! ", "\n";
-		die $this->help_text();
 	}
 	my $tempMericHash = {}; ### check for correct meric option 
 	$tempMericHash->{$MULTIMER} = 0;
@@ -348,6 +355,32 @@ sub setOptions {
 	}
 	print STDOUT "====================\n";
 
+	return;
+}
+
+sub requireSite {
+	my $this = shift;
+	unless( $this->{'site_file'} ) {
+		warn "Provided sites-file requires a site-file, but no site-file was given\n";
+		die $this->help_text();
+	}
+	unless ( -e $this->{'site_file'} ) {
+		warn "The site-file, ".$this->{'site_file'}.", does not exist!\n";
+		die $this->help_text();
+	}
+	return;
+}
+
+sub requireMAF {
+	my $this = shift;
+	unless( $this->{'maf_file'} ) {
+		warn "You must provide a maf-file for the pair data provided.\n";
+		die $this->help_text();
+	}
+	unless( -e $this->{'maf_file'} ) {
+		warn "The maf-file, ".$this->{'maf_file'}.", does not exist! ", "\n";
+		die $this->help_text();
+	}
 	return;
 }
 
@@ -808,10 +841,15 @@ sub setMutation {
 	my $refAlt = &combine( $mutation->reference() , $mutation->alternate() );
 	my $proteinKey = $this->makeProteinKey( $mutation );
 	#print "setMutation: ".$refAlt."\n";
-	print join( "\t" , ( $mutationKey , $refAlt , $proteinKey , $barID , $weight ) )."\n";
 
-	#print "PRE-----------------------------------";
-	#print $this->printMutations( $mutations , "set" );
+	#print $this->printMutations( $mutations , "preset" );
+	if ( $refAlt =~ m/$PTM/ ) {
+		if ( exists $mutations->{$mutationKey}->{$refAlt}->{$proteinKey} ) {
+			print "PTM AGAIN\n";
+			print join( "\t" , ( $mutationKey , $refAlt , $proteinKey , $barID , $weight ) )."\n";
+			return;
+		}
+	}
 	if ( exists $mutations->{$mutationKey}->{$refAlt}->{$proteinKey} ) {
 		#print "existing\n";
 		if ( $this->{'vertex_type'} ne $WEIGHT ) {
@@ -827,8 +865,7 @@ sub setMutation {
 			$mutations->{$mutationKey}->{$refAlt}->{$proteinKey} += 1;
 		}
 	} #if mutation exists
-	#print "POST==================================";
-	#print $this->printMutations( $mutations , "set" );
+	#print $this->printMutations( $mutations , "postset" );
 	#my $w = $mutations->{$mutationKey}->{$refAlt}->{$proteinKey};
 	#print "ADDED: ".$w."\n";
 	return;
@@ -937,10 +974,59 @@ sub generateFilename {
 	return join( "." , @outFilename );
 }
 
-sub readMutationSites {
+sub readSite {
+	my ( $this , $mutations ) = @_;
+    if ( defined $this->{'site_file'} ) { #if musite pairs included
+		print STDOUT "HotSpot3D::Cluster::readSite\n";
+		my $fh = new FileHandle;
+		unless( $fh->open( $this->{'site_file'} , "r" ) ) {
+			die "Could not open site list file $! \n"
+		};
+		my $si = 0;
+		my $headline = $fh->getline(); chomp( $headline );
+		my %sitecols = map{ ( $_ , $si++ ) } split( /\t/ , $headline );
+		my @required = ( "Hugo_Symbol" , $this->{'transcript_id_header'} , 
+						 "Position" , "Feature" );
+		unless(	defined( $sitecols{"Hugo_Symbol"} )
+			and defined( $sitecols{$this->{'transcript_id_header'}} )
+			and defined( $sitecols{"Position"} )
+			and defined( $sitecols{"Feature"} ) ) {
+			die "not a valid site file\n";
+		}
+		my @wantsitecols = ( $sitecols{"Hugo_Symbol"} ,
+							$sitecols{$this->{'transcript_id_header'}} ,
+							$sitecols{"Position"} ,
+							$sitecols{"Feature"} );
+		my $nSites = 0;
+		foreach my $line ( <$fh> ) { 
+			chomp( $line );
+			my @line = split /\t/ , $line;
+			my ( $gene , $transcript , $position , $feature ) = @line[@wantsitecols];
+			my $proteinSite = TGI::ProteinVariant->new();
+			my $site = TGI::Variant->new(); #for the purpose of making keys, will look like a mutation
+			$site->gene( $gene );
+			$site->chromosome( $transcript );
+			$site->start( $position );
+			$site->stop( $position );
+			$site->reference( $NULL );
+			$site->alternate( $PTM );
+			$proteinSite->transcript( $transcript );
+			$proteinSite->aminoAcidChange( $site );
+			$site->addProteinVariant( $proteinSite );
+			my $weight = 1;
+			$this->setMutation( $mutations , $site , $feature , $weight );
+			$nSites++;
+		}
+		$fh->close();
+		print STDOUT $nSites." sites\n";
+	} #if site file included
+	return;
+}
+
+sub readMutationSitePairs {
 	my ( $this , $mutations , $distance_matrix ) = @_;
     if ( defined $this->{'musites_file'} ) { #if musite pairs included
-		print STDOUT "HotSpot3D::Cluster::readMutationSites\n";
+		print STDOUT "HotSpot3D::Cluster::readMutationSitePairs\n";
 		my $fh = new FileHandle;
 		unless( $fh->open( $this->{'musites_file'} , "r" ) ) {
 			die "Could not open musite pairs data file $! \n"
@@ -1028,10 +1114,10 @@ sub readMutationSites {
 	return;
 }
 
-sub readSites {
+sub readSiteSitePairs {
 	my ( $this , $mutations , $distance_matrix ) = @_;
     if ( defined $this->{'sites_file'} ) { #if sitesite pairs included
-		print STDOUT "HotSpot3D::Cluster::readSites\n";
+		print STDOUT "HotSpot3D::Cluster::readSiteSitePairs\n";
 		my $fh = new FileHandle;
 		unless( $fh->open( $this->{'sites_file'} , "r" ) ) {
 			die "Could not open sitesite pairs data file $! \n"
@@ -1122,7 +1208,7 @@ sub readSites {
 		}
 		$fh->close();
 		print STDOUT $nSitePairs." site-site pairs from .sites\n";
-		print $this->printMutations( $mutations , "sitesite" );
+		#print $this->printMutations( $mutations , "sitesite" );
 	} #if musite pairs included
 	return;
 }
@@ -1131,7 +1217,7 @@ sub getMutationSitePairs {
 	#$this->getMutationSitePairs( $distance_matrix );
 	my ( $this , $mutations , $distance_matrix ) = @_;
 	print STDOUT "HotSpot3D::Cluster::getMutationSitePairs\n";
-	$this->readMutationSites( $mutations , $distance_matrix );
+	$this->readMutationSitePairs( $mutations , $distance_matrix );
 	return;
 }
 
@@ -1139,7 +1225,7 @@ sub getSiteSitePairs {
 	#$this->getSiteSitePairs( $distance_matrix );
 	my ( $this , $mutations , $distance_matrix ) = @_;
 	print STDOUT "HotSpot3D::Cluster::getSiteSitePairs\n";
-	$this->readSites( $mutations , $distance_matrix );
+	$this->readSiteSitePairs( $mutations , $distance_matrix );
 	return;
 }
 
@@ -1323,8 +1409,10 @@ sub isSameProteinPosition { # shared
 			if ( $aaChange1 =~ m/p\.\D\D*(\d+)\D*/ ) {
 				$aaPosition1 =  $1;
 			} else {
-				print "...next, no match aaChange1\n";
-				next;
+				unless ( $refAlt1 =~ m/$PTM/ ) {
+					print "...next, no match aaChange1\n";
+					next;
+				}
 			}
 			foreach my $refAlt2 ( sort keys %{$mutations->{$mutationKey2}} ) {
 #TODO make sure this works for in_frame_ins
@@ -1335,8 +1423,10 @@ sub isSameProteinPosition { # shared
 					if ( $aaChange2 =~ m/p\.\D\D*(\d+)\D*/ ) {
 						$aaPosition2 =  $1;
 					} else {
-						print "...next, no match aaChange2\n";
-						next;
+						unless ( $refAlt2 =~ m/$PTM/ ) {
+							print "...next, no match aaChange2\n";
+							next;
+						}
 					}
 					next if ( $proteinKey2 !~ /$transcript1/ );
 					#if ( $this->checkProteinPosition( $proteinKey1 , $proteinKey2 ) ) {
@@ -1719,18 +1809,19 @@ HELP
 
 sub help_text {
     my $this = shift;
+#--site-file                  The site list file used in proximity search step
         return <<HELP
 
 Usage: hotspot3d cluster [options]
 
-                             REQUIRED
+                             REQUIRE
 --maf-file                   .maf file used in proximity search step
 
                              REQUIRE AT LEAST ONE
---pairwise-file              A .pairwise file with mutation-mutation pairs
---drug-clean-file            A .drugs.*target.clean file with mutation-drug pairs
 --sites-file                 A .sites file with site-site pairs
---musites-file               A .musites file with mutation-site pairs
+--pairwise-file              A .pairwise file with mutation-mutation pairs (provide maf-file)
+--drug-clean-file            A .drugs.*target.clean file with mutation-drug pairs (provide maf-file)
+--musites-file               A .musites file with mutation-site pairs (provide maf-file and site-file)
 
                              OPTIONAL
 --output-prefix              Output prefix, default: 3D_Proximity
