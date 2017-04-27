@@ -47,6 +47,8 @@ my $DENSITY = "density";
 my $INDEPENDENT = 0; #"independent";
 my $DEPENDENT = 1; #"dependent";
 my $ANY = "any";
+my $MINCLUSTERSIZE = 2;
+my $NULL = "-";
 
 my $MULTIMER = "multimer";
 my $MONOMER = "monomer";
@@ -138,11 +140,8 @@ sub localParallelNetworkClustering {
 		my $superLines = {};
 		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
 			my $lines = {};
-			my $subClusterID = 0;
-			#$lines .= $this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-					#$structure , $superClusterID , $subClusterID , () );
 			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-					$structure , $superClusterID , $subClusterID , $lines );
+					$structure , $superClusterID , $lines );
 			$superLines->{$superClusterID} = $lines;
 		}
 		print STDOUT "children: ".(scalar keys %{$superLines})."\n";
@@ -196,9 +195,8 @@ sub noParallelNetworkClustering {
 	foreach my $structure ( sort keys %{$distance_matrix} ) {
 		foreach my $superClusterID ( sort keys %{$clusterings->{$structure}} ) {
 			my $lines = {};
-			my $subClusterID = 0;
 			$this->determineStructureClusters( $clusterings , $mutations , $distance_matrix , 
-					$structure , $superClusterID , $subClusterID , $lines );
+					$structure , $superClusterID , $lines );
 			$this->writeClustersFile( $fh , $lines );
 		}
 	}
@@ -338,11 +336,75 @@ sub isRadiusOkay {
 	return 0;
 }
 
-sub calculateClosenessCentrality {
-	my ( $this , $mutations , $geodesics , $structure , $superClusterID , $subClusterID ) = @_;
+sub determineCentroid {
+	my ( $this , $mutationKey , $newScore , 
+		 $currentCentroid , $currentScore ) = @_;
+	if ( $newScore > $currentScore ) {
+		return ( $mutationKey , $newScore );
+	}
+	return ( $currentCentroid , $currentScore );
+}
+
+sub determineSubClusters {
+	my ( $this , $centrality , $geodesics , $structure ) = @_;
+	my $subClusters = {};
+	my $moreToFind = 1;
+	my $subClusterID = -1;
+	while ( $moreToFind == 1 ) {
+		my $score = 0;
+		my $centroidScore = 0;
+		my $centroid;
+		$subClusterID++;
+		print "Finding subcluster: ".$subClusterID."\n";
+		my $checked = 0;
+		foreach my $mutationKey ( keys %{$centrality} ) {
+			next if $this->hasBeenProcessed( $structure , $mutationKey );
+			$checked++;
+			foreach my $refAlt ( keys %{$centrality->{$mutationKey}} ) {
+				$score = $centrality->{$mutationKey}->{$refAlt};
+				( $centroid , $centroidScore ) = $this->determineCentroid( 
+						$mutationKey , $score ,	$centroid , $centroidScore );
+			}
+		}
+		my $vertices = 0;
+		if ( defined $centroid ) {
+			foreach my $mutationKey ( keys %{$geodesics->{$structure}->{$centroid}} ) {
+				next if $this->hasBeenProcessed( $structure , $mutationKey );
+				if ( $mutationKey eq $centroid ) {
+					#print $subClusterID." - CENTROID: ".$mutationKey."\n";
+					$this->setProcessStatus( $structure , $mutationKey , 1 );
+					$subClusters->{$structure}->{$subClusterID}->{'centroid'} = $mutationKey;
+					$vertices++;
+					next;
+				}
+				if ( $this->isRadiusOkay( $geodesics , $structure , 
+							$centroid , $mutationKey ) ) {
+					#print $subClusterID." - NEIGHBOR: ".$mutationKey."\n";
+					$this->setProcessStatus( $structure , $mutationKey , 1 );
+					$subClusters->{$structure}->{$subClusterID}->{'neighbors'}->{$mutationKey} = 1;
+					$vertices++;
+				}
+			}
+		}
+		if ( $vertices < $MINCLUSTERSIZE ) {
+			if ( not $this->anyFiniteGeodesicsRemaining( $geodesics , $structure ) ) {
+				#print "Checked ".$checked.", but found no new cluster\n";
+				$moreToFind = 0;
+			} else {
+				#print "Found ".$vertices." from ".$checked." checked in ".$subClusterID." with centroid ".$centroid."\n";
+			}
+		} else {
+			print "Found ".$vertices." from ".$checked." checked in ".$subClusterID." with centroid ".$centroid."\n";
+		}
+	}
+	return $subClusters;
+}
+
+sub calculateVertexScore {
+	my ( $this , $mutations , $geodesics , $structure ) = @_;
 	#my ( $this , $mutations , $geodesics , $structure ) = @_;
 	my $centrality = {};
-	#print STDOUT "HotSpot3D::Cluster::calculateClosenessCentrality\n";#.$x." by ";
+	#print STDOUT "HotSpot3D::Cluster::calculateVertexScore\n";#.$x." by ";
 	my $max=0;
 	my $centroid = "";
 	my ( $mutationKey1 , $mutationKey2 , $weight );
@@ -386,15 +448,11 @@ sub calculateClosenessCentrality {
 							}
 						}
 					}
-					$centrality->{$superClusterID}->{$subClusterID}->{$mutationKey1} = $C;
-					#$centrality->{$mutationKey1} = $C;
-					if ( $C > $max ) {
-						$max = $C;
-						$centroid = $mutationKey1;
-					}
+					$centrality->{$mutationKey1}->{$refAlt1} = $C;
 					#print join( "\t" , ( "cid=".$superClusterID.".".$subClusterID , "cent=".$centroid , "maxCc=".$max , "Cc=".$C ) )."\n";
 				} #foreach refAlt2
 			} #foreach mutationKey2
+			#print "Score of ".$mutationKey1.":".$refAlt1." = ".$C."\n";
 		} #foreach refAlt1
 	} #foreach mutationKey1
 	#print join( "\t" , ( "result from calculation: " , $centroid , $max ) )."\n";
@@ -406,34 +464,16 @@ sub calculateClosenessCentrality {
 #		}
 #	}
 
-	return ( $centroid , $centrality );
+	return $centrality;
 }
 
-#sub determineCentroid {
-#	my ( $this , $centrality , $superClusterID ) = @_;
-#	my $max = 0;
-#	my $centroid = "";
-#	foreach my $mutationKey ( keys %{$centrality->{$superClusterID}} ) {
-#		my $C = $centrality->{$superClusterID}->{$mutationKey};
-#		if ( $C > $max ) {
-#			$max = $C;
-#			$centroid = $mutationKey1;
-#		}
-#	}
-#	return ( $centroid , $max );
-#}
-
 sub anyFiniteGeodesicsRemaining {
-	my ( $this , $mutations , $geodesics , $structure ) = @_;
+	my ( $this , $geodesics , $structure ) = @_;
 	foreach my $mutationKey1 ( keys %{$geodesics->{$structure}} ) {
 		next if ( $this->hasBeenProcessed( $structure , $mutationKey1 ) );
 		foreach my $mutationKey2 ( keys %{$geodesics->{$structure}->{$mutationKey1}} ) {
 			next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) 
 				and not $this->isRadiusOkay( $geodesics , $structure , $mutationKey1 , $mutationKey2 ) );
-			#my $sumWeights1 = &sum( $this->mutationWeights( $mutations , $mutationKey1 ) );
-			#my $sumWeights2 = &sum( $this->mutationWeights( $mutations , $mutationKey2 ) );
-			#next if ( $sumWeights1 == 1 and $sumWeights2 == 1 );
-			#print "FINITE: ".join( "..." , ( $mutationKey1 , $mutationKey2 , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\n";
 			return 1;
 		}
 	}
@@ -442,41 +482,16 @@ sub anyFiniteGeodesicsRemaining {
 
 sub determineStructureClusters {
 	my ( $this , $clusterings , $mutations , $distance_matrix ,
-		 $structure , $superClusterID , $subClusterID , $linesToWrite ) = @_;
-	#print STDOUT "HotSpot3D::Cluster::determineStructureClusters\n";
-	#print "\t".$structure."\t".$superClusterID.".".$subClusterID."\n";
+		 $structure , $superClusterID , $linesToWrite ) = @_;
+	print STDOUT "HotSpot3D::Cluster::determineStructureClusters\n";
+	print "\t".$structure."\t".$superClusterID."\n";
 	my $geodesics = $this->initializeGeodesics( $clusterings , $superClusterID ,
 							$structure , $distance_matrix , $mutations );
-	if ( $this->anyFiniteGeodesicsRemaining( $mutations , $geodesics , $structure ) ) {
-		$this->floydWarshall( $geodesics , $structure );
-		my ( $centroid , $centrality ) = $this->calculateClosenessCentrality( 
-												$mutations , $geodesics , 
-												$structure , $superClusterID , 
-												$subClusterID );
-		my $writtenLines = $this->collectOutputLines( $mutations , $geodesics , $structure , 
-				$superClusterID , $subClusterID , $centroid , $centrality , $linesToWrite );
-		
-		my $count = $this->checkProcessedDistances( $geodesics , $structure );
-		#print join( "\t" , ( "recluster?" , $count , 
-		#		$superClusterID.".".$subClusterID , $structure ) );
-		if ( $count >= 2 and $writtenLines ) {
-			#$linesToWrite .= join( "\n" , @{$lines} );
-			$subClusterID += 1;
-			#print " yes\n";
-			$this->determineStructureClusters( $clusterings , 
-					$mutations , $geodesics , $structure , 
-					$superClusterID , $subClusterID , $linesToWrite );
-		#} else {
-			#print " no\n";
-			#return $linesToWrite;
-		}
-	#	my $numstructures = scalar keys %{$distance_matrix->{$structure}};
-	#	if ( $this->{'structure_dependence'} eq $DEPENDENT ) {
-	#		print STDOUT "Found ".$numclusters." super-clusters on ".$numstructures." structures\n";
-	#	} else {
-	#		print STDOUT "Found ".$numclusters." super-clusters\n";
-	#	}
-	} 
+	$this->floydWarshall( $geodesics , $structure );
+	my $centrality = $this->calculateVertexScore( $mutations , $geodesics , $structure );
+	my $subClusters = $this->determineSubClusters( $centrality , $geodesics , $structure );
+	$this->collectOutputLines( $mutations , $geodesics , $structure , 
+			$superClusterID , $centrality , $subClusters , $linesToWrite );
 	return;
 }
 
@@ -498,75 +513,38 @@ sub collectOutputLines {
 	#$this->collectOutputLines( $fh , $mutations , $geodesics , $structure , 
 	#		$superClusterID , $subClusterID , $centroid , $centrality );
 	my ( $this , $mutations , $geodesics , $structure ,
-		 $superClusterID , $subClusterID , $centroid , $centrality , $linesToWrite ) = @_;
-	my $writtenLines = 0;
+		 $superClusterID , $centrality , $subClusters , $linesToWrite ) = @_;
 	my $clusterID = $superClusterID;
-	#print STDOUT "HotSpot3D::Cluster::collectOutputLines\n"; 
-	if ( $this->{'structure_dependence'} eq $DEPENDENT 
-		 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
-		$clusterID = join( "." , ( $superClusterID , $subClusterID , $structure ) );
-	} else {
-		$clusterID = join( "." , ( $superClusterID , $subClusterID ) );
-	}
-	#print "\tcluster ID ".$clusterID."\n";
-	my $geodesic = 0;
-	my $degrees = scalar keys %{$geodesics->{$structure}->{$centroid}}; #TODO update to only count subcluster nodes
-	my $closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$centroid};
-	#my $closenessCentrality = $centrality->{$centroid};
-	my ( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $centroid )};
-	my @alternateAnnotations;
-	my $proteinChanges = {};
-	my ( $reportedTranscript , $reportedAAChange );
-	my $weight; # = $weights->{$proteinKey};
-	my $inLines = scalar keys %{$linesToWrite};
-	my $outLines = 0;
-	my @cluster;
-	foreach my $refAlt ( sort keys %{$mutations->{$centroid}} ) {
-#TODO make sure this works for in_frame_ins
-		my ( $reference , $alternate ) = @{ TGI::Mutpro::Main::Cluster::uncombine( $refAlt ) };
-		@alternateAnnotations = sort keys %{$mutations->{$centroid}->{$refAlt}};
-		#print join( "," , ( @alternateAnnotations ) )."\n";
-		my $reported = shift @alternateAnnotations;
-		#print "\t".$reported."\n";
-		$weight = $mutations->{$centroid}->{$refAlt}->{$reported};
-		( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
-		my $alternateAnnotations = join( "|" , @alternateAnnotations );
-		#$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-		push @cluster , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-								   $degrees , $closenessCentrality , 
-								   $geodesic , $weight ,
-								   $chromosome , $start , $stop ,
-								   $reference , $alternate ,
-								   $reportedTranscript , $alternateAnnotations
-								 )
-						);
-				  #);
-		#$writtenLines += 1;
-	} #foreach refAlt
-	$this->setProcessStatus( $structure , $centroid , 1 );
-	foreach my $mutationKey2 ( sort keys %{$geodesics->{$structure}->{$centroid}} ) {
-		next if ( $this->hasBeenProcessed( $structure , $mutationKey2 ) );
-		$geodesic = $geodesics->{$structure}->{$centroid}->{$mutationKey2};
-		next if ( $geodesic > $this->{'max_radius'} ); 
-		#print $centroid." geodesic to ".$mutationKey2."\t".$geodesic."\n";
-		$degrees = scalar keys %{$geodesics->{$structure}->{$mutationKey2}}; #TODO update to only count subcluster nodes
-		$closenessCentrality = $centrality->{$superClusterID}->{$subClusterID}->{$mutationKey2};
-		#$closenessCentrality = $centrality->{$mutationKey2};
-		( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $mutationKey2 )};
-		$proteinChanges = {};
-		foreach my $refAlt ( sort keys %{$mutations->{$mutationKey2}} ) {
+	foreach my $subClusterID ( sort {$a<=>$b} keys %{$subClusters->{$structure}} ) {
+		#print STDOUT "HotSpot3D::Cluster::collectOutputLines\n"; 
+		my $centroid = $subClusters->{$structure}->{$subClusterID}->{'centroid'};
+		if ( $this->{'structure_dependence'} eq $DEPENDENT 
+			 or $this->{'subunit_dependence'} eq $DEPENDENT ) {
+			$clusterID = join( "." , ( $superClusterID , $subClusterID , $structure ) );
+		} else {
+			$clusterID = join( "." , ( $superClusterID , $subClusterID ) );
+		}
+		print "\tcluster ID ".$clusterID." has centroid ".$centroid."\n";
+		my $geodesic = 0;
+		my $degrees = $this->getDegrees( $geodesics , $structure , $centroid );
+		my ( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $centroid )};
+		my @alternateAnnotations;
+		my $proteinChanges = {};
+		my ( $reportedTranscript , $reportedAAChange );
+		my $weight;
+		foreach my $refAlt ( sort keys %{$mutations->{$centroid}} ) {
+			my $closenessCentrality = $centrality->{$centroid}->{$refAlt};
 #TODO make sure this works for in_frame_ins
 			my ( $reference , $alternate ) = @{ TGI::Mutpro::Main::Cluster::uncombine( $refAlt ) };
-			@alternateAnnotations = sort keys %{$mutations->{$mutationKey2}->{$refAlt}};
-			#print join( "," , ( @alternateAnnotations ) )."\n";
+			@alternateAnnotations = sort keys %{$mutations->{$centroid}->{$refAlt}};
 			my $reported = shift @alternateAnnotations;
-			#print "\t".$reported."\n";
-			$weight = $mutations->{$mutationKey2}->{$refAlt}->{$reported};
+			$weight = $mutations->{$centroid}->{$refAlt}->{$reported};
 			( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
 			my $alternateAnnotations = join( "|" , @alternateAnnotations );
-			#$fh->print( join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-			push @cluster , join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-
+			if ( not defined $alternateAnnotations ) {
+				$alternateAnnotations = $NULL;
+			}
+			my $out = join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
 									   $degrees , $closenessCentrality , 
 									   $geodesic , $weight ,
 									   $chromosome , $start , $stop ,
@@ -574,29 +552,60 @@ sub collectOutputLines {
 									   $reportedTranscript , $alternateAnnotations
 									 )
 							);
-					  #);
-			#$writtenLines += 1;
+			$linesToWrite->{$out} = 1;
 		} #foreach refAlt
-		#print "deleting: ".$mutationKey2." and distances with centroid ".$centroid."\n";
-		$this->setProcessStatus( $structure , $mutationKey2 , 1 );
-	} #foreach other vertex in network
-	$outLines = $this->limitSubClusterSize( \@cluster );
-	if ( $outLines == 0 ) {
-		return 0;
+		$this->setProcessStatus( $structure , $centroid , 2 );
+		foreach my $mutationKey2 ( sort keys %{$subClusters->{$structure}->{$subClusterID}->{'neighbors'}} ) {
+			$geodesic = $geodesics->{$structure}->{$centroid}->{$mutationKey2};
+			#print $centroid." geodesic to ".$mutationKey2."\t".$geodesic."\n";
+			$degrees = $this->getDegrees( $geodesics , $structure , $mutationKey2 );
+			( $gene , $chromosome , $start , $stop ) = @{$this->splitMutationKey( $mutationKey2 )};
+			$proteinChanges = {};
+			foreach my $refAlt ( sort keys %{$mutations->{$mutationKey2}} ) {
+#TODO make sure this works for in_frame_ins
+				my $closenessCentrality = $centrality->{$mutationKey2}->{$refAlt};
+				my ( $reference , $alternate ) = @{ TGI::Mutpro::Main::Cluster::uncombine( $refAlt ) };
+				@alternateAnnotations = sort keys %{$mutations->{$mutationKey2}->{$refAlt}};
+				my $reported = shift @alternateAnnotations;
+				$weight = $mutations->{$mutationKey2}->{$refAlt}->{$reported};
+				( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
+				my $alternateAnnotations = join( "|" , @alternateAnnotations );
+				if ( not defined $alternateAnnotations ) {
+					$alternateAnnotations = $NULL;
+				}
+				my $out = join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
+
+										   $degrees , $closenessCentrality , 
+										   $geodesic , $weight ,
+										   $chromosome , $start , $stop ,
+										   $reference , $alternate ,
+										   $reportedTranscript , $alternateAnnotations
+										 )
+								);
+				$linesToWrite->{$out} = 1;
+			} #foreach refAlt
+			$this->setProcessStatus( $structure , $mutationKey2 , 2 );
+		} #foreach other vertex in network
+	} #foreach subClusterID
+	return;
+}
+
+sub getDegrees {
+	my ( $this , $geodesics , $structure , $mutationKey ) = @_;
+	my $degrees = 0;
+	foreach my $neighbor ( keys %{$geodesics->{$structure}->{$mutationKey}} ) {
+		my $geodesic = $geodesics->{$structure}->{$mutationKey}->{$neighbor};
+		if ( $geodesic < $this->{'3d_distance_cutoff'} ) {
+			$degrees++;
+		}
 	}
-	$writtenLines = $outLines - $inLines;
-	foreach my $line ( @cluster ) {
-		$linesToWrite->{$line} = 1;
-	}
-	#print "LINES TO WRITE = ".(scalar $writtenLines)."\n";
-	return $writtenLines;
+	return $degrees;
 }
 
 sub limitSubClusterSize {
 	my ( $this , $results ) = @_;
 	my $outLines = scalar @{$results};
-	my $minClusterSize = 2;
-	if ( $outLines < $minClusterSize ) {
+	if ( $outLines < $MINCLUSTERSIZE ) {
 		return 0;
 	}
 	return $outLines;

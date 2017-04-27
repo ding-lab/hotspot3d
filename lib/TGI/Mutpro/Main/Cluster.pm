@@ -845,8 +845,8 @@ sub setMutation {
 	#print $this->printMutations( $mutations , "preset" );
 	if ( $refAlt =~ m/$PTM/ ) {
 		if ( exists $mutations->{$mutationKey}->{$refAlt}->{$proteinKey} ) {
-			print "PTM AGAIN\n";
-			print join( "\t" , ( $mutationKey , $refAlt , $proteinKey , $barID , $weight ) )."\n";
+			#print "PTM AGAIN\n";
+			#print join( "\t" , ( $mutationKey , $refAlt , $proteinKey , $barID , $weight ) )."\n";
 			return;
 		}
 	}
