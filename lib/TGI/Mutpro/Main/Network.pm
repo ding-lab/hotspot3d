@@ -76,8 +76,18 @@ sub process {
  	my $mutations = {};
 
 	$this->readMAF( $temp_mutations );
-	$this->getDrugMutationPairs( $temp_distance_matrix );
+	$this->getDrugMutationPairs( $temp_mutations , $temp_distance_matrix );
+	#$this->printMutations( $temp_mutations , "postdrugmutations" );
+	#print "DRUGMUTATION\n";
+	$this->getMutationSitePairs( $temp_mutations , $temp_distance_matrix );
+	#$this->printMutations( $temp_mutations , "postmutationsites" );
+	#print "MUTATIONSITE\n";
+	$this->getSiteSitePairs( $temp_mutations , $temp_distance_matrix );
+	#$this->printMutations( $temp_mutations , "postsites" );
+	#print "SITESITE\n";
 	$this->getMutationMutationPairs( $temp_distance_matrix );
+	#$this->printMutations( $temp_mutations , "postmutationmutations" );
+	#print "MUTATIONMUTATION\n";
 	$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
 	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
 	$this->networkClustering( $mutations , $distance_matrix );
