@@ -81,6 +81,12 @@ sub process {
 	return 1;
 }
 
+sub siteListFile {
+	my $this = shift;
+	if ( @_ ) { $this->{'site_file'} = shift; }
+	return $this->{'site_file'};
+}
+
 sub printSummaryStats {
 	my $this = shift;
 	print STDOUT "\n\n##################################################\n";
@@ -347,7 +353,7 @@ sub setOptions {
 	unless( -d $this->{'data_dir'} ) { warn 'You must provide a valid data directory ! ', "\n"; die help_text(); }
 	unless( $this->{'maf_file'} and (-e $this->{'maf_file'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
 	if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf_file'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
-	if ( $this->{'site_file'} ) { unless( -e $this->{'site_file'} ) { warn "site-file provided, but it does not exist!\n"; die $this->help_text(); } }
+	if ( $this->siteListFile() ) { unless( -e $this->siteListFile() ) { warn "site-file provided, but it does not exist!\n"; die $this->help_text(); } }
 	$this->{'uniprot_file'} = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
 	unless( -e $this->{'uniprot_file'} ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
 	my $prior_dir = "$this->{'data_dir'}\/prioritization";
@@ -468,39 +474,41 @@ sub getTransMaptoUniprot {
 sub getSites {
 	my ( $this , $trans_to_uniprot ) = @_;
 	my $sites = {};
-	my $fh = new FileHandle;
-	unless( $fh->open( $this->{'site_file'} ) ) { die "Could not open sites file\n" };
-	my $i = 0; my %fth;
-	while ( my $ll = $fh->getline ) {
-	   if ( $ll =~ m/^Hugo_Symbol/ ) { chomp( $ll );
-			%fth = map {($_, $i++)} split( /\t/, $ll );
-			last;
-	   }
+	if ( defined $this->siteListFile() ) {
+		my $fh = new FileHandle;
+		unless( $fh->open( $this->siteListFile() ) ) { die "Could not open sites file\n" };
+		my $i = 0; my %fth;
+		while ( my $ll = $fh->getline ) {
+		   if ( $ll =~ m/^Hugo_Symbol/ ) { chomp( $ll );
+				%fth = map {($_, $i++)} split( /\t/, $ll );
+				last;
+		   }
+		}
+		unless (	defined( $fth{ "Hugo_Symbol" } ) 
+				and defined( $fth{ "Position" } )								
+				and defined( $fth{ $this->{ "transcript_id_header" } } )
+				and defined( $fth{ "Feature" } )
+		) {
+			die "not a valid site file with gene, transcript, and position!\n";
+		}
+		my @cols = ( $fth{ "Hugo_Symbol" } ,
+					 $fth{ "Position" } ,
+					 $fth{ $this->{ "transcript_id_header" } } ,
+					 $fth{ "Feature" }
+				   );
+		# reading file content
+		while ( my $line = $fh->getline ) {
+			chomp( $line );
+			my ( $gene , $position , $transcript , $feature ) = (split /\t/, $line)[@cols];
+			next if ( not exists $trans_to_uniprot->{$transcript} );
+			my ( $tmp_hit_bool , $tmp_uniprot_position ) = $this->getPositionMatch( $trans_to_uniprot , $transcript , $position );
+			next if ( $tmp_hit_bool == 0 );
+			my $mutationKey = join( "\t", $gene , $transcript , $position , $tmp_uniprot_position , $feature );
+			my $uniprotID = $trans_to_uniprot->{$transcript}->{'UNIPROT'};
+			$sites->{ $uniprotID }{ $tmp_uniprot_position } = $mutationKey;
+		}
+		$fh->close();
 	}
-	unless (	defined( $fth{ "Hugo_Symbol" } ) 
-			and defined( $fth{ "Position" } )								
-			and defined( $fth{ $this->{ "transcript_id_header" } } )
-			and defined( $fth{ "Feature" } )
-	) {
-		die "not a valid site file with gene, transcript, and position!\n";
-	}
-	my @cols = ( $fth{ "Hugo_Symbol" } ,
-				 $fth{ "Position" } ,
-				 $fth{ $this->{ "transcript_id_header" } } ,
-				 $fth{ "Feature" }
-			   );
-	# reading file content
-	while ( my $line = $fh->getline ) {
-		chomp( $line );
-		my ( $gene , $position , $transcript , $feature ) = (split /\t/, $line)[@cols];
-		next if ( not exists $trans_to_uniprot->{$transcript} );
-		my ( $tmp_hit_bool , $tmp_uniprot_position ) = $this->getPositionMatch( $trans_to_uniprot , $transcript , $position );
-		next if ( $tmp_hit_bool == 0 );
-		my $mutationKey = join( "\t", $gene , $transcript , $position , $tmp_uniprot_position , $feature );
-		my $uniprotID = $trans_to_uniprot->{$transcript}->{'UNIPROT'};
-		$sites->{ $uniprotID }{ $tmp_uniprot_position } = $mutationKey;
-	}
-	$fh->close();
 	return $sites;
 }
 

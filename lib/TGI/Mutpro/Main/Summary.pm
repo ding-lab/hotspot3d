@@ -1,9 +1,9 @@
 package TGI::Mutpro::Main::Summary;
 #
 #----------------------------------
-# $Authors: Adam Scott
+# $Authors: Adam Scott and Matthew Bailey
 # $Date: 2015-05-21
-# $Revision:  $
+# $Revision: 0.3 $
 # $URL: $
 # $Doc: $ summarize clusters
 # 
@@ -22,6 +22,11 @@ use List::Util qw( min max );
 use IO::File;
 use FileHandle;
 
+my $PTM = "ptm";
+my $NULL = "NA";
+my $fill = "%.3f"."\t";
+my $count = "%i"."\t";
+
 sub new {
     my $class = shift;
     my $this = {};
@@ -30,12 +35,17 @@ sub new {
     $this->{mutationmass} = {};
     $this->{recurrencemass} = {};
     $this->{drugmass} = {};
+    $this->{vertexmass} = {};
+    $this->{vertices} = {};
     $this->{degrees} = {};
     $this->{centralities} = {};
     $this->{geodesics} = {};
     $this->{centroids} = {};
     $this->{genes} = {};
+    $this->{genomicmutations} = {};
     $this->{aas} = {};
+    $this->{sites} = {};
+    $this->{residues} = {};
     $this->{transcripts} = {};
     bless $this, $class;
     $this->process();
@@ -80,7 +90,9 @@ sub generateOutputFileName {
 sub readClustersFile {
 	my ( $this ) = @_;
 	my $infh = new FileHandle;
-	unless( $infh->open( $this->{'clusters_file'} , "r" ) ) { die "Could not open clusters file $! \n" };
+	unless( $infh->open( $this->{'clusters_file'} , "r" ) ) {
+		die "Could not open clusters file $! \n";
+	}
 	my @cols;
 	while ( my $line = <$infh> ) {
 		chomp( $line );
@@ -116,41 +128,56 @@ sub readClustersFile {
 						$cols{"Transcript"} 
 						 );
 		} else {
-			my ( $id , $genedrug , $aagene , $degree , $centrality , $geodesic , $recurrence, $chromosome, $start, $stop, $ref, $alt, $trans, $alt_trans ) = (split( "\t" , $line ))[@cols];
+			my @line = split( "\t" , $line );
+			my ( $id , $genedrug , $aagene , $degree , $centrality , 
+				 $geodesic , $recurrence, $chromosome, $start, $stop, 
+				 $ref, $alt, $trans, $alt_trans 
+			) = @line[@cols];
+
 			$this->sum( 'degrees' , $id , $degree );
 			$this->sum( 'centralities' , $id , $centrality );
 			$this->sum( 'geodesics' , $id , $geodesic );
-			$this->{genes}->{$id}->{$genedrug} = 1;
-			$this->{transcripts}->{$id}->{$trans} = 1;
-                        if (! exists $this->{aas}->{$id}){
-				$this->{aas}->{$id} = ();
-                        } 
+			$this->{transcripts}->{$id}->{$trans} += 1;
+			#if (! exists $this->{aas}->{$id}){
+			#	$this->{aas}->{$id} = ();
+			#} 
 			my @list;
 			if ( $aagene =~ /p\./ ) {
-				push @{$this->{aas}->{$id}}, $aagene; 
+				$this->{genes}->{$id}->{$genedrug} += 1;
+				my $mutationKey = $this->makeMutationKey( $genedrug , 
+						$chromosome , $start , $stop , $ref , $alt );
+				if ( $mutationKey =~ m/$PTM/ ) {
+					push @{$this->{sites}->{$id}} , $aagene;
+				} else {
+					push @{$this->{genomicmutation}->{$id}} , $mutationKey;
+					push @{$this->{aas}->{$id}}, $aagene; 
+					$this->sum( 'mutationmass' , $id , 1 );
+					$this->sum( 'recurrencemass' , $id , $recurrence );
+				}
+				my $position = $1 if $aagene =~ m/p\.\D*(\d+).*/;
+				print $aagene."\t".$position."\n";
+				push @{$this->{residues}->{$id}} , $position;
 				if ( $geodesic == 0 ) { $this->{centroids}->{$id} = $genedrug.":".$aagene; }
-				$this->sum( 'mutationmass' , $id , 1 );
-				$this->sum( 'recurrencemass' , $id , $recurrence );
-				#if ( $families ) { &sumlist( $family , $id , $families , $recurrence ); }
-				#if ( $doms ) { &sumlist( $domains , $id , $doms , $recurrence ); }
-				#$this->list( 'family' , $id , $families );
-				#$this->list( 'domains' , $id , $doms );
-				#if ( $dmkb !~ /NULL/ ) {
-				#	&sum( $DMKB , $id , $recurrence );
-				#	$DMKBs->{$id}->{$genedrug.":".$aagene} = 1;
-				#}
 			} else {
+				$this->{drugs}->{$id}->{$genedrug} += 1;
 				if ( $geodesic == 0 ) { $this->{centroids}->{$id} = $genedrug; }
 				$this->sum( 'drugmass' , $id , 1 );
-				#if ( $classes_DrugBank ) { &sumlist( $DrugBank , $id , $classes_DrugBank , $recurrence ); }
-				#if ( $classes_NIH ) { &sumlist( $NIH , $id , $classes_NIH , $recurrence ); }
-				#&list( $DrugBank , $id , $classes_DrugBank );
-				#&list( $NIH , $id , $classes_NIH );
 			}
+			$this->sum( 'vertexmass' , $id , 1 );
+			$this->{vertices}->{$id} += 1;
 		}
 	}
 	$infh->close();
 	return;
+}
+
+sub makeMutationKey {
+	my $this = shift;
+	return &combine( @_ );
+}
+
+sub combine {
+	return join( ":" , @_ );
 }
 
 sub writeSummary {
@@ -158,75 +185,305 @@ sub writeSummary {
 	my $outFilename = $this->generateOutputFileName();
 	my $fh = new FileHandle;
 	unless( $fh->open( $outFilename , "w" ) ) { die "Could not open $outFilename $! \n"; }
-	my $fill = "%.3f"."\t";
-	$fh->print( "Cluster_ID\tCentroid\tAvg_Degree\tCentrality\tAvg_Centrality\tAvg_Geodesic\tRecurrence_Mass\tAvg_Recurrence" );
-	$fh->print( "\tMutations_(Unique_AAchanges)" );
-	#$fh->print( "\tKnown_Mutations_(Unique_Known)" );
-	$fh->print( "\tTotal_Drugs\tGenes_Drugs\tAA_Mutations\tTranscripts");
-	#$fh->print( "\tHGNC_Gene_Families\tPfam_Domains\tDrugBank_Classes\tNIH_Classes" );
-	$fh->print( "\n" );
-	foreach my $id ( sort { $a cmp $b } keys %{$this->{mutationmass}} ) {
-		$fh->print( $id."\t" ); #Cluster_ID
-		if ( exists $this->{centroids}->{$id} ) {
-            $fh->print( $this->{centroids}->{$id}."\t" ); #Centroid
-        } else {
-            print STDERR $id." has no centroid\n";
-			$fh->print( "NULL\t" );
-        }
-		$fh->printf( $fill , $this->avg( 'degrees' , $id , 'mutationmass' ) ); #AVG_Degree (pairs)
-		$fh->printf( $fill , $this->{centralities}->{$id} ); #Centrality (cluster closeness)
-		$fh->printf( $fill , $this->avg( 'centralities' , $id , 'recurrencemass' ) ); #Avg_Frequency (average recurrence)
-		$fh->printf( $fill , $this->avg( 'geodesics' , $id , 'mutationmass' ) ); #Avg_Geodesic (average geodesic from centroid)
-		$fh->printf( $fill , $this->{recurrencemass}->{$id} ); #Recurrence_Mass (sum recurrence in cluster)
-		$fh->printf( $fill , $this->avg( 'recurrencemass' , $id , 'mutationmass' ) ); #Avg_Frequency (average recurrence)
-		$fh->print( $this->{recurrencemass}->{$id}." (".$this->{mutationmass}->{$id}.")\t" ); #Mutations_(Unique_AAchanges)
-		#$fh->print( $DMKB->{$id}." (".(scalar keys %{$DMKBs->{$id}}).")\t" ); #Known_Mutations_(Unique_Known)#known druggable
-		if ( exists $this->{drugmass}->{$id} ) {
-			$fh->print( $this->{drugmass}->{$id}."\t" );
-		} else {
-			$fh->print( "NA\t" );
-		}
-		if ( exists $this->{genes}->{$id} && $this->{genes}->{$id} ne "" ) {
-			$fh->print( join( "; " , sort keys %{$this->{genes}->{$id}} )."\t" );
-		} else {
-			$fh->print( "NA\t" );
-		} 
-		if ( exists $this->{aas}->{$id} && $this->{aas}->{$id} ne ""){
-			$fh->print( join("," , uniq(@{$this->{aas}->{$id}}))."\t");
-		} else {
-			$fh->print( "NA\t" );
-		}
-		if ( exists $this->{transcripts}->{$id} && $this->{transcripts}->{$id} ne ""){
-			$fh->print( join( "; " , sort keys %{$this->{transcripts}->{$id}} )."\t" );
-		} else {
-			$fh->print( "NA\t" );
-		} 
+	$this->printHeader( $fh );
+	foreach my $id ( sort { $a cmp $b } keys %{$this->{vertices}} ) {
+		$this->printClusterID( $fh , $id );
+		$this->printCentroid( $fh , $id );
+		$this->printCentrality( $fh , $id );
+		$this->printRecurrenceMass( $fh , $id );
+		$this->printAvgCentrality( $fh , $id );
+		$this->printAvgRecurrenceMass( $fh , $id );
+		$this->printAvgDegree( $fh , $id );
+		$this->printAvgGeodesic( $fh , $id );
+		$this->printNGenes( $fh , $id );
+		$this->printNVertices( $fh , $id );
+		$this->printNGenomicMutations( $fh , $id );
+		$this->printNProteinMutations( $fh , $id );
+		$this->printNProteinSites( $fh , $id );
+		$this->printNProteinPositions( $fh , $id );
+		$this->printNDrugs( $fh , $id );
+		$this->printGenes( $fh , $id );
+		$this->printTranscripts( $fh , $id );
+		$this->printGenomicMutations( $fh , $id );
+		$this->printProteinMutations( $fh , $id );
+		$this->printProteinSites( $fh , $id );
+		$this->printProteinPositions( $fh , $id );
+		$this->printDrugs( $fh , $id );
 
-		 #list of genes & drugs
-		#if ( exists $family->{$id} && $family->{$id} ne "" ) {
-		#	$fh->print( join( "; " , sort keys %{$family->{$id}} )."\t" );
-		#} else {
-		#	$fh->print( "NA\t" );
-		#} #list of gene families
-		#if ( exists $domains->{$id} && $domains->{$id} ne "" ) {
-		#	$fh->print( join( "; " , sort keys %{$domains->{$id}} )."\t" );
-		#} else {
-		#	$fh->print( "NA\t" );
-		#} #list of gene families
-		#if ( exists $DrugBank->{$id} && $DrugBank->{$id} ne "" ) {
-		#	$fh->print( join( "; " , sort keys %{$DrugBank->{$id}} )."\t" );
-		#} else {
-		#	$fh->print( "NA\t" );
-		#} #list of drug classes
-		#if ( exists $NIH->{$id} && $NIH->{$id} ne "" ) {
-		#	$fh->print( join( "; " , sort keys %{$NIH->{$id}} )."\n" );
-		#} else {
-		#	$fh->print( "NA\n" );
-		#} #list of drug classes
 		$fh->print( "\n" );
 	}
 	$fh->close();
 	return;
+}
+
+sub printHeader {
+	my ( $this , $fh ) = @_;
+	$fh->print( join( "\t" , ( 	"Cluster_ID" , 
+								"Centroid" , 
+								"Centrality" , 
+								"Recurrence_Mass" , 
+								"Avg_Centrality" , 
+								"Avg_Recurrence" , 
+								"Avg_Degree" , 
+								"Avg_Geodesic" , 
+								"N_Genes" , 
+								"N_Vertices" , 
+								"N_Genomic_Mutations" , 
+								"N_Protein_Mutations" , 
+								"N_Protein_Sites" , 
+								"N_Protein_Positions" , 
+								"N_Drugs" , 
+								"Genes" , 
+								"Transcripts" ,
+								"Genomic_Mutations" , 
+								"Protein_Mutations" , 
+								"Protein_Sites" , 
+								"Drugs" 
+							)
+					)
+	);
+	$fh->print( "\n" );
+	return;
+}
+
+
+sub printClusterID {
+	my ( $this , $fh , $id ) = @_;
+	$fh->print( $id."\t" ); #Cluster_ID
+	return;
+}
+
+
+sub printCentroid {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{centroids}->{$id} ) {
+		$fh->print( $this->{centroids}->{$id}."\t" ); #Centroid
+	} else {
+		print STDERR $id." has no centroid\n";
+		$fh->print( $NULL."\t" );
+	}
+	return;
+}
+
+
+sub printAvgDegree {
+	my ( $this , $fh , $id ) = @_;
+	$fh->printf( $fill , $this->avg( 'degrees' , $id , 'vertexmass' ) ); #AVG_Degree (pairs)
+	return;
+}
+
+sub printCentrality {
+	my ( $this , $fh , $id ) = @_;
+	$fh->printf( $fill , $this->{centralities}->{$id} ); #Centrality (cluster closeness)
+	return;
+}
+
+sub printAvgCentrality {
+	my ( $this , $fh , $id ) = @_;
+	$fh->printf( $fill , $this->avg( 'centralities' , $id , 'vertexmass' ) ); #Avg_Frequency (average recurrence)
+	return;
+}
+
+sub printAvgGeodesic {
+	my ( $this , $fh , $id ) = @_;
+	$fh->printf( $fill , $this->avg( 'geodesics' , $id , 'vertexmass' ) ); #Avg_Geodesic (average geodesic from centroid)
+	return;
+}
+
+sub printRecurrenceMass {
+	my ( $this , $fh , $id ) = @_;
+	$fh->printf( $count , $this->{recurrencemass}->{$id} ); #Recurrence_Mass (sum recurrence in cluster)
+	return;
+}
+
+sub printAvgRecurrenceMass {
+	my ( $this , $fh , $id ) = @_;
+	$fh->printf( $fill , $this->avg( 'recurrencemass' , $id , 'mutationmass' ) ); #Avg_Frequency (average recurrence)
+	return;
+}
+
+sub printNGenomicMutations {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{genomicmutations}->{$id} ) {
+		my @u = uniq( @{$this->{genomicmutations}->{$id}} );
+		$fh->printf( $count , ( scalar @u ) ); #Total_Mutations
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printNProteinMutations {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{aas}->{$id} ) {
+		my @u = uniq( @{$this->{aas}->{$id}} );
+		$fh->printf( $count , ( scalar @u ) ); #Total_Mutations
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printNProteinSites {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{sites}->{$id} ) {
+		my @u = uniq( @{$this->{sites}->{$id}} );
+		$fh->printf( $count , ( scalar @u ) ); #Total_Mutations
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printNProteinPositions {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{residues}->{$id} ) {
+		my @u = uniq( @{$this->{residues}->{$id}} );
+		$fh->printf( $count , ( scalar @u ) ); #Total_Mutations
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printNGenes {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{genes}->{$id} ) {
+		my @u = uniq( keys %{$this->{genes}->{$id}} );
+		$fh->print( ( scalar @u ) );
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printNDrugs {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{drugs}->{$id} ) {
+		my @u = uniq( keys %{$this->{drugs}->{$id}} );
+		$fh->print( ( scalar @u ) );
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printNVertices {
+	my ( $this , $fh , $id ) = @_;
+	my ( $nDrugs , $nGenomicMutations , $nSites ) = (0) x 3;
+	if ( exists $this->{drugs}->{$id} ) {
+		$nDrugs = scalar keys %{$this->{drugs}->{$id}};
+	}
+	if ( exists $this->{genomicmutations}->{$id} ) {
+		$nGenomicMutations = scalar @{$this->{genomicmutations}->{$id}};
+	}
+	if ( exists $this->{sites}->{$id} ) {
+		$nSites = scalar @{$this->{sites}->{$id}};
+	}
+	my $nVertices = $nDrugs + $nGenomicMutations + $nSites;
+	$fh->print( $nVertices );
+	$fh->print( "\t" );
+	return;
+}
+
+sub printGenomicMutations {
+	my ( $this , $fh , $id ) = @_;
+
+	if ( exists $this->{genomicmutations}->{$id} ) {
+		$fh->print( join( "," , sort +uniq( @{$this->{genomicmutations}->{$id}} ) ) );
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printProteinMutations {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{aas}->{$id} ) {
+		$fh->print( join( "," , sort +uniq( @{$this->{aas}->{$id}} ) ) );
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printProteinPositions {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{residues}->{$id} ) {
+		$fh->print( join( "," , sort +uniq( @{$this->{residues}->{$id}} ) ) );
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printProteinSites {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{sites}->{$id} ) {
+		$fh->print( join( "," , sort +uniq( @{$this->{sites}->{$id}} ) ) );
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+sub printGenes {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{genes}->{$id} && $this->{genes}->{$id} ne "" ) {
+		my $out = "";
+		foreach my $gene ( sort keys %{$this->{genes}->{$id}} ) {
+			$out .= $gene."(".$this->{genes}->{$id}->{$gene}."),";
+		}
+		$out = substr( $out , 0 , -1 );
+		$fh->print( $out );
+	} else {
+		$fh->print( $NULL );
+	} 
+	$fh->print( "\t" );
+	return;
+}
+
+sub printTranscripts {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{transcripts}->{$id} && $this->{transcripts}->{$id} ne ""){
+		my $out = "";
+		foreach my $transcript ( sort keys %{$this->{transcripts}->{$id}} ) {
+			$out .= $transcript."(".$this->{transcripts}->{$id}->{$transcript}."),";
+		}
+		$out = substr( $out , 0 , -1 );
+		$fh->print( $out );
+	} else {
+		$fh->print( $NULL );
+	} 
+	$fh->print( "\t" );
+	return;
+}
+
+sub printDrugs {
+	my ( $this , $fh , $id ) = @_;
+	if ( exists $this->{drugs}->{$id} && $this->{drugs}->{$id} ne ""){
+		$fh->print( join( "," , sort +uniq( @{$this->{drugs}->{$id}} ) ) );
+	} else {
+		$fh->print( $NULL );
+	}
+	$fh->print( "\t" );
+	return;
+}
+
+
+sub count {
+	my ( $this , $type , $id ) = @_;
+	return scalar @{$this->{$type}->{$id}};
 }
 
 sub sum {

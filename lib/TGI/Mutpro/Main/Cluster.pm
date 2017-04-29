@@ -129,6 +129,12 @@ sub process {
     return 1;
 }
 
+sub siteListFile {
+	my $this = shift;
+	if ( @_ ) { $this->{'site_file'}= shift; }
+	return $this->{'site_file'};
+}
+
 sub printMutations {
 	my ( $this , $mutations , $type ) = @_;
 	foreach my $a ( sort keys %{$mutations} ) {
@@ -177,7 +183,7 @@ sub setOptions {
         'probability-cut-off=f' => \$this->{'probability_cut_off'},
         'distance-measure=s' => \$this->{'distance_measure'},
         'maf-file=s' => \$this->{'maf_file'},
-        'site-file=s' => \$this->{'site_file'},
+        'site-file=s' => \$this->{'site_file'} , 
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'weight-header=s' => \$this->{'weight_header'},
@@ -244,9 +250,9 @@ sub setOptions {
 			$this->{'3d_distance_cutoff'} = $MAXDISTANCE;
 		}
 	}
-	if ( defined $this->{'site_file'} ) {
-		if ( not -e $this->{'site_file'} ) { 
-			warn "The input site file (".$this->{'site_file'}.") does not exist! ", "\n";
+	if ( defined $this->siteListFile() ) {
+		if ( not -e $this->siteListFile() ) { 
+			warn "The input site file (".$this->siteListFile().") does not exist! ", "\n";
 			die $this->help_text();
 		}
 	} else {
@@ -360,12 +366,12 @@ sub setOptions {
 
 sub requireSite {
 	my $this = shift;
-	unless( $this->{'site_file'} ) {
+	unless( $this->siteListFile() ) {
 		warn "Provided sites-file requires a site-file, but no site-file was given\n";
 		die $this->help_text();
 	}
-	unless ( -e $this->{'site_file'} ) {
-		warn "The site-file, ".$this->{'site_file'}.", does not exist!\n";
+	unless ( -e $this->siteListFile() ) {
+		warn "The site-file, ".$this->siteListFile().", does not exist!\n";
 		die $this->help_text();
 	}
 	return;
@@ -598,7 +604,7 @@ sub readPairwise { # shared
 			and defined( $pairwisecols{"Position2"} )
 			and defined( $pairwisecols{"LinearDistance"} )
 			and defined( $pairwisecols{"DistanceInfo"} ) ) {
-			die "not a valid sites file\n";
+			die "not a valid pairwise file\n";
 		}
 		my @wantpairwisecols = (	$pairwisecols{"Gene1"} ,
 							$pairwisecols{"Chromosome1"} ,
@@ -976,10 +982,10 @@ sub generateFilename {
 
 sub readSite {
 	my ( $this , $mutations ) = @_;
-    if ( defined $this->{'site_file'} ) { #if musite pairs included
-		print STDOUT "HotSpot3D::Cluster::readSite\n";
+    if ( defined $this->siteListFile() ) { #if musite pairs included
+		print STDOUT "HotSpot3D::Cluster::readSite - ".$this->siteListFile()."\n";
 		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'site_file'} , "r" ) ) {
+		unless( $fh->open( $this->siteListFile() , "r" ) ) {
 			die "Could not open site list file $! \n"
 		};
 		my $si = 0;
