@@ -129,10 +129,53 @@ sub process {
     return 1;
 }
 
+sub mafFile {
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'maf_file' , $file ) );
+}
+
+sub geneListFile {
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'gene_list_file' , $file ) );
+}
+
+sub structureListFile {
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'structure_list_file' , $file ) );
+}
+
 sub siteListFile {
-	my $this = shift;
-	if ( @_ ) { $this->{'site_file'}= shift; }
-	return $this->{'site_file'};
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'site_file' , $file ) );
+}
+
+sub pairwiseFile {
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'pairwise_file' , $file ) );
+}
+
+sub drugsCleanFile {
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'drug_clean_file' , $file ) );
+}
+
+sub sitePairsFile {
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'sites_file' , $file ) );
+}
+
+sub musitePairsFile {
+	my ( $this , $file ) = @_;
+	return ( $this->getFile( 'musites_file' , $file ) );
+}
+
+sub getFile {
+	my ( $this , $name , $file ) = @_;
+	if ( $file ) { $this->{$name} = $file; }
+	if ( not defined $this->{$name} ) { 
+		return undef; 
+	}
+	return $this->{$name};
 }
 
 sub printMutations {
@@ -258,47 +301,47 @@ sub setOptions {
 	} else {
 		warn "HotSpot3D::Cluster::setOptions warning: no site-file included (cannot produce site-site clusters)!\n";
 	}
-	if ( defined $this->{'sites_file'} ) {
+	if ( defined $this->sitePairsFile() ) {
 		#$this->requireSite();
-		if ( not -e $this->{'sites_file'} ) { 
-			warn "The input site-site pair file (".$this->{'sites_file'}.") does not exist! ", "\n";
+		if ( not -e $this->sitePairsFile() ) { 
+			warn "The input site-site pair file (".$this->sitePairsFile().") does not exist! ", "\n";
 			die $this->help_text();
 		}
 	} else {
 		warn "HotSpot3D::Cluster::setOptions warning: no sites-file included (cannot produce site-site clusters)!\n";
 	}
-	if ( defined $this->{'musites_file'} ) {
+	if ( defined $this->musitePairsFile() ) {
 		#$this->requireSite();
 		$this->requireMAF();
-		if ( not -e $this->{'musites_file'} ) { 
-			warn "The input mutation-site pair file (".$this->{'musites_file'}.") does not exist! ", "\n";
+		if ( not -e $this->musitePairsFile() ) { 
+			warn "The input mutation-site pair file (".$this->musitePairsFile().") does not exist! ", "\n";
 			die $this->help_text();
 		}
 	} else {
 		warn "HotSpot3D::Cluster::setOptions warning: no musites-file included (cannot produce mutation-site clusters)!\n";
 	}
-	if ( defined $this->{'drug_clean_file'} ) {
+	if ( defined $this->drugsCleanFile() ) {
 		$this->requireMAF();
-		if ( not -e $this->{'drug_clean_file'} ) { 
-			warn "The input drug pairs file (".$this->{'drug_clean_file'}.") does not exist! ", "\n";
+		if ( not -e $this->drugsCleanFile() ) { 
+			warn "The input drug pairs file (".$this->drugsCleanFile().") does not exist! ", "\n";
 			die $this->help_text();
 		}
 	} else {
 		warn "HotSpot3D::Cluster::setOptions warning: no drug-clean-file included (cannot produce drug-mutation clusters)!\n";
 	}
-    if ( defined $this->{'pairwise_file'} ) {
+    if ( defined $this->pairwiseFile() ) {
 		$this->requireMAF();
-		if ( not -e $this->{'pairwise_file'} ) { 
-			warn "HotSpot3D::Cluster::setOptions error: the input pairwise file (".$this->{'pairwise_file'}.") does not exist!\n";
+		if ( not -e $this->pairwiseFile() ) { 
+			warn "HotSpot3D::Cluster::setOptions error: the input pairwise file (".$this->pairwiseFile().") does not exist!\n";
 			die $this->help_text();
 		}
 	} else {
 		warn "HotSpot3D::Cluster::setOptions warning: no pairwise-file included (cannot produce mutation-mutation clusters)!\n";
 	}
-	if ( not defined $this->{'pairwise_file'} and
-		 not defined $this->{'sites_file'} and
-		 not defined $this->{'musites_file'} and
-		 not defined $this->{'drug_clean_file'} ) {
+	if (  not defined $this->pairwiseFile() and
+		  not defined $this->sitePairsFile() and
+		  not defined $this->musitePairsFile() and
+		  not defined $this->drugsCleanFile() ) {
 		warn "HotSpot3D::Cluster::setOptions error: no pair file provided. Need at least one of *.pairwise, *.clean, *.sites, *.musites.\n";
 		die $this->help_text();
 	}
@@ -329,16 +372,16 @@ sub setOptions {
 	}
 
 	##### START gene-list and structure-list options
-	if ( defined $this->{'gene_list_file'} ) {
-		if ( not -e $this->{'gene_list_file'} ) { 
-			warn "The input gene list file (".$this->{'gene_list_file'}.") does not exist! ", "\n";
+	if ( defined $this->geneListFile() ) {
+		if ( not -e $this->geneListFile() ) { 
+			warn "The input gene list file (".$this->geneListFile().") does not exist! ", "\n";
 			die $this->help_text();
 		}		
 	}
 
-	if ( defined $this->{'structure_list_file'} ) {
-		if ( not -e $this->{'structure_list_file'} ) { 
-			warn "The input structure list file (".$this->{'structure_list_file'}.") does not exist! ", "\n";
+	if ( defined $this->structureListFile() ) {
+		if ( not -e $this->structureListFile() ) { 
+			warn "The input structure list file (".$this->structureListFile().") does not exist! ", "\n";
 			die $this->help_text();
 		}
 	}
@@ -362,17 +405,17 @@ sub setOptions {
 	}
 	print STDOUT "====================\n";
 	print STDOUT "=====Data===========\n";
-	print STDOUT " maf-file              = ".$this->{'maf_file'}."\n";
+	print STDOUT " maf-file              = ".$this->mafFile()."\n";
 	print STDOUT " transcript_id_header  = ".$this->{'transcript_id_header'}."\n";
 	print STDOUT " amino-acid-header     = ".$this->{'amino_acid_header'}."\n";
 	print STDOUT " weight-header         = ".$this->{'weight_header'}."\n";
-	print STDOUT " site-file             = ".$this->{'site_file'}."\n"; 
-	print STDOUT " gene-list-file        = ".$this->{'gene_list_file'}."\n";
-	print STDOUT " structure-list-file   = ".$this->{'structure_list_file'}."\n";
-	print STDOUT " pairwise-file         = ".$this->{'pairwise_file'}."\n";
-	print STDOUT " drug-clean-file       = ".$this->{'drug_clean_file'}."\n";
-	print STDOUT " sites-file            = ".$this->{'sites_file'}."\n";
-	print STDOUT " musites-file          = ".$this->{'musites_file'}."\n";
+	print STDOUT " site-file             = ".$this->siteListFile()."\n"; 
+	print STDOUT " gene-list-file        = ".$this->geneListFile()."\n";
+	print STDOUT " structure-list-file   = ".$this->structureListFile()."\n";
+	print STDOUT " pairwise-file         = ".$this->pairwiseFile()."\n";
+	print STDOUT " drug-clean-file       = ".$this->drugsCleanFile()."\n";
+	print STDOUT " sites-file            = ".$this->sitePairsFile()."\n";
+	print STDOUT " musites-file          = ".$this->musitePairsFile()."\n";
 	print STDOUT " output-prefix         = ".$this->{'output_prefix'}."\n";
 	print STDOUT "====================\n";
 
@@ -394,12 +437,12 @@ sub requireSite {
 
 sub requireMAF {
 	my $this = shift;
-	unless( $this->{'maf_file'} ) {
+	unless( $this->mafFile() ) {
 		warn "You must provide a maf-file for the pair data provided.\n";
 		die $this->help_text();
 	}
-	unless( -e $this->{'maf_file'} ) {
-		warn "The maf-file, ".$this->{'maf_file'}.", does not exist! ", "\n";
+	unless( -e $this->mafFile() ) {
+		warn "The maf-file, ".$this->mafFile().", does not exist! ", "\n";
 		die $this->help_text();
 	}
 	return;
@@ -409,37 +452,37 @@ sub initializeLists {
 	my $this = shift;
 	#print "at initializeLists\n";
 
-	if ( defined $this->{'gene_list_file'} ) {
+	if ( defined $this->geneListFile() ) {
 		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'gene_list_file'} , "r" ) ) { die "Could not open gene list file $! \n" };
+		unless( $fh->open( $this->geneListFile() , "r" ) ) { die "Could not open gene list file $! \n" };
 		while ( my $gene = <$fh> ) {
     		chomp( $gene );
     		$this->{'providedGenes'}->{$gene} = 0; # hash with provided gene names as keys, will be used later in filterByProvidedLists
     	}
 	}
-	if ( defined $this->{'structure_list_file'} ) {
+	if ( defined $this->structureListFile() ) {
 		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'structure_list_file'} , "r" ) ) { die "Could not open structures list file $! \n" };
+		unless( $fh->open( $this->structureListFile() , "r" ) ) { die "Could not open structures list file $! \n" };
 		while ( my $structure = <$fh> ) {
     		chomp( $structure );
     		$this->{'providedStructures'}->{$structure} = 0; # hash with provided structure names as keys, will be used later in filterByProvidedLists
     	}
 	}
 	##
-	if ( (defined $this->{'gene_list_file'}) && (not defined $this->{'structure_list_file'}) ) {
+	if ( ( defined $this->geneListFile() ) && ( not defined $this->structureListFile() ) ) {
 		$this->{'listOption'} = "GeneListOnly";
 		#print "gene list only\n";
 	}
-	if ( (not defined $this->{'gene_list_file'}) && (defined $this->{'structure_list_file'}) ) {
+	if ( ( not defined $this->geneListFile() ) && ( defined $this->structureListFile() ) ) {
 		$this->{'listOption'} = "StructureListOnly";
 		warn "HotSpot3D::Cluster::setOptions warning: only the mutations present in the given structures are being considered\n";
 		#print "structure list only\n";
 	}
-	if ( (defined $this->{'gene_list_file'}) && (defined $this->{'structure_list_file'}) ) {
+	if ( ( defined $this->geneListFile() ) && ( defined $this->structureListFile() ) ) {
 		$this->{'listOption'} = "BothLists";
 		#print "both lists\n";
 	}
-	if ( (not defined $this->{'gene_list_file'}) && (not defined $this->{'structure_list_file'}) ) {
+	if ( ( not defined $this->geneListFile() ) && ( not defined $this->structureListFile() ) ) {
 		$this->{'listOption'} = "None";
 		#print "no lists\n";
 	}
@@ -591,91 +634,91 @@ sub getMutationMutationPairs {
 sub readPairwise { # shared
 	#$this->readPairwise( $distance_matrix );
 	my ( $this , $distance_matrix ) = @_;
-	if ( defined $this->{'pairwise_file'} ) {
-		print STDOUT "HotSpot3D::Cluster::readPairwise\n";
-		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'pairwise_file'} , "r" ) ) { die "Could not open pairwise file $! \n" };
-		my $pi = 0;
-		my $headline = $fh->getline(); chomp( $headline );
-		my %pairwisecols = map{ ( $_ , $pi++ ) } split( /\t/ , $headline );
-		my @required = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" ,
-						 "Mutation1" , "Chain1" , "Position1" , 
-						 "Gene2" , "Chromosome2" , "Start2" , "Stop2" ,
-						 "Mutation2" , "Chain2" , "Position2" , 
-						 "LinearDistance" , "DistanceInfo" );
-		unless(	defined( $pairwisecols{"Gene1"} )
-			and defined( $pairwisecols{"Chromosome1"} )
-			and defined( $pairwisecols{"Start1"} )
-			and defined( $pairwisecols{"Stop1"} )
-			and defined( $pairwisecols{"Mutation1"} )
-			and defined( $pairwisecols{"Chain1"} )
-			and defined( $pairwisecols{"Position1"} )
-			and defined( $pairwisecols{"Gene2"} )
-			and defined( $pairwisecols{"Chromosome2"} )
-			and defined( $pairwisecols{"Start2"} )
-			and defined( $pairwisecols{"Stop2"} )
-			and defined( $pairwisecols{"Mutation2"} )
-			and defined( $pairwisecols{"Chain2"} )
-			and defined( $pairwisecols{"Position2"} )
-			and defined( $pairwisecols{"LinearDistance"} )
-			and defined( $pairwisecols{"DistanceInfo"} ) ) {
-			die "not a valid pairwise file\n";
-		}
-		my @wantpairwisecols = (	$pairwisecols{"Gene1"} ,
-							$pairwisecols{"Chromosome1"} ,
-							$pairwisecols{"Start1"} ,
-							$pairwisecols{"Stop1"} ,
-							$pairwisecols{"Mutation1"} ,
-							$pairwisecols{"Chain1"} ,
-							$pairwisecols{"Position1"} ,
-							$pairwisecols{"Gene2"} ,
-							$pairwisecols{"Chromosome2"} ,
-							$pairwisecols{"Start2"} ,
-							$pairwisecols{"Stop2"} ,
-							$pairwisecols{"Mutation2"} ,
-							$pairwisecols{"Chain2"} ,
-							$pairwisecols{"Position2"} ,
-							$pairwisecols{"LinearDistance"} ,
-							$pairwisecols{"DistanceInfo"} );
-		my $pdbCount;
-		foreach my $line ( <$fh> ) {
-			chomp( $line );
-			my @line = split /\t/ , $line;
-			my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aa_1 , $chain1 , $loc_1 , 
-				 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , 
-				 $linearDistance , $infos ) = @line[@wantpairwisecols];
+	return if ( not defined $this->pairwiseFile() );
+	print STDOUT "HotSpot3D::Cluster::readPairwise\n";
+	my $fh = new FileHandle;
+	unless( $fh->open( $this->pairwiseFile() , "r" ) ) { die "Could not open pairwise file $! \n" };
+	my $pi = 0;
+	my $headline = $fh->getline(); chomp( $headline );
+	my %pairwisecols = map{ ( $_ , $pi++ ) } split( /\t/ , $headline );
+	my @required = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" ,
+					 "Mutation1" , "Chain1" , "Position1" , 
+					 "Gene2" , "Chromosome2" , "Start2" , "Stop2" ,
+					 "Mutation2" , "Chain2" , "Position2" , 
+					 "LinearDistance" , "DistanceInfo" );
+	unless(	defined( $pairwisecols{"Gene1"} )
+		and defined( $pairwisecols{"Chromosome1"} )
+		and defined( $pairwisecols{"Start1"} )
+		and defined( $pairwisecols{"Stop1"} )
+		and defined( $pairwisecols{"Mutation1"} )
+		and defined( $pairwisecols{"Chain1"} )
+		and defined( $pairwisecols{"Position1"} )
+		and defined( $pairwisecols{"Gene2"} )
+		and defined( $pairwisecols{"Chromosome2"} )
+		and defined( $pairwisecols{"Start2"} )
+		and defined( $pairwisecols{"Stop2"} )
+		and defined( $pairwisecols{"Mutation2"} )
+		and defined( $pairwisecols{"Chain2"} )
+		and defined( $pairwisecols{"Position2"} )
+		and defined( $pairwisecols{"LinearDistance"} )
+		and defined( $pairwisecols{"DistanceInfo"} ) ) {
+		die "not a valid pairwise file\n";
+	}
+	my @wantpairwisecols = (	$pairwisecols{"Gene1"} ,
+						$pairwisecols{"Chromosome1"} ,
+						$pairwisecols{"Start1"} ,
+						$pairwisecols{"Stop1"} ,
+						$pairwisecols{"Mutation1"} ,
+						$pairwisecols{"Chain1"} ,
+						$pairwisecols{"Position1"} ,
+						$pairwisecols{"Gene2"} ,
+						$pairwisecols{"Chromosome2"} ,
+						$pairwisecols{"Start2"} ,
+						$pairwisecols{"Stop2"} ,
+						$pairwisecols{"Mutation2"} ,
+						$pairwisecols{"Chain2"} ,
+						$pairwisecols{"Position2"} ,
+						$pairwisecols{"LinearDistance"} ,
+						$pairwisecols{"DistanceInfo"} );
+	my $pdbCount;
+	foreach my $line ( <$fh> ) {
+		chomp( $line );
+		my @line = split /\t/ , $line;
+		my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aa_1 , $chain1 , $loc_1 , 
+			 $gene2 , $chromosome2 , $start2 , $stop2 , $aa_2 , $chain2 , $loc_2 , 
+			 $linearDistance , $infos ) = @line[@wantpairwisecols];
 
-			if ( $this->checkByProvidedLists( $gene1, $gene2, $infos ) ) { # check to filter out mutation pairs according to a given gene list or structures list or both
-				if ( defined $this->{'structure_list_file'} ) { # if true, get only the pdbIDs which are in this list
-					$infos = $this->filterInfosByGivenStructures( $infos );
-					#print "new infos= $infos\n";
-				}
-				if ( $this->checkMeric( $gene1 , $gene2 , $chain1 , $chain2 ) ) {
-					$chain1 =~ s/\[(\w)\]/$1/g;
-					$chain2 =~ s/\[(\w)\]/$1/g;
-					my $proteinMutation = TGI::ProteinVariant->new();
-					my $mutation1 = TGI::Variant->new();
-					$mutation1->gene( $gene1 );
-					$mutation1->chromosome( $chromosome1 );
-					$mutation1->start( $start1 );
-					$mutation1->stop( $stop1 );
-					$proteinMutation->aminoAcidChange( $aa_1 );
-					$mutation1->addProteinVariant( $proteinMutation );
+		if ( $this->checkByProvidedLists( $gene1, $gene2, $infos ) ) { # check to filter out mutation pairs according to a given gene list or structures list or both
+			if ( defined $this->structureListFile() ) { # if true, get only the pdbIDs which are in this list
+				$infos = $this->filterInfosByGivenStructures( $infos );
+				#print "new infos= $infos\n";
+			}
+			if ( $this->checkMeric( $gene1 , $gene2 , $chain1 , $chain2 ) ) {
+				$chain1 =~ s/\[(\w)\]/$1/g;
+				$chain2 =~ s/\[(\w)\]/$1/g;
+				my $proteinMutation = TGI::ProteinVariant->new();
+				my $mutation1 = TGI::Variant->new();
+				$mutation1->gene( $gene1 );
+				$mutation1->chromosome( $chromosome1 );
+				$mutation1->start( $start1 );
+				$mutation1->stop( $stop1 );
+				$proteinMutation->aminoAcidChange( $aa_1 );
+				$mutation1->addProteinVariant( $proteinMutation );
 
-					my $mutation2 = TGI::Variant->new();
-					$mutation2->gene( $gene2 );
-					$mutation2->chromosome( $chromosome2 );
-					$mutation2->start( $start2 );
-					$mutation2->stop( $stop2 );
-					$proteinMutation->aminoAcidChange( $aa_2 );
-					$mutation2->addProteinVariant( $proteinMutation );
-		#			print "pair structures ".join( "  " , ( $infos , $chain1 , $chain2 ) )."\n";
-					$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
-										$chain1 , $chain2 , $infos , $pdbCount );
-				}
+				my $mutation2 = TGI::Variant->new();
+				$mutation2->gene( $gene2 );
+				$mutation2->chromosome( $chromosome2 );
+				$mutation2->start( $start2 );
+				$mutation2->stop( $stop2 );
+				$proteinMutation->aminoAcidChange( $aa_2 );
+				$mutation2->addProteinVariant( $proteinMutation );
+	#			print "pair structures ".join( "  " , ( $infos , $chain1 , $chain2 ) )."\n";
+				$this->setDistance( $distance_matrix , $mutation1 , $mutation2 , 
+									$chain1 , $chain2 , $infos , $pdbCount );
 			}
 		}
-		$fh->close();
+	}
+	$fh->close();
 #	print "DISTANCE MATRIX\n";
 #	foreach my $s ( sort keys %{$distance_matrix} ) {
 #		foreach my $mu1 ( sort keys %{$distance_matrix->{$s}} ) {
@@ -684,7 +727,6 @@ sub readPairwise { # shared
 #			}
 #		}
 #	}
-	}
 	return;
 }
 
@@ -782,9 +824,10 @@ sub checkMeric {
 sub readMAF{ # shared
 	#$this->readMAF( $mutations );
 	my ( $this , $mutations ) = @_;
+	return if ( not defined $this->mafFile() );
 	print STDOUT "HotSpot3D::Cluster::readMAF\n";
 	my $fh = new FileHandle;
-	die "Could not open .maf file\n" unless( $fh->open( $this->{'maf_file'} , "r" ) );
+	die "Could not open .maf file\n" unless( $fh->open( $this->mafFile() , "r" ) );
 	my $headline = $fh->getline(); chomp( $headline );
 	my $mafi = 0;
 	my %mafcols = map{ ( $_ , $mafi++ ) } split( /\t/ , $headline );
@@ -937,36 +980,36 @@ sub generateFilename {
 	if ( $this->{'output_prefix'} ) {
 		push @outFilename , $this->{'output_prefix'};
 	} else {
-		if ( $this->{'maf_file'} ) {
-			my $maf = basename( $this->{'maf_file'} );
+		if ( $this->mafFile() ) {
+			my $maf = basename( $this->mafFile() );
 			push @outFilename , $maf;
 		}
-		if ( defined $this->{'pairwise_file'} ) {
-			my $clean = basename( $this->{'pairwise_file'} );
+		if ( $this->pairwiseFile() ne "" ) {
+			my $clean = basename( $this->pairwiseFile() );
 			if ( $clean ne '' and scalar @outFilename > 1 ) {
 				push @outFilename , $clean;
 			} elsif ( $clean ne '' ) {
 				push @outFilename , $clean;
 			}
 		}
-		if ( defined $this->{'sites_file'} ) {
-			my $clean = basename( $this->{'sites_file'} );
+		if ( $this->sitePairsFile() ne "" ) {
+			my $clean = basename( $this->sitePairsFile() );
 			if ( $clean ne '' and scalar @outFilename > 1 ) {
 				push @outFilename , $clean;
 			} elsif ( $clean ne '' ) {
 				push @outFilename , $clean;
 			}
 		}
-		if ( defined $this->{'musites_file'} ) {
-			my $clean = basename( $this->{'musites_file'} );
+		if ( $this->musitePairsFile() ne "" ) {
+			my $clean = basename( $this->musitePairsFile() );
 			if ( $clean ne '' and scalar @outFilename > 1 ) {
 				push @outFilename , $clean;
 			} elsif ( $clean ne '' ) {
 				push @outFilename , $clean;
 			}
 		}
-		if ( defined $this->{'drug_clean_file'} ) {
-			my $clean = basename( $this->{'drug_clean_file'} );
+		if ( $this->drugsCleanFile() ne "" ) {
+			my $clean = basename( $this->drugsCleanFile() );
 			if ( $clean ne '' and scalar @outFilename > 1 ) {
 				push @outFilename , $clean;
 			} elsif ( $clean ne '' ) {
@@ -997,240 +1040,237 @@ sub generateFilename {
 
 sub readSite {
 	my ( $this , $mutations ) = @_;
-    if ( defined $this->siteListFile() ) { #if musite pairs included
-		print STDOUT "HotSpot3D::Cluster::readSite - ".$this->siteListFile()."\n";
-		my $fh = new FileHandle;
-		unless( $fh->open( $this->siteListFile() , "r" ) ) {
-			die "Could not open site list file $! \n"
-		};
-		my $si = 0;
-		my $headline = $fh->getline(); chomp( $headline );
-		my %sitecols = map{ ( $_ , $si++ ) } split( /\t/ , $headline );
-		my @required = ( "Hugo_Symbol" , $this->{'transcript_id_header'} , 
-						 "Position" , "Feature" );
-		unless(	defined( $sitecols{"Hugo_Symbol"} )
-			and defined( $sitecols{$this->{'transcript_id_header'}} )
-			and defined( $sitecols{"Position"} )
-			and defined( $sitecols{"Feature"} ) ) {
-			die "not a valid site file\n";
-		}
-		my @wantsitecols = ( $sitecols{"Hugo_Symbol"} ,
-							$sitecols{$this->{'transcript_id_header'}} ,
-							$sitecols{"Position"} ,
-							$sitecols{"Feature"} );
-		my $nSites = 0;
-		foreach my $line ( <$fh> ) { 
-			chomp( $line );
-			my @line = split /\t/ , $line;
-			my ( $gene , $transcript , $position , $feature ) = @line[@wantsitecols];
-			my $proteinSite = TGI::ProteinVariant->new();
-			my $site = TGI::Variant->new(); #for the purpose of making keys, will look like a mutation
-			$site->gene( $gene );
-			$site->chromosome( $transcript );
-			$site->start( $position );
-			$site->stop( $position );
-			$site->reference( $NULL );
-			$site->alternate( $PTM );
-			$proteinSite->transcript( $transcript );
-			$proteinSite->aminoAcidChange( $site );
-			$site->addProteinVariant( $proteinSite );
-			my $weight = 1;
-			$this->setMutation( $mutations , $site , $feature , $weight );
-			$nSites++;
-		}
-		$fh->close();
-		print STDOUT $nSites." sites\n";
-	} #if site file included
+    return if ( not defined $this->siteListFile() ); #if musite pairs included
+	print STDOUT "HotSpot3D::Cluster::readSite - ".$this->siteListFile()."\n";
+	my $fh = new FileHandle;
+	unless( $fh->open( $this->siteListFile() , "r" ) ) {
+		die "Could not open site list file $! \n"
+	};
+	my $si = 0;
+	my $headline = $fh->getline(); chomp( $headline );
+	my %sitecols = map{ ( $_ , $si++ ) } split( /\t/ , $headline );
+	my @required = ( "Hugo_Symbol" , $this->{'transcript_id_header'} , 
+					 "Position" , "Feature" );
+	unless(	defined( $sitecols{"Hugo_Symbol"} )
+		and defined( $sitecols{$this->{'transcript_id_header'}} )
+		and defined( $sitecols{"Position"} )
+		and defined( $sitecols{"Feature"} ) ) {
+		die "not a valid site file\n";
+	}
+	my @wantsitecols = ( $sitecols{"Hugo_Symbol"} ,
+						$sitecols{$this->{'transcript_id_header'}} ,
+						$sitecols{"Position"} ,
+						$sitecols{"Feature"} );
+	my $nSites = 0;
+	foreach my $line ( <$fh> ) { 
+		chomp( $line );
+		my @line = split /\t/ , $line;
+		my ( $gene , $transcript , $position , $feature ) = @line[@wantsitecols];
+		my $proteinSite = TGI::ProteinVariant->new();
+		my $site = TGI::Variant->new(); #for the purpose of making keys, will look like a mutation
+		$site->gene( $gene );
+		$site->chromosome( $transcript );
+		$site->start( $position );
+		$site->stop( $position );
+		$site->reference( $NULL );
+		$site->alternate( $PTM );
+		$proteinSite->transcript( $transcript );
+		$proteinSite->aminoAcidChange( $site );
+		$site->addProteinVariant( $proteinSite );
+		my $weight = 1;
+		$this->setMutation( $mutations , $site , $feature , $weight );
+		$nSites++;
+	}
+	$fh->close();
+	print STDOUT $nSites." sites\n";
 	return;
 }
 
 sub readMutationSitePairs {
 	my ( $this , $mutations , $distance_matrix ) = @_;
-    if ( defined $this->{'musites_file'} ) { #if musite pairs included
-		print STDOUT "HotSpot3D::Cluster::readMutationSitePairs\n";
-		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'musites_file'} , "r" ) ) {
-			die "Could not open musite pairs data file $! \n"
-		};
-		my $msi = 0;
-		my $headline = $fh->getline(); chomp( $headline );
-		my %musitecols = map{ ( $_ , $msi++ ) } split( /\t/ , $headline );
-		my @required = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" , 
-						 "Mutation1" , "Chain1" , "Position1" , 
-						 "Gene2" , "Transcript2" , "TranscriptPosition2" , "Site2" ,
-						 "Chain2" , "Position2" , "Feature2" , 
-						 "LinearDistance" , "DistanceInfo" );
-		unless(	defined( $musitecols{"Gene1"} )
-			and defined( $musitecols{"Chromosome1"} )
-			and defined( $musitecols{"Start1"} )
-			and defined( $musitecols{"Stop1"} )
-			and defined( $musitecols{"Mutation1"} )
-			and defined( $musitecols{"Chain1"} )
-			and defined( $musitecols{"Position1"} )
-			and defined( $musitecols{"Gene2"} )
-			and defined( $musitecols{"Transcript2"} )
-			and defined( $musitecols{"TranscriptPosition2"} )
-			and defined( $musitecols{"Site2"} )
-			and defined( $musitecols{"Chain2"} )
-			and defined( $musitecols{"Position2"} )
-			and defined( $musitecols{"Feature2"} )
-			and defined( $musitecols{"LinearDistance"} )
-			and defined( $musitecols{"DistanceInfo"} ) ) {
-			die "not a valid musite file\n";
-		}
-		my @wantmscols = (	$musitecols{"Gene1"} ,
-							$musitecols{"Chromosome1"} ,
-							$musitecols{"Start1"} ,
-							$musitecols{"Stop1"} ,
-							$musitecols{"Mutation1"} ,
-							$musitecols{"Chain1"} ,
-							$musitecols{"Position1"} ,
-							$musitecols{"Gene2"} ,
-							$musitecols{"Transcript2"} ,
-							$musitecols{"TranscriptPosition2"} ,
-							$musitecols{"Site2"} ,
-							$musitecols{"Chain2"} ,
-							$musitecols{"Position2"} ,
-							$musitecols{"Feature2"} ,
-							$musitecols{"LinearDistance"} ,
-							$musitecols{"DistanceInfo"} );
-		my $pdbCount = {};
-		my $nMuSitePairs = 0;
-		foreach my $line ( <$fh> ) { 
-			chomp( $line );
-			my @line = split /\t/ , $line;
-			my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aaChange1 , 
-				 $chain1 , $position1 , 
-				 $gene2 , $transcript2 , $transcriptPosition2 , $site2 , 
-				 $chain2 , $position2 , $feature2 , 
-				 $linearDistance , $infos ) = @line[@wantmscols];
-			my $proteinMutation = TGI::ProteinVariant->new();
-			my $mutation = TGI::Variant->new();
-			$mutation->gene( $gene1 );
-			$mutation->chromosome( $chromosome1 );
-			$mutation->start( $start1 );
-			$mutation->stop( $stop1 );
-			$proteinMutation->aminoAcidChange( $aaChange1 );
-			$mutation->addProteinVariant( $proteinMutation );
-			my $site = TGI::Variant->new(); #for the purpose of making keys, will look like a mutation
-			$site->gene( $gene2 );
-			$site->chromosome( $transcript2 );
-			$site->start( $transcriptPosition2 );
-			$site->stop( $position2 );
-			$site->reference( $NULL );
-			$site->alternate( $PTM );
-			$proteinMutation->transcript( $transcript2 );
-			$proteinMutation->aminoAcidChange( $site2 );
-			$site->addProteinVariant( $proteinMutation );
-			$this->setDistance( $distance_matrix , $site , 
-								$mutation , $chain1 , $chain2 , 
-								$infos , $pdbCount );
-			my $weight2 = 1;
-			$this->setMutation( $mutations , $site , $feature2 , $weight2 );
-			$nMuSitePairs++;
-		}
-		$fh->close();
-		print STDOUT $nMuSitePairs." mutation-site pairs from .musites\n";
-	} #if musite pairs included
+    return if ( not defined $this->musitePairsFile() ); #if musite pairs included
+	print STDOUT "HotSpot3D::Cluster::readMutationSitePairs\n";
+	my $fh = new FileHandle;
+	unless( $fh->open( $this->musitePairsFile() , "r" ) ) {
+		die "Could not open musite pairs data file $! \n"
+	};
+	my $msi = 0;
+	my $headline = $fh->getline(); chomp( $headline );
+	my %musitecols = map{ ( $_ , $msi++ ) } split( /\t/ , $headline );
+	my @required = ( "Gene1" , "Chromosome1" , "Start1" , "Stop1" , 
+					 "Mutation1" , "Chain1" , "Position1" , 
+					 "Gene2" , "Transcript2" , "TranscriptPosition2" , "Site2" ,
+					 "Chain2" , "Position2" , "Feature2" , 
+					 "LinearDistance" , "DistanceInfo" );
+	unless(	defined( $musitecols{"Gene1"} )
+		and defined( $musitecols{"Chromosome1"} )
+		and defined( $musitecols{"Start1"} )
+		and defined( $musitecols{"Stop1"} )
+		and defined( $musitecols{"Mutation1"} )
+		and defined( $musitecols{"Chain1"} )
+		and defined( $musitecols{"Position1"} )
+		and defined( $musitecols{"Gene2"} )
+		and defined( $musitecols{"Transcript2"} )
+		and defined( $musitecols{"TranscriptPosition2"} )
+		and defined( $musitecols{"Site2"} )
+		and defined( $musitecols{"Chain2"} )
+		and defined( $musitecols{"Position2"} )
+		and defined( $musitecols{"Feature2"} )
+		and defined( $musitecols{"LinearDistance"} )
+		and defined( $musitecols{"DistanceInfo"} ) ) {
+		die "not a valid musite file\n";
+	}
+	my @wantmscols = (	$musitecols{"Gene1"} ,
+						$musitecols{"Chromosome1"} ,
+						$musitecols{"Start1"} ,
+						$musitecols{"Stop1"} ,
+						$musitecols{"Mutation1"} ,
+						$musitecols{"Chain1"} ,
+						$musitecols{"Position1"} ,
+						$musitecols{"Gene2"} ,
+						$musitecols{"Transcript2"} ,
+						$musitecols{"TranscriptPosition2"} ,
+						$musitecols{"Site2"} ,
+						$musitecols{"Chain2"} ,
+						$musitecols{"Position2"} ,
+						$musitecols{"Feature2"} ,
+						$musitecols{"LinearDistance"} ,
+						$musitecols{"DistanceInfo"} );
+	my $pdbCount = {};
+	my $nMuSitePairs = 0;
+	foreach my $line ( <$fh> ) { 
+		chomp( $line );
+		my @line = split /\t/ , $line;
+		my ( $gene1 , $chromosome1 , $start1 , $stop1 , $aaChange1 , 
+			 $chain1 , $position1 , 
+			 $gene2 , $transcript2 , $transcriptPosition2 , $site2 , 
+			 $chain2 , $position2 , $feature2 , 
+			 $linearDistance , $infos ) = @line[@wantmscols];
+		my $proteinMutation = TGI::ProteinVariant->new();
+		my $mutation = TGI::Variant->new();
+		$mutation->gene( $gene1 );
+		$mutation->chromosome( $chromosome1 );
+		$mutation->start( $start1 );
+		$mutation->stop( $stop1 );
+		$proteinMutation->aminoAcidChange( $aaChange1 );
+		$mutation->addProteinVariant( $proteinMutation );
+		my $site = TGI::Variant->new(); #for the purpose of making keys, will look like a mutation
+		$site->gene( $gene2 );
+		$site->chromosome( $transcript2 );
+		$site->start( $transcriptPosition2 );
+		$site->stop( $position2 );
+		$site->reference( $NULL );
+		$site->alternate( $PTM );
+		$proteinMutation->transcript( $transcript2 );
+		$proteinMutation->aminoAcidChange( $site2 );
+		$site->addProteinVariant( $proteinMutation );
+		$this->setDistance( $distance_matrix , $site , 
+							$mutation , $chain1 , $chain2 , 
+							$infos , $pdbCount );
+		my $weight2 = 1;
+		$this->setMutation( $mutations , $site , $feature2 , $weight2 );
+		$nMuSitePairs++;
+	}
+	$fh->close();
+	print STDOUT $nMuSitePairs." mutation-site pairs from .musites\n";
 	return;
 }
 
 sub readSiteSitePairs {
 	my ( $this , $mutations , $distance_matrix ) = @_;
-    if ( defined $this->{'sites_file'} ) { #if sitesite pairs included
-		print STDOUT "HotSpot3D::Cluster::readSiteSitePairs\n";
-		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'sites_file'} , "r" ) ) {
-			die "Could not open sitesite pairs data file $! \n"
-		};
-		my $si = 0;
-		my $headline = $fh->getline(); chomp( $headline );
-		my %sitesitecols = map{ ( $_ , $si++ ) } split( /\t/ , $headline );
-		my @required = ( "Gene1" , "Transcript1" , "TranscriptPosition1" , "Site1" ,
-						 "Chain1" , "Position1" , "Feature1" , 
-						 "Gene2" , "Transcript2" , "TranscriptPosition2" , "Site2" ,
-						 "Chain2" , "Position2" , "Feature2" , 
-						 "LinearDistance" , "DistanceInfo" );
-		unless(	defined( $sitesitecols{"Gene1"} )
-			and defined( $sitesitecols{"Transcript1"} )
-			and defined( $sitesitecols{"TranscriptPosition1"} )
-			and defined( $sitesitecols{"Site1"} )
-			and defined( $sitesitecols{"Chain1"} )
-			and defined( $sitesitecols{"Position1"} )
-			and defined( $sitesitecols{"Feature1"} )
-			and defined( $sitesitecols{"Gene2"} )
-			and defined( $sitesitecols{"Transcript2"} )
-			and defined( $sitesitecols{"TranscriptPosition2"} )
-			and defined( $sitesitecols{"Site2"} )
-			and defined( $sitesitecols{"Chain2"} )
-			and defined( $sitesitecols{"Position2"} )
-			and defined( $sitesitecols{"Feature2"} )
-			and defined( $sitesitecols{"LinearDistance"} )
-			and defined( $sitesitecols{"DistanceInfo"} ) ) {
-			die "not a valid sites file\n";
-		}
-		my @wantsitecols = (	$sitesitecols{"Gene1"} ,
-							$sitesitecols{"Transcript1"} ,
-							$sitesitecols{"TranscriptPosition1"} ,
-							$sitesitecols{"Site1"} ,
-							$sitesitecols{"Chain1"} ,
-							$sitesitecols{"Position1"} ,
-							$sitesitecols{"Feature1"} ,
-							$sitesitecols{"Gene2"} ,
-							$sitesitecols{"Transcript2"} ,
-							$sitesitecols{"TranscriptPosition2"} ,
-							$sitesitecols{"Site2"} ,
-							$sitesitecols{"Chain2"} ,
-							$sitesitecols{"Position2"} ,
-							$sitesitecols{"Feature2"} ,
-							$sitesitecols{"LinearDistance"} ,
-							$sitesitecols{"DistanceInfo"} );
-		my $pdbCount = {};
-		my $nSitePairs = 0;
-		foreach my $line ( <$fh> ) { 
-			chomp( $line );
-			my @line = split /\t/ , $line;
-			map{ $line =~ s/"//g } @line;
-			my ( $gene1 , $transcript1 , $transcriptPosition1 , $site1 , 
-				 $chain1 , $position1 , $feature1 , 
-				 $gene2 , $transcript2 , $transcriptPosition2 , $site2 , 
-				 $chain2 , $position2 , $feature2 , 
-				 $linearDistance , $infos ) = @line[@wantsitecols];
-			my $proteinSite1 = TGI::ProteinVariant->new();
-			my $tsite1 = TGI::Variant->new();
-			$tsite1->gene( $gene1);
-			$tsite1->chromosome( $transcript1 );
-			$tsite1->start( $transcriptPosition1 );
-			$tsite1->stop( $position1 );
-			$tsite1->reference( $NULL );
-			$tsite1->alternate( $PTM );
-			$proteinSite1->transcript( $transcript1 );
-			$proteinSite1->aminoAcidChange( $site1 );
-			$tsite1->addProteinVariant( $proteinSite1 );
-			my $proteinSite2 = TGI::ProteinVariant->new();
-			my $tsite2 = TGI::Variant->new(); #for the purpose of making keys, will look like a site21
-			$tsite2->gene( $gene2 );
-			$tsite2->chromosome( $transcript2 );
-			$tsite2->start( $transcriptPosition2 );
-			$tsite2->stop( $position2 );
-			$tsite2->reference( $NULL );
-			$tsite2->alternate( $PTM );
-			$proteinSite2->aminoAcidChange( $site2 );
-			$proteinSite2->transcript( $transcript2 );
-			$tsite2->addProteinVariant( $proteinSite2 );
-			$this->setDistance( $distance_matrix , $tsite1 , 
-								$tsite2 , $chain1 , $chain2 , 
-								$infos , $pdbCount );
-			my $weight1 = 1;
-			$this->setMutation( $mutations , $tsite1 , $feature1 , $weight1 );
-			my $weight2 = 1;
-			$this->setMutation( $mutations , $tsite2 , $feature2 , $weight2 );
-			$nSitePairs++;
-		}
-		$fh->close();
-		print STDOUT $nSitePairs." site-site pairs from .sites\n";
-		#print $this->printMutations( $mutations , "sitesite" );
-	} #if musite pairs included
+    return if ( not defined $this->sitePairsFile() ); #if sitesite pairs included
+	print STDOUT "HotSpot3D::Cluster::readSiteSitePairs\n";
+	my $fh = new FileHandle;
+	unless( $fh->open( $this->sitePairsFile() , "r" ) ) {
+		die "Could not open sitesite pairs data file $! \n"
+	};
+	my $si = 0;
+	my $headline = $fh->getline(); chomp( $headline );
+	my %sitesitecols = map{ ( $_ , $si++ ) } split( /\t/ , $headline );
+	my @required = ( "Gene1" , "Transcript1" , "TranscriptPosition1" , "Site1" ,
+					 "Chain1" , "Position1" , "Feature1" , 
+					 "Gene2" , "Transcript2" , "TranscriptPosition2" , "Site2" ,
+					 "Chain2" , "Position2" , "Feature2" , 
+					 "LinearDistance" , "DistanceInfo" );
+	unless(	defined( $sitesitecols{"Gene1"} )
+		and defined( $sitesitecols{"Transcript1"} )
+		and defined( $sitesitecols{"TranscriptPosition1"} )
+		and defined( $sitesitecols{"Site1"} )
+		and defined( $sitesitecols{"Chain1"} )
+		and defined( $sitesitecols{"Position1"} )
+		and defined( $sitesitecols{"Feature1"} )
+		and defined( $sitesitecols{"Gene2"} )
+		and defined( $sitesitecols{"Transcript2"} )
+		and defined( $sitesitecols{"TranscriptPosition2"} )
+		and defined( $sitesitecols{"Site2"} )
+		and defined( $sitesitecols{"Chain2"} )
+		and defined( $sitesitecols{"Position2"} )
+		and defined( $sitesitecols{"Feature2"} )
+		and defined( $sitesitecols{"LinearDistance"} )
+		and defined( $sitesitecols{"DistanceInfo"} ) ) {
+		die "not a valid sites file\n";
+	}
+	my @wantsitecols = (	$sitesitecols{"Gene1"} ,
+						$sitesitecols{"Transcript1"} ,
+						$sitesitecols{"TranscriptPosition1"} ,
+						$sitesitecols{"Site1"} ,
+						$sitesitecols{"Chain1"} ,
+						$sitesitecols{"Position1"} ,
+						$sitesitecols{"Feature1"} ,
+						$sitesitecols{"Gene2"} ,
+						$sitesitecols{"Transcript2"} ,
+						$sitesitecols{"TranscriptPosition2"} ,
+						$sitesitecols{"Site2"} ,
+						$sitesitecols{"Chain2"} ,
+						$sitesitecols{"Position2"} ,
+						$sitesitecols{"Feature2"} ,
+						$sitesitecols{"LinearDistance"} ,
+						$sitesitecols{"DistanceInfo"} );
+	my $pdbCount = {};
+	my $nSitePairs = 0;
+	foreach my $line ( <$fh> ) { 
+		chomp( $line );
+		my @line = split /\t/ , $line;
+		map{ $line =~ s/"//g } @line;
+		my ( $gene1 , $transcript1 , $transcriptPosition1 , $site1 , 
+			 $chain1 , $position1 , $feature1 , 
+			 $gene2 , $transcript2 , $transcriptPosition2 , $site2 , 
+			 $chain2 , $position2 , $feature2 , 
+			 $linearDistance , $infos ) = @line[@wantsitecols];
+		my $proteinSite1 = TGI::ProteinVariant->new();
+		my $tsite1 = TGI::Variant->new();
+		$tsite1->gene( $gene1);
+		$tsite1->chromosome( $transcript1 );
+		$tsite1->start( $transcriptPosition1 );
+		$tsite1->stop( $position1 );
+		$tsite1->reference( $NULL );
+		$tsite1->alternate( $PTM );
+		$proteinSite1->transcript( $transcript1 );
+		$proteinSite1->aminoAcidChange( $site1 );
+		$tsite1->addProteinVariant( $proteinSite1 );
+		my $proteinSite2 = TGI::ProteinVariant->new();
+		my $tsite2 = TGI::Variant->new(); #for the purpose of making keys, will look like a site21
+		$tsite2->gene( $gene2 );
+		$tsite2->chromosome( $transcript2 );
+		$tsite2->start( $transcriptPosition2 );
+		$tsite2->stop( $position2 );
+		$tsite2->reference( $NULL );
+		$tsite2->alternate( $PTM );
+		$proteinSite2->aminoAcidChange( $site2 );
+		$proteinSite2->transcript( $transcript2 );
+		$tsite2->addProteinVariant( $proteinSite2 );
+		$this->setDistance( $distance_matrix , $tsite1 , 
+							$tsite2 , $chain1 , $chain2 , 
+							$infos , $pdbCount );
+		my $weight1 = 1;
+		$this->setMutation( $mutations , $tsite1 , $feature1 , $weight1 );
+		my $weight2 = 1;
+		$this->setMutation( $mutations , $tsite2 , $feature2 , $weight2 );
+		$nSitePairs++;
+	}
+	$fh->close();
+	print STDOUT $nSitePairs." site-site pairs from .sites\n";
+	#print $this->printMutations( $mutations , "sitesite" );
 	return;
 }
 
@@ -1262,75 +1302,74 @@ sub readDrugClean {
 	#$this->readDrugClean( $distance_matrix );
 	my ( $this , $mutations , $distance_matrix ) = @_;
 	print STDOUT "HotSpot3D::Cluster::readDrugClean\n";
-    if ( $this->{'drug_clean_file'} ) { #if drug pairs included
-		my $fh = new FileHandle;
-		unless( $fh->open( $this->{'drug_clean_file'} , "r" ) ) {
-			die "Could not open drug pairs data file $! \n"
-		};
-		my $rxi = 0;
-		my $headline = $fh->getline(); chomp( $headline );
-		my %drugcols = map{ ( $_ , $rxi++ ) } split( /\t/ , $headline );
-		my @required = ( "Drug" , "PDB_ID" , "Gene" , "Chromosome" , "Start" , 
-						 "Stop" , "Amino_Acid_Change" , 
-						 "Mutation_Location_In_PDB" ,
-						 "3D_Distance_Information" );
-		unless(	defined( $drugcols{"Drug"} )						#0
-			and defined( $drugcols{"PDB_ID"} )						#2
-			and defined( $drugcols{"Chain1"} )						#2
-			and defined( $drugcols{"Gene"} )						#6
-			and defined( $drugcols{"Chromosome"} )					#7
-			and defined( $drugcols{"Start"} )						#8
-			and defined( $drugcols{"Stop"} )						#9
-			and defined( $drugcols{"Amino_Acid_Change"} )			#10
-			and defined( $drugcols{"Chain2"} )						#2
-			and defined( $drugcols{"Mutation_Location_In_PDB"} )	#12
-			and defined( $drugcols{"3D_Distance_Information"} ) ) {	#17
-			die "not a valid drug-clean file\n";
-		}
-		my @wantrxcols = (	$drugcols{"Drug"} ,
-							$drugcols{"PDB_ID"} ,
-							$drugcols{"Chain1"} ,
-							$drugcols{"Gene"} ,
-							$drugcols{"Chromosome"} ,
-							$drugcols{"Start"} ,
-							$drugcols{"Stop"} ,
-							$drugcols{"Amino_Acid_Change"} ,
-							$drugcols{"Chain2"} ,
-							$drugcols{"Mutation_Location_In_PDB"} ,
-							$drugcols{"3D_Distance_Information"} );
-		my $pdbCount = {};
-		foreach my $line ( <$fh> ) { 
-				chomp( $line );
-				my @line = split /\t/ , $line;
-				map{ $line =~ s/"//g } @line;
-				my ( $drug, $pdb , $chain1 , $gene, 
-					 $chromosome , $start , $stop , $aaChange , $chain2 , 
-					 $loc, $infos ) = @line[@wantrxcols];
-				#my ( $dist, $pdb2, $pval ) = split / /, $infos;
-				$infos =~ s/"//g;
+    return if ( not defined $this->drugsCleanFile() ); #if drug pairs included
+	my $fh = new FileHandle;
+	unless( $fh->open( $this->drugsCleanFile() , "r" ) ) {
+		die "Could not open drug pairs data file $! \n"
+	};
+	my $rxi = 0;
+	my $headline = $fh->getline(); chomp( $headline );
+	my %drugcols = map{ ( $_ , $rxi++ ) } split( /\t/ , $headline );
+	my @required = ( "Drug" , "PDB_ID" , "Gene" , "Chromosome" , "Start" , 
+					 "Stop" , "Amino_Acid_Change" , 
+					 "Mutation_Location_In_PDB" ,
+					 "3D_Distance_Information" );
+	unless(	defined( $drugcols{"Drug"} )						#0
+		and defined( $drugcols{"PDB_ID"} )						#2
+		and defined( $drugcols{"Chain1"} )						#2
+		and defined( $drugcols{"Gene"} )						#6
+		and defined( $drugcols{"Chromosome"} )					#7
+		and defined( $drugcols{"Start"} )						#8
+		and defined( $drugcols{"Stop"} )						#9
+		and defined( $drugcols{"Amino_Acid_Change"} )			#10
+		and defined( $drugcols{"Chain2"} )						#2
+		and defined( $drugcols{"Mutation_Location_In_PDB"} )	#12
+		and defined( $drugcols{"3D_Distance_Information"} ) ) {	#17
+		die "not a valid drug-clean file\n";
+	}
+	my @wantrxcols = (	$drugcols{"Drug"} ,
+						$drugcols{"PDB_ID"} ,
+						$drugcols{"Chain1"} ,
+						$drugcols{"Gene"} ,
+						$drugcols{"Chromosome"} ,
+						$drugcols{"Start"} ,
+						$drugcols{"Stop"} ,
+						$drugcols{"Amino_Acid_Change"} ,
+						$drugcols{"Chain2"} ,
+						$drugcols{"Mutation_Location_In_PDB"} ,
+						$drugcols{"3D_Distance_Information"} );
+	my $pdbCount = {};
+	foreach my $line ( <$fh> ) { 
+			chomp( $line );
+			my @line = split /\t/ , $line;
+			map{ $line =~ s/"//g } @line;
+			my ( $drug, $pdb , $chain1 , $gene, 
+				 $chromosome , $start , $stop , $aaChange , $chain2 , 
+				 $loc, $infos ) = @line[@wantrxcols];
+			#my ( $dist, $pdb2, $pval ) = split / /, $infos;
+			$infos =~ s/"//g;
 
-				my $structure = $this->makeStructureKey( $pdb , $chain1 , $chain2 );
-				my $proteinMutation = TGI::ProteinVariant->new();
-				my $mutation = TGI::Variant->new();
-				$mutation->gene( $gene );
-				$mutation->chromosome( $chromosome );
-				$mutation->start( $start );
-				$mutation->stop( $stop );
-				$proteinMutation->aminoAcidChange( $aaChange );
-				$mutation->addProteinVariant( $proteinMutation );
-				my $soCalledMutation = TGI::Variant->new(); #for the purpose of making keys, will look like a mutation
-				$soCalledMutation->gene( $gene );
-				$soCalledMutation->chromosome( $drug );
-				$soCalledMutation->start( $structure );
-				$soCalledMutation->stop( $structure );
-				$proteinMutation->aminoAcidChange( $aaChange );
-				$soCalledMutation->addProteinVariant( $proteinMutation );
-				$this->setDistance( $distance_matrix , $soCalledMutation , 
-									$mutation , $chain1 , $chain2 , 
-									$infos , $pdbCount );
-		}
-		$fh->close();
-	} #if drug pairs included
+			my $structure = $this->makeStructureKey( $pdb , $chain1 , $chain2 );
+			my $proteinMutation = TGI::ProteinVariant->new();
+			my $mutation = TGI::Variant->new();
+			$mutation->gene( $gene );
+			$mutation->chromosome( $chromosome );
+			$mutation->start( $start );
+			$mutation->stop( $stop );
+			$proteinMutation->aminoAcidChange( $aaChange );
+			$mutation->addProteinVariant( $proteinMutation );
+			my $soCalledMutation = TGI::Variant->new(); #for the purpose of making keys, will look like a mutation
+			$soCalledMutation->gene( $gene );
+			$soCalledMutation->chromosome( $drug );
+			$soCalledMutation->start( $structure );
+			$soCalledMutation->stop( $structure );
+			$proteinMutation->aminoAcidChange( $aaChange );
+			$soCalledMutation->addProteinVariant( $proteinMutation );
+			$this->setDistance( $distance_matrix , $soCalledMutation , 
+								$mutation , $chain1 , $chain2 , 
+								$infos , $pdbCount );
+	}
+	$fh->close();
 	return;
 }
 
@@ -1835,14 +1874,15 @@ sub help_text {
 
 Usage: hotspot3d cluster [options]
 
-                             REQUIRE
---maf-file                   .maf file used in proximity search step
-
                              REQUIRE AT LEAST ONE
 --sites-file                 A .sites file with site-site pairs
 --pairwise-file              A .pairwise file with mutation-mutation pairs (provide maf-file)
 --drug-clean-file            A .drugs.*target.clean file with mutation-drug pairs (provide maf-file)
 --musites-file               A .musites file with mutation-site pairs (provide maf-file and site-file)
+
+                             CONDITIONAL REQUIREMENT
+--maf-file                   .maf file used in proximity search step
+                                 necessary for pairwise, drug-clean, or musites pair data
 
                              OPTIONAL
 --output-prefix              Output prefix, default: 3D_Proximity
