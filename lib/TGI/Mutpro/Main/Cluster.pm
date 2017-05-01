@@ -347,6 +347,7 @@ sub setOptions {
 	##### END
 
 	print STDOUT "=====Parameters=====\n";
+	print STDOUT " linear-cutoff         = ".$this->{'linear_cutoff'}."\n";
 	print STDOUT " p-value-cutoff        = ".$this->{'p_value_cutoff'}."\n";
 	print STDOUT " 3d-distance-cutoff    = ".$this->{'3d_distance_cutoff'}."\n";
 	print STDOUT " max-radius            = ".$this->{'max_radius'}."\n";
@@ -359,6 +360,20 @@ sub setOptions {
 	if ( defined $this->{'max_processes'} ) {
 		print STDOUT " max-processes         = ".$this->{'max_processes'}."\n";
 	}
+	print STDOUT "====================\n";
+	print STDOUT "=====Data===========\n";
+	print STDOUT " maf-file              = ".$this->{'maf_file'}."\n";
+	print STDOUT " transcript_id_header  = ".$this->{'transcript_id_header'}."\n";
+	print STDOUT " amino-acid-header     = ".$this->{'amino_acid_header'}."\n";
+	print STDOUT " weight-header         = ".$this->{'weight_header'}."\n";
+	print STDOUT " site-file             = ".$this->{'site_file'}."\n"; 
+	print STDOUT " gene-list-file        = ".$this->{'gene_list_file'}."\n";
+	print STDOUT " structure-list-file   = ".$this->{'structure_list_file'}."\n";
+	print STDOUT " pairwise-file         = ".$this->{'pairwise_file'}."\n";
+	print STDOUT " drug-clean-file       = ".$this->{'drug_clean_file'}."\n";
+	print STDOUT " sites-file            = ".$this->{'sites_file'}."\n";
+	print STDOUT " musites-file          = ".$this->{'musites_file'}."\n";
+	print STDOUT " output-prefix         = ".$this->{'output_prefix'}."\n";
 	print STDOUT "====================\n";
 
 	return;
@@ -1839,8 +1854,8 @@ Usage: hotspot3d cluster [options]
 --vertex-type                Graph vertex type for network-based clustering (recurrence, unique, site or weight), default: site
                                  recurrence vertices are the genomic mutations for each sample from the given .maf
                                  unique vertices are the specific genomic changes
-								 site vertices are the affected protein positions
-								 weight vertices are the genomic mutations with a numerical weighting
+                                 site vertices are the affected protein positions
+                                 weight vertices are the genomic mutations with a numerical weighting
 --distance-measure           Pair distance to use (shortest or average), default: average
 --structure-dependent        Clusters for each structure or across all structures, default (no flag): independent
 --subunit-dependent          Clusters for each subunit or across all subunits, default (no flag): independent

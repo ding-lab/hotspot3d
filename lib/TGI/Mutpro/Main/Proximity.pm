@@ -25,13 +25,13 @@ my $MAXDISTANCE = 100;
 sub new {
 	my $class = shift;
 	my $this = {};
-	$this->{'maf_file'} = undef;
-	$this->{'skip_silent'} = undef;
-	$this->{'missense_only'} = undef;
-	$this->{'data_dir'} = undef;
-	$this->{'uniprot_file'} = undef;
-	$this->{'site_file'} = undef;
-	$this->{'drugport_file'} = undef;
+	$this->{'maf_file'} = "";
+	$this->{'skip_silent'} = 0;
+	$this->{'missense_only'} = 0;
+	$this->{'data_dir'} = "";
+	$this->{'uniprot_file'} = "";
+	$this->{'site_file'} = "";
+	$this->{'drugport_file'} = "";
 	$this->{'output_prefix'} = '3D_Proximity';
 	$this->{'p_value_cutoff'} = undef;
 	$this->{'3d_distance_cutoff'} = undef;
@@ -57,7 +57,7 @@ sub process {
 
 	my $site_hash_ref = $this->getSites( $trans_to_uniprot );
 
-	my $maf_hash_ref = $this->parseMaf( $this->{'maf_file'}, $trans_to_uniprot );
+	my $maf_hash_ref = $this->parseMaf( $trans_to_uniprot );
 
 	print STDOUT "searching...\n";
 	my ( $pairoutref , $cosmicref , $roiref , 
@@ -272,7 +272,7 @@ sub getMutationMutationPairs {
 		chomp; @_ = split /\t/;
 		my $mutation1Info = join("\t", @_[0..8]);
 		my $mutation2Info = join("\t", @_[9..17]);
-		print STDOUT $mutation1Info."\t".$mutation2Info."\n";
+		#print STDOUT $mutation1Info."\t".$mutation2Info."\n";
 		if ( defined $filterHash->{$mutation1Info}->{$mutation2Info} ) {
 			$filterHash->{$mutation1Info}->{$mutation2Info} .= $_[19]; 
 		} elsif ( defined $filterHash->{$mutation2Info}->{$mutation1Info} ) {
@@ -351,21 +351,55 @@ sub setOptions {
 	}
 	unless( $this->{'data_dir'} ) { warn 'You must provide a output directory ! ', "\n"; die help_text(); }
 	unless( -d $this->{'data_dir'} ) { warn 'You must provide a valid data directory ! ', "\n"; die help_text(); }
-	unless( $this->{'maf_file'} and (-e $this->{'maf_file'}) ) { warn 'You must provide a MAF format file ! ', "\n"; die $this->help_text(); }
+	if ( $this->siteListFile() ne "" ) {
+		unless( -e $this->siteListFile() ) { 
+			warn "site-file provided (".$this->siteListFile()."), but it does not exist\n";
+			die $this->help_text();
+		}
+		if ( $this->{'maf_file'} ne "" ) {
+			unless ( -e $this->{'maf_file'} ) { 
+				warn "maf-file provided (".$this->{'maf_file'}."), but it does not exist\n"; 
+				die $this->help_text();
+			}
+		}
+	} else {
+		unless( $this->{'maf_file'} and ( -e $this->{'maf_file'} ) ) { 
+			warn "You must provide a maf-ile and/or a site-file\n"; 
+			die $this->help_text(); 
+		}
+	}
 	if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf_file'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
-	if ( $this->siteListFile() ) { unless( -e $this->siteListFile() ) { warn "site-file provided, but it does not exist!\n"; die $this->help_text(); } }
 	$this->{'uniprot_file'} = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
 	unless( -e $this->{'uniprot_file'} ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
 	my $prior_dir = "$this->{'data_dir'}\/prioritization";
 	unless( -d $prior_dir ) { die "the Prioritization directory $prior_dir does not exist ! \n"; };
+	print STDOUT "=====Parameters=====\n";
+	print STDOUT " p-value-cutoff        = ".$this->{'p_value_cutoff'}."\n";
+	print STDOUT " 3d-distance-cutoff    = ".$this->{'3d_distance_cutoff'}."\n";
+	print STDOUT " skip-silent           = ".$this->{'skip_silent'}."\n";
+	print STDOUT " missense-only         = ".$this->{'missense_only'}."\n";
+	print STDOUT " linear-cutoff         = ".$this->{'linear_cutoff'}."\n";
+	print STDOUT "====================\n";
+	print STDOUT "=====Data===========\n";
+	print STDOUT " prep-dir              = ".$this->{'data_dir'}."\n";
+	print STDOUT " maf-file              = ".$this->{'maf_file'}."\n";
+	print STDOUT " transcript-id-header  = ".$this->{'transcript_id_header'}."\n";
+	print STDOUT " amino-acid-header     = ".$this->{'amino_acid_header'}."\n";
+	print STDOUT " drugport-file         = ".$this->{'drugport_file'}."\n";
+	print STDOUT " site-file             = ".$this->{'site_file'}."\n";
+	print STDOUT " output-prefix         = ".$this->{'output_prefix'}."\n";
+	print STDOUT "====================\n";
 	return ( $prior_dir );
 }
 
 # parse maf file 
 sub parseMaf {
-	my ( $this, $maf, $trans_to_uniprot )  = @_;
+	my ( $this , $trans_to_uniprot )  = @_;
+	return if ( $this->{'maf_file'} eq "" );
 	my $fh = new FileHandle;
-	unless( $fh->open($maf) ) { die "Could not open MAF format mutation file\n" };
+	unless( $fh->open( $this->{'maf_file'} ) ) {
+		die "Could not open MAF format mutation file\n";
+	}
 	my $i = 0; my %fth;
 	while ( my $ll = $fh->getline ) {
 	   if ( $ll =~ m/^Hugo_Symbol/ ) { chomp( $ll );
@@ -450,7 +484,9 @@ sub getPositionMatch {
 sub getTransMaptoUniprot {
 	my ( $this, $uniprotf ) = @_;
 	my $fh = new FileHandle;
-	unless( $fh->open($uniprotf) ) { die "Could not open uniprot transcript mapping file\n" };
+	unless( $fh->open($uniprotf) ) {
+		die "Could not open uniprot transcript mapping file\n";
+	}
 	my %transHash;
 	while ( my $a = $fh->getline ) {
 		chomp($a);
@@ -476,7 +512,9 @@ sub getSites {
 	my $sites = {};
 	if ( defined $this->siteListFile() ) {
 		my $fh = new FileHandle;
-		unless( $fh->open( $this->siteListFile() ) ) { die "Could not open sites file\n" };
+		unless( $fh->open( $this->siteListFile() ) ) {
+			die "Could not open sites file\n";
+		}
 		my $i = 0; my %fth;
 		while ( my $ll = $fh->getline ) {
 		   if ( $ll =~ m/^Hugo_Symbol/ ) { chomp( $ll );
@@ -560,10 +598,48 @@ sub proximitySearching {
 			my ( $uid1, $chain1, $pdbcor1, $offset1, $residue1, $domain1, $cosmic1, 
 				 $uid2, $chain2, $pdbcor2, $offset2, $residue2, $domain2, $cosmic2, 
 				 $proximityinfor ) = @line;
+			if ( not defined $pdbcor1 
+				 or not defined $offset1 
+				 or not defined $chain1 
+				 or not defined $pdbcor2 
+				 or not defined $offset2 
+				 or not defined $chain2 
+			) {
+				print STDERR "Search warning - incomplete coordinate info: ";
+				print STDERR $b."\n";
+				next;
+			}
+			if ( not defined $uid1
+				 or not defined $uid2
+				 or not defined $residue1
+				 or not defined $residue2
+			) {
+				print STDERR "Search warning - incomplete protein info: ";
+				print STDERR $b."\n";
+				next;
+			}
+			if ( not defined $proximityinfor ) {
+				print STDERR "Search warning - incomplete proximity info: ";
+				print STDERR $b."\n";
+				next;
+			}
+			if ( not defined $domain1
+				 or not defined $cosmic1
+				 or not defined $domain2
+				 or not defined $cosmic2
+			) {
+				print STDERR "Search warning - incomplete annotation info: ";
+				print STDERR $b."\n";
+				next;
+			}
 			my $uniprotcor1 = $pdbcor1 + $offset1;
 			my $uniprotcor2 = $pdbcor2 + $offset2;
 			my $lineardis = undef;
-			if ( $uid1 eq $uid2 ) { $lineardis = abs($uniprotcor1 - $uniprotcor2) } else { $lineardis = "N\/A"; }
+			if ( $uid1 eq $uid2 ) {
+				$lineardis = abs($uniprotcor1 - $uniprotcor2);
+			} else {
+				$lineardis = "N\/A";
+			}
 			#print $uniprotID."\t".$uid2."\t".$uniprotcor1."\t".$uniprotcor2."\t".$lineardis."\n";
 			my $muPart1 = join( "\t" , @line[1,2,5,6] ); #chain, position, domain, cosmic
 			my $muPart2 = join( "\t" , @line[8,9,12,13] );
@@ -676,7 +752,7 @@ sub proximitySearching {
 						}
 						if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 							my $muKeys = join( "|" , keys( %{$mafHashref->{$uid2}->{$uniprotcor2}} ) ); 
-							print "mutation: ".join( "\t" , ( $muKeys, $muPart2 , $sitePart1 , $lineardis , $proximityinfor ) );
+							#print "mutation: ".join( "\t" , ( $muKeys, $muPart2 , $sitePart1 , $lineardis , $proximityinfor ) );
 							foreach my $mutationKey ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
 								if ( $this->cutFiltering( $lineardis , $proximityinfor ) ) {
 									push( @mutationSiteResults , join( "\t" , ( $mutationKey , $muPart2 , $sitePart1 , $lineardis , $proximityinfor ) ) );
@@ -721,7 +797,7 @@ sub siteExists {
 sub drug_proximity_postprocessing {
 	my ( $this, $output_prefix, $drugport_parsing_results ) = @_;
 	# post processing like collapsed clean results
-	if ( not defined $drugport_parsing_results ) {
+	if ( $drugport_parsing_results eq "" ) {
 		warn "HotSpot3D Search Warning: Skipping drugport proximity, because no results file given.\n";
 		return;
 	}
@@ -832,12 +908,14 @@ sub help_text{
 Usage: hotspot3d search [options]
 
                              REQUIRED
---maf-file                   Input MAF file used to search proximity results
 --prep-dir                   HotSpot3D preprocessing results directory
+
+                             REQUIRE AT LEAST ONE
+--maf-file                   Input MAF file used to search proximity results
+--site-file                  Protein site file (gene transcript position description)
 
                              OPTIONAL
 --drugport-file              DrugPort database parsing results file
---site-file                  Protein site file
 --output-prefix              Prefix of output files, default: 3D_Proximity 
 --skip-silent                skip silent mutations, default: no
 --missense-only              missense mutation only, default: no
