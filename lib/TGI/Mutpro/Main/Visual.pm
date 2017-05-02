@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Visual;
 #----------------------------------
 # $Authors: Adam Scott & Beifang Niu 
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 0.3 $
 # $URL: $
 # $Doc: $ clusters visualization
 #----------------------------------
@@ -21,6 +21,7 @@ use List::MoreUtils qw( uniq );
 
 my $NETWORK = "network";
 my $DENSITY = "density";
+my $PTM = "ptm";
 
 sub new {
     my $class = shift;
@@ -34,8 +35,10 @@ sub new {
     $this->{_PYMOL} = '/usr/bin/pymol';
     $this->{_SCRIPT_ONLY} = undef;
     $this->{_MUT_COLOR} = '1,0,0';
+    $this->{_SITE_COLOR} = '0,0,1';
     $this->{_COMPOUND_COLOR} = 'util.cbag';
     $this->{_MUT_STYLE} = 'spheres';
+    $this->{_SITE_STYLE} = 'sticks';
     $this->{_COMPOUND_STYLE} = 'sticks';
     $this->{_BG_COLOR} = 'white';
     $this->{_NO_LABEL} = undef;
@@ -60,6 +63,8 @@ sub process {
     $options = GetOptions (
 		'clusters-file=s' => \$this->{_CLUSTERS_FILE},
         'pairwise-file=s' => \$this->{_PAIRWISE_FILE},
+        'musites-file=s' => \$this->{_MUSITES_FILE},
+        'sites-file=s' => \$this->{_SITES_FILE},
         'drug-pairs-file=s' => \$this->{_DRUG_PAIRS_FILE},
         'output-dir=s' => \$this->{_OUTPUT_DIR},
         'output-file=s' => \$this->{_OUTPUT_FILE},
@@ -68,34 +73,52 @@ sub process {
         'pymol=s' => \$this->{_PYMOL},
 		'script-only' => \$this->{_SCRIPT_ONLY},
         'mut-color=s' => \$this->{_MUT_COLOR},
+        'site-color=s' => \$this->{_SITE_COLOR},
         'compound-color=s' => \$this->{_COMPOUND_COLOR},
         'mut-style=s' => \$this->{_MUT_STYLE},
+        'site-style=s' => \$this->{_SITE_STYLE},
         'compound-style=s' => \$this->{_COMPOUND_STYLE},
         'no-label' => \$this->{_NO_LABEL},
         'bg-color=s' => \$this->{_BG_COLOR},
         'clusters-file-type=s' => \$this->{clusters_file_type},
         'help' => \$help
     );
-    if ( $help ) { warn help_text(); exit 0; }
+    if ( $help ) { die $this->help_text(); }
     unless( $options ) { die $this->help_text(); }
-    if ( ( not $this->{_PAIRWISE_FILE} ) && ( not $this->{_DRUG_PAIRS_FILE} ) ) { #no input
-		warn 'You must provide a pairwise file or a drug pairs file! ', "\n";
+    if (    ( not $this->{_PAIRWISE_FILE} ) 
+		and ( not $this->{_MUSITES_FILE} ) 
+		and ( not $this->{_SITES_FILE} ) 
+		and ( not $this->{_DRUG_PAIRS_FILE} ) ) { #no input
+		warn 'You must provide a pairwise, musites, sites, or drug pairs file! ', "\n";
 		die $this->help_text();
 	}
-	if ( not $this->{_DRUG_PAIRS_FILE} ) { #have drug pairs input
+    unless( $this->{_CLUSTERS_FILE} ) { warn 'You must provide a cluster file ! ', "\n"; die $this->help_text(); }
+    unless( -e $this->{_CLUSTERS_FILE} ) { warn ' cluster file is not exist  ! ', "\n"; die $this->help_text(); }
+    unless( $this->{_OUTPUT_FILE} || $this->{_OUTPUT_DIR} ) { warn 'You must provide an output file or directory! ', "\n"; die $this->help_text(); }
+	if ( $this->{_PAIRWISE_FILE} ) {
 		if ( not -e $this->{_PAIRWISE_FILE} ) {
 			warn ' pairwise file does not exist  ! ', "\n";
 			die $this->help_text();
 		}
-	} elsif ( not $this->{_PAIRWISE_FILE} ) {
+	} 
+	if ( $this->{_MUSITES_FILE} ) {
+		if ( not -e $this->{_MUSITES_FILE} ) {
+			warn ' musites file does not exist  ! ', "\n";
+			die $this->help_text();
+		}
+	}
+	if ( $this->{_SITES_FILE} ) {
+		if ( not -e $this->{_SITES_FILE} ) {
+			warn ' sites file does not exist  ! ', "\n";
+			die $this->help_text();
+		}
+	}
+	if ( $this->{_DRUG_PAIRS_FILE} ) {
 		if ( not -e $this->{_DRUG_PAIRS_FILE} ) {
 			warn ' drug pairs file does not exist  ! ', "\n";
 			die $this->help_text();
 		}
 	}
-    unless( $this->{_CLUSTERS_FILE} ) { warn 'You must provide a cluster file ! ', "\n"; die $this->help_text(); }
-    unless( -e $this->{_CLUSTERS_FILE} ) { warn ' cluster file is not exist  ! ', "\n"; die $this->help_text(); }
-    unless( $this->{_OUTPUT_FILE} || $this->{_OUTPUT_DIR} ) { warn 'You must provide an output file or directory! ', "\n"; die $this->help_text(); }
     map{ $this->{_STAT}{$_} = 0; } qw( num_muts pdb pairs );
 
     if ( not defined $this->{clusters_file_type} ) {
@@ -108,7 +131,8 @@ sub process {
 
 		#$this->checkPDB(  );
 
-		unless( $this->{mutations} ) { warn "No proximal pairs were found on ".$this->{_PDB}."\n"; }
+		unless( $this->{mutations} ) { warn "No proximal mutation pairs were found on ".$this->{_PDB}."\n"; }
+		unless( $this->{sites} ) { warn "No proximal site pairs were found on ".$this->{_PDB}."\n"; }
 		$this->getClusters(  );
 		unless( $this->{clusters} ) { warn "No cluster to display on ".$this->{_PDB}."\n"; }
 		$this->makePyMOLScript(  );
@@ -150,48 +174,207 @@ sub addPDB {
 
 sub getMappingLocations {
 	my ( $this ) = @_;
+	$this->readPairwise();
+	$this->readMuSites();
+	$this->readSites();
+	$this->readDrugPairs();
+	return 1;
+}
+
+sub readPairwise {
+	my ( $this ) = @_;
 	if ( $this->{_PAIRWISE_FILE} ) {
 		my $fh = new FileHandle;
 		print STDOUT "Getting mutation-mutation pairs\n";
 		unless( $fh->open( $this->{_PAIRWISE_FILE} ) ) { die "Could not open pairwise file\n" };
+		my @ccols;
 		while ( my $line = <$fh> ) {
 			chomp( $line );
-			if ( $line =~ /$this->{_PDB}/ ) {
-				my ( $gene1 , $mu1 , $chain1 , $res1 , $gene2 , $mu2 , $chain2 , $res2 ) = ( split /\t/ , $line )[0,4,5,6,9,13,14,15];
-				$chain1 =~ s/\[(\w)\]/$1/g;
-				$chain2 =~ s/\[(\w)\]/$1/g;
-				$this->{mutations}->{$gene1.":".$mu1}->{$chain1.":".$res1} = 0;
-				$this->{mutations}->{$gene2.":".$mu2}->{$chain2.":".$res2} = 0;
-				$this->{chains}->{$chain1}->{$gene1} = 0;
-				$this->{chains}->{$chain2}->{$gene2} = 0;
-				push @{$this->{locations}->{$gene1}->{$chain1}->{$res1}} , $mu1;
-				push @{$this->{locations}->{$gene2}->{$chain2}->{$res2}} , $mu2;
+			if ( $line =~ /Gene/ ) {
+				my $i = 0;
+				my %ccols = map{ ( $_ , $i++ ) } split( /\t/ , $line );
+				unless(	defined( $ccols{"Gene1"} )
+					and defined( $ccols{"Mutation1"} )
+					and defined( $ccols{"Chain1"} )
+					and defined( $ccols{"Position1"} )
+					and defined( $ccols{"Gene2"} )
+					and defined( $ccols{"Mutation2"} )
+					and defined( $ccols{"Chain2"} )
+					and defined( $ccols{"Position2"} ) ) {
+					die "Not a valid pairwise file!\n";
+				}
+				@ccols = (	$ccols{"Gene1"} ,
+							$ccols{"Mutation1"} , 
+							$ccols{"Chain1"} , 
+							$ccols{"Position1"} , 
+							$ccols{"Gene2"} ,
+							$ccols{"Mutation2"} , 
+							$ccols{"Chain2"} , 
+							$ccols{"Position2"} );
+			} else {
+				if ( $line =~ /$this->{_PDB}/ ) {
+					my ( $gene1 , $mu1 , $chain1 , $res1 , $gene2 , $mu2 , $chain2 , $res2 ) = ( split /\t/ , $line )[@ccols];
+					$chain1 =~ s/\[(\w)\]/$1/g;
+					$chain2 =~ s/\[(\w)\]/$1/g;
+					$this->{mutations}->{$gene1.":".$mu1}->{$chain1.":".$res1} = 0;
+					$this->{mutations}->{$gene2.":".$mu2}->{$chain2.":".$res2} = 0;
+					$this->{chains}->{$chain1}->{$gene1} = 0;
+					$this->{chains}->{$chain2}->{$gene2} = 0;
+					push @{$this->{locations}->{$gene1}->{$chain1}->{$res1}} , $mu1;
+					push @{$this->{locations}->{$gene2}->{$chain2}->{$res2}} , $mu2;
+				}
 			}
 		}
 		$fh->close();
 	}
+	return;
+}
+
+sub readMuSites {
+	my ( $this ) = @_;
+	if ( $this->{_MUSITES_FILE} ) {
+		my $fh = new FileHandle;
+		print STDOUT "Getting mutation-site pairs\n";
+		unless( $fh->open( $this->{_MUSITES_FILE} ) ) { die "Could not open musites file\n" };
+		my @ccols;
+		while ( my $line = <$fh> ) {
+			chomp( $line );
+			if ( $line =~ /Gene/ ) {
+				my $i = 0;
+				my %ccols = map{ ( $_ , $i++ ) } split( /\t/ , $line );
+				unless(	defined( $ccols{"Gene1"} )
+					and defined( $ccols{"Mutation1"} )
+					and defined( $ccols{"Chain1"} )
+					and defined( $ccols{"Position1"} )
+					and defined( $ccols{"Gene2"} )
+					and defined( $ccols{"Site2"} )
+					and defined( $ccols{"Chain2"} )
+					and defined( $ccols{"Position2"} ) ) {
+					die "Not a valid musites file!\n";
+				}
+				@ccols = (	$ccols{"Gene1"} ,
+							$ccols{"Mutation1"} , 
+							$ccols{"Chain1"} , 
+							$ccols{"Position1"} , 
+							$ccols{"Gene2"} ,
+							$ccols{"Site2"} , 
+							$ccols{"Chain2"} , 
+							$ccols{"Position2"} );
+			} else {
+				if ( $line =~ /$this->{_PDB}/ ) {
+					my ( $gene1 , $mu1 , $chain1 , $res1 , $gene2 , $site2 , $chain2 , $res2 ) = ( split /\t/ , $line )[@ccols];
+					$chain1 =~ s/\[(\w)\]/$1/g;
+					$chain2 =~ s/\[(\w)\]/$1/g;
+					$this->{mutations}->{$gene1.":".$mu1}->{$chain1.":".$res1} = 0;
+					$this->{sites}->{$gene2.":".$site2}->{$chain2.":".$res2} = 0;
+					$this->{chains}->{$chain1}->{$gene1} = 0;
+					$this->{chains}->{$chain2}->{$gene2} = 0;
+					push @{$this->{locations}->{$gene1}->{$chain1}->{$res1}} , $mu1;
+					push @{$this->{locations}->{$gene2}->{$chain2}->{$res2}} , $site2;
+				}
+			}
+		}
+		$fh->close();
+	}
+	return;
+}
+
+sub readSites {
+	my ( $this ) = @_;
+	if ( $this->{_SITES_FILE} ) {
+		my $fh = new FileHandle;
+		print STDOUT "Getting site-site pairs\n";
+		unless( $fh->open( $this->{_SITES_FILE} ) ) { die "Could not open sites file\n" };
+		my @ccols;
+		while ( my $line = <$fh> ) {
+			chomp( $line );
+			if ( $line =~ /Gene/ ) {
+				my $i = 0;
+				my %ccols = map{ ( $_ , $i++ ) } split( /\t/ , $line );
+				unless(	defined( $ccols{"Gene1"} )
+					and defined( $ccols{"Site1"} )
+					and defined( $ccols{"Chain1"} )
+					and defined( $ccols{"Position1"} )
+					and defined( $ccols{"Gene2"} )
+					and defined( $ccols{"Site2"} )
+					and defined( $ccols{"Chain2"} )
+					and defined( $ccols{"Position2"} ) ) {
+					die "Not a valid musites file!\n";
+				}
+				@ccols = (	$ccols{"Gene1"} ,
+							$ccols{"Site1"} , 
+							$ccols{"Chain1"} , 
+							$ccols{"Position1"} , 
+							$ccols{"Gene2"} ,
+							$ccols{"Site2"} , 
+							$ccols{"Chain2"} , 
+							$ccols{"Position2"} );
+			} else {
+				if ( $line =~ /$this->{_PDB}/ ) {
+					my ( $gene1 , $site1 , $chain1 , $res1 , $gene2 , $site2 , $chain2 , $res2 ) = ( split /\t/ , $line )[@ccols];
+					$chain1 =~ s/\[(\w)\]/$1/g;
+					$chain2 =~ s/\[(\w)\]/$1/g;
+					$this->{sites}->{$gene1.":".$site1}->{$chain1.":".$res1} = 0;
+					$this->{sites}->{$gene2.":".$site2}->{$chain2.":".$res2} = 0;
+					$this->{chains}->{$chain1}->{$gene1} = 0;
+					$this->{chains}->{$chain2}->{$gene2} = 0;
+					push @{$this->{locations}->{$gene1}->{$chain1}->{$res1}} , $site1;
+					push @{$this->{locations}->{$gene2}->{$chain2}->{$res2}} , $site2;
+				}
+			}
+		}
+		$fh->close();
+	}
+	return;
+}
+
+sub readDrugPairs {
+	my ( $this ) = @_;
 	if ( $this->{_DRUG_PAIRS_FILE} ) {
 		my $dfh = new FileHandle;
 		print STDOUT "Getting drug-mutation pairs\n";
 		unless( $dfh->open( $this->{_DRUG_PAIRS_FILE} ) ) { die "Could not open drug pairs file\n" };
+		my @ccols;
 		while ( my $line = <$dfh> ) {
 			chomp( $line );
-			if ( $line =~ /$this->{_PDB}/ ) {
-				my ( $drug , $chain1 , $res1 , $gene2 , $mu2 , $chain2 , $res2 ) = ( split /\t/ , $line )[0,3,4,5,9,10,11];
-				$chain1 =~ s/\[(\w)\]/$1/g;
-				$chain2 =~ s/\[(\w)\]/$1/g;
-				#$mutations->{$drug.":".$gene2}->{$chain1.":".$res1} = 0;
-				$this->{mutations}->{$gene2.":".$mu2}->{$chain2.":".$res2} = 0;
-				$this->{compounds}->{$drug}->{$chain1} = $res1;
-				$this->{chains}->{$chain1}->{$drug} = 0;
-				$this->{chains}->{$chain2}->{$gene2} = 0;
-				push @{$this->{locations}->{$drug}->{$chain1}->{$res1}} , $drug;
-				push @{$this->{locations}->{$gene2}->{$chain2}->{$res2}} , $mu2;
+			if ( $line =~ /Gene/ ) {
+				my $i = 0;
+				my %ccols = map{ ( $_ , $i++ ) } split( /\t/ , $line );
+				unless(	defined( $ccols{"Drug"} )
+					and defined( $ccols{"Chain1"} )
+					and defined( $ccols{"Position1"} )
+					and defined( $ccols{"Gene2"} )
+					and defined( $ccols{"Mutation2"} )
+					and defined( $ccols{"Chain2"} )
+					and defined( $ccols{"Position2"} ) ) {
+					die "Not a valid drug-clean file!\n";
+				}
+				@ccols = (	$ccols{"Gene1"} ,
+							$ccols{"Site1"} , 
+							$ccols{"Chain1"} , 
+							$ccols{"Position1"} , 
+							$ccols{"Gene2"} ,
+							$ccols{"Site2"} , 
+							$ccols{"Chain2"} , 
+							$ccols{"Position2"} );
+			} else {
+				if ( $line =~ /$this->{_PDB}/ ) {
+					my ( $drug , $chain1 , $res1 , $gene2 , $mu2 , $chain2 , $res2 ) = ( split /\t/ , $line )[@ccols];
+					$chain1 =~ s/\[(\w)\]/$1/g;
+					$chain2 =~ s/\[(\w)\]/$1/g;
+					#$mutations->{$drug.":".$gene2}->{$chain1.":".$res1} = 0;
+					$this->{mutations}->{$gene2.":".$mu2}->{$chain2.":".$res2} = 0;
+					$this->{compounds}->{$drug}->{$chain1} = $res1;
+					$this->{chains}->{$chain1}->{$drug} = 0;
+					$this->{chains}->{$chain2}->{$gene2} = 0;
+					push @{$this->{locations}->{$drug}->{$chain1}->{$res1}} , $drug;
+					push @{$this->{locations}->{$gene2}->{$chain2}->{$res2}} , $mu2;
+				}
 			}
 		}
 		$dfh->close();
 	}
-	return 1;
+	return;
 }
 
 sub getClusters {
@@ -209,30 +392,44 @@ sub getClusters {
 				and defined( $ccols{"Gene/Drug"} )
 				and defined( $ccols{"Mutation/Gene"} )
 				and defined( $ccols{"Closeness_Centrality"} )
-				and defined( $ccols{"Geodesic_From_Centroid"} ) ) {
+				and defined( $ccols{"Geodesic_From_Centroid"} )
+				and defined( $ccols{"Alternate"} ) ) {
 				die "Not a valid clusters file!\n";
 			}
 			@ccols = (	$ccols{"Cluster"} ,
 						$ccols{"Gene/Drug"} , 
 						$ccols{"Mutation/Gene"} , 
 						$ccols{"Closeness_Centrality"} , 
-						$ccols{"Geodesic_From_Centroid"} );
+						$ccols{"Geodesic_From_Centroid"} ,
+						$ccols{"Alternate"} );
 		} else {
-			my ( $id , $gd , $mp , $cc , $gfc ) = ( split /\t/ , $line )[@ccols];
+			my ( $id , $gd , $mp , $cc , $gfc , $alt ) = ( split /\t/ , $line )[@ccols];
 			if ( $id =~ m/\d+\.\d+\.\w/ ) {
 				next if ( $id !~ m/$this->{_PDB}/ );
 			}
 			my $variant = $gd.":".$mp;
-			if ( exists $this->{mutations}->{$variant} ) {
-				my @positions = keys %{$this->{mutations}->{$variant}};
-				if ( $gfc == 0 ) {
-					push @{$this->{centroids}->{$id}} , $mp;
-					foreach my $pos ( @positions ) { $this->{mutations}->{$variant}->{$pos} = 1; }
+			if ( $alt eq $PTM ) {
+				if ( exists $this->{sites}->{$variant} ) {
+					my @positions = keys %{$this->{sites}->{$variant}};
+					if ( $gfc == 0 ) {
+						push @{$this->{centroids}->{$id}} , $mp;
+						foreach my $pos ( @positions ) { $this->{sites}->{$variant}->{$pos} = 1; }
+					}
+					$this->{clusters}->{$id}->{$gd}->{$mp} = $cc;
 				}
-				$this->{clusters}->{$id}->{$gd}->{$mp} = $cc;
+			} else {
+				if ( exists $this->{mutations}->{$variant} ) {
+					my @positions = keys %{$this->{mutations}->{$variant}};
+					if ( $gfc == 0 ) {
+						push @{$this->{centroids}->{$id}} , $mp;
+						foreach my $pos ( @positions ) { $this->{mutations}->{$variant}->{$pos} = 1; }
+					}
+					$this->{clusters}->{$id}->{$gd}->{$mp} = $cc;
+				}
 			}
 		}
 	}
+	$fh->close();
 	return 1;
 }
 
@@ -243,6 +440,8 @@ sub makePyMOLScript {
 	my $chain_colors = {};
 	my $old_gene = "";
 	my $centroid_color = "grey";
+	my $centroid_site_color = "black";
+	my $site_color = "white";
 	my $CHAIN_COLORS = ['pink' , 'palegreen' , 'lightblue' , 'lightmagenta' , 'lightorange' , 'lightpink' , 'paleyellow' , 'lightteal' , 'aquamarine' , 'palecyan'];
 	my $CLUSTER_COLORS = ['red' , 'blue' , 'green' , 'magenta' , 'forest' , 'brightorange' , 'chocolate' , 'deepblue' , 'deepolive' , 'deeppurple' , 'bluewhite' , 'lime' , 'purple' , 'dash' , 'orange' , 'brown' , 'salmon' , 'oxygen' , 'wheat' , 'violetpurple' , 'limon' , 'sand' , 'raspberry' , 'slate'];
 	foreach my $id ( sort keys %{$this->{clusters}} ) {
@@ -265,18 +464,39 @@ sub makePyMOLScript {
 					$comment .= join( ", " , @location_AA_changes );
 					my $AA_change = shift @location_AA_changes;
 					my $residue = $AA_change;
-					$residue =~ s/^p\.(.+)\D+$/$1/g;
+					$residue =~ s/^p\.(.+)\D*$/$1/g;
+					my $isSite = 0;
+					if ( exists $this->{sites}->{$genedrug.":".$AA_change} ) {
+						$isSite = 1;
+					}
 					if ( ( grep{ $_ eq $residue } @cluster_AA_changes ) || ( grep{ $_ eq $AA_change } @cluster_AA_changes ) ) {
 						if ( not exists $residue_line->{$chain}->{$location} ) {
 							#print "\t\t\t\tMaking line ".$id.": ".$genedrug.":".join( "," , @location_AA_changes )." - ".$chain.", ".$location."\n";
-							my $label = $cluster_color."_".$genedrug."_".$residue."_".$chain;
+							my $label = "";
+							if ( $isSite ) {
+								$label = $cluster_color."_".$genedrug."_ptm".$residue."_".$chain;
+							} else {
+								$label = $cluster_color."_".$genedrug."_".$residue."_".$chain;
+							}
 							$residue_line->{$chain}->{$location} = "sele ".$label.", (resi ".$location." and chain ".$chain."); ";
 							if ( grep{ $_ eq $AA_change } @{$this->{centroids}->{$id}} ) { #is centroid
-								$residue_line->{$chain}->{$location} .= "color ".$centroid_color.", ".$label."; ";
+								if ( $isSite ) {
+									$residue_line->{$chain}->{$location} .= "color ".$centroid_site_color.", ".$label."; ";
+								} else {
+									$residue_line->{$chain}->{$location} .= "color ".$centroid_color.", ".$label."; ";
+								}
 							} else { #is not centroid
-								$residue_line->{$chain}->{$location} .= "color ".$cluster_color.", ".$label."; ";
+								if ( $isSite ) {
+									$residue_line->{$chain}->{$location} .= "color ".$site_color.", ".$label."; ";
+								} else {
+									$residue_line->{$chain}->{$location} .= "color ".$cluster_color.", ".$label."; ";
+								}
 							}
-							$residue_line->{$chain}->{$location} .= "show ".$this->{_MUT_STYLE}.", ".$label."; ";
+							if ( $isSite ) {
+								$residue_line->{$chain}->{$location} .= "show ".$this->{_SITE_STYLE}.", ".$label."; ";
+							} else {
+								$residue_line->{$chain}->{$location} .= "show ".$this->{_MUT_STYLE}.", ".$label."; ";
+							}
 							#$residue_line->{$chain}->{$location} .= "set label_font_id, 10; ";
 							#$residue_line->{$chain}->{$location} .= "set label_position, (3,2,1); ";
 							#$residue_line->{$chain}->{$location} .= "set label_size, 20; ";
@@ -325,6 +545,8 @@ sub makePyMOLScript {
 	$fh->print( "#show mesh;\n" );
 	$fh->print( "\n" );
 	$fh->print( "bg_color ".$this->{_BG_COLOR}.";\n" );
+	$fh->print( "set ray shadows, off;\n" );
+	$fh->print( "set ray_opaque_background, off;\n" );
 	$fh->print( "\n" );
 
 	#chains
@@ -410,7 +632,7 @@ sub densityVisual {
 	}
 	#print Dumper \%ClusterStructure;
 
-	getMappingLocations($this);
+	$this->getMappingLocations( );
 	print "Done getting mapping locations.\n";
 
 	#################  Clusters present in the given PDB structure  #####################
@@ -656,8 +878,10 @@ Usage: hotspot3d visual [options]
 --pdb                        PDB ID on which to view clusters
 
                              AT LEAST ONE
---pairwise-file              Pairwise file
---drug-pairs-file            Drug pairs file (target/nontarget/hs3dd)
+--pairwise-file              A .pairwise file
+--musites-file               A .musites file
+--sites-file                 A .sites file
+--drug-pairs-file            A .drug*clean file (either target or nontarget)
 
                              OPTIONAL
 --output-file                Output filename for single PyMol script, default: hotspot3d.visual.pml
@@ -667,6 +891,8 @@ Usage: hotspot3d visual [options]
 --bg-color                   background color, default: white
 --mut-color                  mutation color, default: red
 --mut-style                  mutation style, default: spheres
+--site-color                 site color, default: blue
+--site-style                 site style, default: sticks
 --compound-color             compound color, default: util.cbag
 --compound-style             compound style, default: sticks if compound-color, util.cbag otherwise
 --script-only                If included (on), pymol is not run with new <output-file> when finished, default: off
