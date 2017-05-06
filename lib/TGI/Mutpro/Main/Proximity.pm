@@ -443,14 +443,14 @@ sub parseMaf {
 			$this->{'stat'}{'num_unexpect_format'}++;
 			next;
 		}
-		my ( $residue, $position );
-		if ( $aac =~ /p\.(\w)\D*(\d+)/ ) { $residue = $1; $position = $2; 
-		} else { $position = $aac =~ /p\.\D*(\d+)in_frame_ins/i };
-		next unless( (defined $position) and ($position =~ /^\d+$/) );
+		my ( $residue , $transcriptPosition );
+		if ( $aac =~ /p\.(\w)\D*(\d+)/ ) { $residue = $1; $transcriptPosition = $2; 
+		} else { $transcriptPosition = $aac =~ /p\.\D*(\d+)in_frame_ins/i };
+		next unless( (defined $transcriptPosition) and ($transcriptPosition =~ /^\d+$/) );
 		$this->{'stat'}{'num_expect_format'}++;
 		next unless( defined $trans_to_uniprot->{$trans} );
 		my $tmp_uniprot_id = $trans_to_uniprot->{$trans}->{'UNIPROT'};
-		my ( $tmp_hit_bool , $tmp_uniprot_position ) = $this->getPositionMatch( $trans_to_uniprot , $trans , $position );
+		my ( $tmp_hit_bool , $tmp_uniprot_position ) = $this->getPositionMatch( $trans_to_uniprot , $trans , $transcriptPosition );
 		next if ( $tmp_hit_bool == 0 );
 		$mafHash{ $tmp_uniprot_id }{ $tmp_uniprot_position }{ $mutationKey } = 1;
 		$this->{'stat'}{'num_with_uniprot'}++;
@@ -464,14 +464,14 @@ sub parseMaf {
 }
 
 sub getPositionMatch {
-	my ( $this , $trans_to_uniprot , $trans , $position ) = @_;
+	my ( $this , $trans_to_uniprot , $trans , $transcriptPosition ) = @_;
 	my $tmp_uniprot_position = -1;
 	my $tmp_hit_bool = 0;
-	foreach my $tmp_pos ( keys %{$trans_to_uniprot->{$trans}->{'POSITION'}} ){
-		if ( ( $position >= $tmp_pos ) 
-		and  ( $position <= $trans_to_uniprot->{$trans}->{'POSITION'}->{$tmp_pos}->{'TEND'} ) ) { #pos >= tpos and pos <= tend
+	foreach my $TBEGIN ( keys %{$trans_to_uniprot->{$trans}->{'POSITION'}} ) {
+		if ( ( $transcriptPosition >= $TBEGIN ) 
+		and  ( $transcriptPosition <= $trans_to_uniprot->{$trans}->{'POSITION'}->{$TBEGIN}->{'TEND'} ) ) { #pos >= tpos and pos <= tend
 			#upos = pos - tpos + ubegin
-			$tmp_uniprot_position = $position - $tmp_pos + $trans_to_uniprot->{$trans}->{'POSITION'}->{$tmp_pos}->{'UBEGIN'};
+			$tmp_uniprot_position = $transcriptPosition - $TBEGIN + $trans_to_uniprot->{$trans}->{'POSITION'}->{$TBEGIN}->{'UBEGIN'};
 			$tmp_hit_bool = 1; 
 			last;
 		} 
@@ -527,7 +527,7 @@ sub getSites {
 				and defined( $fth{ $this->{ "transcript_id_header" } } )
 				and defined( $fth{ "Feature" } )
 		) {
-			die "not a valid site file with gene, transcript, and position!\n";
+			die "HotSpot3D::Proximity::getSites error: not a valid site file. The site-file does not have headers: Hugo_Symbol, Position, ".$this->{'transcript_id_header'}.", and Feature!\n";
 		}
 		my @cols = ( $fth{ "Hugo_Symbol" } ,
 					 $fth{ "Position" } ,
