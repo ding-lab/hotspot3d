@@ -1,9 +1,9 @@
 package TGI::Mutpro::Preprocess::PdbStructure;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu and Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 1 (Fri May 12 08:00:38 CDT 2017) $
 # $URL: $
 # $Doc: $ peptide class 
 #----------------------------------
@@ -17,6 +17,7 @@ use warnings;
 
 use Carp;
 use LWP::Simple;
+use Data::Dumper;
 
 use TGI::Mutpro::Preprocess::Peptide;
 
@@ -75,28 +76,160 @@ sub entireRecord {
     return $self->{PAGE};
 }
 
+# sub offset {
+#     # Input: chain
+#     # Return: Offset needed to convert crystal coordinates to 
+#     # Uniprot coordinates
+#     #
+#     # Add 'offset' to crystal coordinate to get Uniprot coordinate
+#     # Subtract 'offset' from Uniprot coordinate to get cyrstal coordinate
+#     my $self = shift;
+#     my $chain = shift;
+#     my ($line, $offset,);
+#     $offset = undef;
+#     foreach $line (split /\n/, $self->entireRecord()) {
+# 	chomp $line;        
+# 	# match line like this:
+#         # DBREF  2AR5 A    2   113  UNP    Q14CQ9   Q14CQ9_HUMAN  1421   1532
+#         if ($line =~ /DBREF\s+\w+\s+$chain\s+(\-?\d+)\s+\d+\s+UNP\s+\S+\s+\S+\s+(\d+)/) {
+# 	    # Don't use offset if it is ambiguous
+# 	    if (defined $offset && $offset != $2-$1) { return undef; }
+# 	    $offset = $2-$1;
+#         }
+#     }
+#     return $offset;
+# }
+
 sub offset {
-    # Input: chain
+    # Input: an array of chains
     # Return: Offset needed to convert crystal coordinates to 
-    # Uniprot coordinates
+    # Uniprot coordinates for different chains and regions
     #
     # Add 'offset' to crystal coordinate to get Uniprot coordinate
     # Subtract 'offset' from Uniprot coordinate to get cyrstal coordinate
     my $self = shift;
-    my $chain = shift;
+    my $chainToUniprotIdRef = shift;
+    my @chainArray = keys %{$chainToUniprotIdRef};
+    my $pdbId = $self->{ID};
+    my $offsetHash = {}; # a hash to store chain->pdbStart->pdbStop->offset corresponding to 
+    #each DBREF entry (allowed multiple DBREF for a given chain). But do this only for the chains already been cleared 
+    #and stored in $chainToUniprotIdRef. If SEQADV is also present this hash will be modified to return offsets and 
+    #corresponding chains and ranges
+    my $infoHash = {}; # a hash to store chain->pdbStart->pdbStop->uStart->uStop
+    my $seqadvHash = {}; # a hash to store chain->SEQADV_event->SEQADV_comment
+    my $skipChains = {}; # a hash to store chains with REMARK 999 in their SEQADV line
+    my $hasSEQADV = 0; # a bool to identify whether there's a SEQADV line
     my ($line, $offset,);
-    $offset = undef;
     foreach $line (split /\n/, $self->entireRecord()) {
-	chomp $line;        
-	# match line like this:
-        # DBREF  2AR5 A    2   113  UNP    Q14CQ9   Q14CQ9_HUMAN  1421   1532
-        if ($line =~ /DBREF\s+\w+\s+$chain\s+(\-?\d+)\s+\d+\s+UNP\s+\S+\s+\S+\s+(\d+)/) {
-	    # Don't use offset if it is ambiguous
-	    if (defined $offset && $offset != $2-$1) { return undef; }
-	    $offset = $2-$1;
+        chomp $line;         
+        if ( $line =~ /^DBREF/ or $line =~ /^SEQADV/ ) {
+            foreach my $chain ( @chainArray ) {
+                # match line like this: (possible to have multiple lines for a chain)
+                # DBREF  2AR5 A    2   113  UNP    Q14CQ9   Q14CQ9_HUMAN  1421   1532
+                if ( $line =~ /DBREF\s+\w+\s+$chain\s+(\-?\d+)\s+(\d+)\s+UNP\s+\S+\s+\S+\s+(\d+)\s+(\d+)/ ) {
+                    my $pStart = $1; # p=pdb
+                    my $pStop = $2;
+                    my $uStart = $3; # u=uniprot
+                    my $uStop = $4;
+                    my $offset = $uStart - $pStart;
+                    $offsetHash->{$chain}->{$pStart}->{$pStop} = $offset;
+                    $infoHash->{$chain}->{$pStart}->{$pStop}->{$uStart} = $uStop;
+                }
+                # match line like this:
+                # SEQADV 3VW8     A       UNP  P08581    ALA  1057 DELETION
+                elsif ( $line =~ /SEQADV\s+\w+\s+$chain\s+UNP\s+\w+\s+\w+\s+(\d+)\s+(\w+)/ ) {
+                    my $position = $1;
+                    my $type = $2;
+                    if ( $type eq "DELETION" or $type eq "INSERTION" ) {
+                        $hasSEQADV = 1;
+                        $seqadvHash->{$chain}->{$position} = $type;
+                    }
+                }
+                # match line like this:
+                # SEQADV 1ZEO GLY A  201  UNP  P37231              SEE REMARK 999
+                elsif ( $line =~ /SEQADV.*REMARK/ ) {
+                    $hasSEQADV = 1;
+                    $skipChains->{$chain} = 0;
+                }
+            }
         }
     }
-    return $offset;
+    # do some clean up and make new regions depending on events reported at SEQADV lines
+    if ( $hasSEQADV ) { # currently this can only handle SEQADV = {REMARK 999, DELETION, INSTERTION}
+        print STDOUT "TGI::Mutpro::Preprocess::PdbStructure::offset() ALERT: SEQADV line present for pdbId = $pdbId\n";
+        # add chains like below to skip chains hash (there are deletions but delta(pdb) = delta(uniprot))
+        # DBREF  3TAD A  866  1193  UNP    O75334   LIPA2_HUMAN    866   1193
+        # SEQADV 3TAD     A       UNP  O75334    PRO   976 DELETION 
+        # SEQADV 3TAD     A       UNP  O75334    SER   977 DELETION
+        # ...                      
+        foreach my $chain ( keys %{$infoHash} ) {
+            foreach my $pStart ( keys %{$infoHash->{$chain}} ) {
+                foreach my $pStop ( keys %{$infoHash->{$chain}->{$pStart}} ) {
+                    foreach my $uStart ( keys %{$infoHash->{$chain}->{$pStart}->{$pStop}} ) {
+                        my $uStop = $infoHash->{$chain}->{$pStart}->{$pStop}->{$uStart};
+                        if ( exists $seqadvHash->{$chain} ) { # if there are reported DELETIONs or INSERTIONs in this chain
+                            my $deltaPDB = $pStop - $pStart;
+                            my $deltaUNIPROT = $uStop - $uStart;
+                            if ( $deltaPDB == $deltaUNIPROT ) {
+                                $skipChains->{$chain} = 0; # add to the set of skip chains
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        # remove chains with "REMARK 999" and delta(pdb) = delta(uniprot) even if SEQADV DEL,INS lines are present
+        foreach my $chain ( keys %{$skipChains} ) {
+            if ( defined $chain ) { # and exists $chainToUniprotIdRef->{$chain} 
+                print STDOUT "TGI::Mutpro::Preprocess::PdbStructure::offset() WARNING:: $pdbId chain $chain is deleted bc SEQADV=REMARK 999 and wrong sequence matches\n";
+                delete $chainToUniprotIdRef->{$chain};
+                delete $offsetHash->{$chain};
+                delete $seqadvHash->{$chain};
+            }
+        }
+        # make new regions and define offsets for them
+        foreach my $chain ( keys %{$seqadvHash} ) {
+            foreach my $position ( keys %{$seqadvHash->{$chain}} ) {
+                my $type = $seqadvHash->{$chain}->{$position};
+                foreach my $pStart ( keys %{$offsetHash->{$chain}} ) {
+                    foreach my $pStop ( keys %{$offsetHash->{$chain}->{$pStart}} ) {
+                        if ( $pStart <= $position and $position <= $pStop ) { # DEL or INT is inside the corresponding range
+                            my $offset = $offsetHash->{$chain}->{$pStart}->{$pStop};
+                            if ( $type eq "DELETION" ) {
+                                delete $offsetHash->{$chain}->{$pStart}->{$pStop}; # replace this region by two regions below
+                                if ( $pStart <= $position - 1 ) { # first region
+                                    my $newPend = $position - 1;
+                                    my $newOffset = $offset;
+                                    $offsetHash->{$chain}->{$pStart}->{$newPend} = $newOffset;
+                                }
+                                # second region
+                                my $newPstart = $position;
+                                my $newOffset = $offset + 1;
+                                $offsetHash->{$chain}->{$newPstart}->{$pStop} = $newOffset;
+                            }
+                            elsif ( $type eq "INSERTION" ) {
+                                delete $offsetHash->{$chain}->{$pStart}->{$pStop}; # replace this region by two regions below
+                                if ( $pStart <= $position - 1 ) { # first region
+                                    my $newPend = $position - 1;
+                                    my $newOffset = $offset;
+                                    $offsetHash->{$chain}->{$pStart}->{$newPend} = $newOffset;
+                                }
+                                if ( $pStop >= $position + 1 ) { # second region
+                                    my $newPstart = $position + 1;
+                                    my $newOffset = $offset - 1;
+                                    $offsetHash->{$chain}->{$newPstart}->{$pStop} = $newOffset;
+                                }
+                            }
+                        }
+                    }
+                }               
+            }
+        }
+    }
+    # if ( $pdbId =~ /3VW8/ ) {
+    #     print Dumper $offsetHash;
+    # }
+    return $offsetHash;
 }
 
 ##

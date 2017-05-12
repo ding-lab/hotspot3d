@@ -1,9 +1,9 @@
 package TGI::Mutpro::Preprocess::Calpro;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu and Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 1 (Fri May 12 08:00:38 CDT 2017) $
 # $URL: $
 # $Doc: $ calculate proximity file for one uniprotid (used by first step)
 #----------------------------------
@@ -180,7 +180,7 @@ sub writeProximityFile {
 	print STDOUT "Creating ".$file."\n";
 	my ( $uniprotDomainRef,
 		 $pdbRef, %pdbIds, 
-		 %allOffsets,
+		 #%allOffsets,
 		 $structureRef, $peptideRef, $chainToUniprotIdRef, 
 		 $uniprotChain,
 		 $otherChainOffset, 
@@ -227,7 +227,7 @@ sub writeProximityFile {
 	$fh->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
 	$fh->print( "Distance\tPDB_ID\n" );
 	foreach my $pdbId (keys %pdbIds) {
-		%allOffsets = ();
+		my $allOffsets = {};
 		#$structureRef = TGI::Mutpro::Preprocess::PdbStructure->new( $pdbId );
 		$structureRef = TGI::Mutpro::Preprocess::PdbStructure->new( $pdbId, $this->{'pdb_file_dir'} );
 		## don't need this part when only one model be picked up
@@ -240,7 +240,9 @@ sub writeProximityFile {
 		$chainToUniprotIdRef = $structureRef->chainToUniprotId();
 		$uniprotChain = undef; 
 		my $chainLength = 0;
-		foreach my $chain ( keys %{$chainToUniprotIdRef} ) {
+		##TODO: Make a hash with chain info: start, stop, SEQADV-event-position, and SEQADV-event-comment
+		# my $chainInfo = {}; # TODO
+		foreach my $chain ( keys %{$chainToUniprotIdRef} ) { # choose the longest chain (to be used as the base chain)
 			#print STDERR $chain."\n";
 			next if ( $$chainToUniprotIdRef{$chain} ne $this->{'uniprot_id'} );
 			my ( $chainStart, $chainStop, ) = $structureRef->chainStartStop( $chain );
@@ -265,15 +267,18 @@ sub writeProximityFile {
 		# Get all offsets needed to convert crystal coordinates 
 		# to Uniprot coordinates
 		# Add 'offset' to crystal coordinate to get Uniprot coordinate
-		map{
-			my $offset = $structureRef->offset($_);
-			$offset = "N/A" if ( !defined $offset || $offset !~ /\-?\d+$/ );
-			#print STDERR "$_\t offset: $offset\n";
-			$allOffsets{$_} = $offset;
-		} keys %{$chainToUniprotIdRef};
+		####
+		# map{
+		# 	my $offset = $structureRef->offset($_);
+		# 	$offset = "N/A" if ( !defined $offset || $offset !~ /\-?\d+$/ );
+		# 	#print STDERR "$_\t offset: $offset\n";
+		# 	$allOffsets{$_} = $offset;
+		# } keys %{$chainToUniprotIdRef};
+		###
+		$allOffsets = $structureRef->offset( $chainToUniprotIdRef );
 		# Get offset needed to convert the crystal coordinates to Uniprot coordinates
 		# for the chain corresponding to $UniprotId
-		$uniprotChainOffset = $allOffsets{$uniprotChain};
+		
 		#print STDERR "uniprotChain:  $uniprotChain\t  uniprotChainOffset: $uniprotChainOffset\n";
 		# Get position numbers (in crystal coordinates) of all residues in the peptide 
 		# chain resolved in the structure
@@ -297,6 +302,8 @@ sub writeProximityFile {
 			$uniprotAminoAcidRef = $$peptideRef{$uniprotChain}->getAminoAcidObject( $residuePosition );
 			next if ( $$uniprotAminoAcidRef->isAA() == 0 );
 			$uniprotAaName = $$uniprotAminoAcidRef->name();
+			# 	Updated	170510 : use a hash with chain and regions for retrieving the offset
+			$uniprotChainOffset = getOffset( $allOffsets, $uniprotChain, $residuePosition );
 			#      120905  Don't tie this to Uniprot annotation
 			# See if this is in an annotated Uniprot domain.  
 			# If so, write it out.
@@ -325,11 +332,12 @@ sub writeProximityFile {
 				}
 				# Get the offset needed to convert crystal coordinates of this 
 				# peptide chain to Uniprot coordinates 
-				$otherChainOffset = $allOffsets{$chain};
+				
 				$allAaObjRef = $$peptideRef{$chain}->getAllAminoAcidObjects();
 				## remove the positions with insertion code
 				my @tmp_array_positions = grep{ /\d+$/ } keys %{$allAaObjRef}; 
 				foreach $position ( sort {$a<=>$b} @tmp_array_positions ) {
+					$otherChainOffset = getOffset( $allOffsets, $chain, $position );
 					$aaObjRef = $$peptideRef{$chain}->getAminoAcidObject($position);
 					next if ( $$aaObjRef->isAA() == 0 );
 					if ( (defined $otherChainOffset) and ($otherChainOffset eq "N/A") ) { 
@@ -415,6 +423,24 @@ sub writeProximityFile {
 		} #foreach residue position ref
 	} #foreach pdb id
 	return 1;
+}
+
+sub getOffset {
+	my ( $allOffsets, $chain ,$residuePosition ) = @_;
+	my $offset = undef;
+	foreach my $pStart ( keys %{$allOffsets->{$chain}} ) {
+		foreach my $pStop ( keys %{$allOffsets->{$chain}->{$pStart}} ) {
+			if ( $pStart <= $residuePosition and $residuePosition <= $pStop ) {
+				$offset = $allOffsets->{$chain}->{$pStart}->{$pStop};
+				last;
+			}
+		}
+		if ( defined $offset ) {
+			last;
+		}
+	}
+	$offset = "N/A" if ( !defined $offset );
+	return $offset;
 }
 
 sub getDomainsForAllUniprotIds {
