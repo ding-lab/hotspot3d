@@ -3,7 +3,7 @@ package TGI::Data::CleanNumber;
 #----------------------------------
 # $Authors: Adam Scott
 # $Date: 2016-11-07
-# $Revision: v0.0 $
+# $Revision: v0.1 $
 # $URL: $
 # $Doc: $ assures clean numbers
 # 
@@ -51,7 +51,7 @@ sub nullIsZero {
 
 sub numOnly {
 	my $num = shift;
-	$num =~ s/\D*(\d+)\D*/$1/g;
+	$num =~ s/\D*(-[\d\.]+)\D*/$1/g;
 	return $num;
 }
 

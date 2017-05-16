@@ -10,7 +10,7 @@ Usage
 
          Stable:     v0.6.0 
 
-           Beta:     up to v1.7.0
+           Beta:     up to v1.7.2
         
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
@@ -86,15 +86,9 @@ For the latest stable version:
 
 For the latest beta version:
 
-<<<<<<< Updated upstream
-	git checkout v1.5.1
+	git checkout v1.7.1
     
-	cpanm HotSpot3D-1.5.1.tar.gz
-=======
-	git checkout v1.4.2
-    
-	cpanm HotSpot3D-1.4.2.tar.gz
->>>>>>> Stashed changes
+	cpanm HotSpot3D-1.7.1.tar.gz
 
 Final note: Installations under some organizations may use an internal perl version. 
 To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
@@ -131,6 +125,22 @@ Configure Environment
 Example - Preprocessing
 -----------------------
 
+## Download from Synapse
+1. Go to https://www.synapse.org/#!Synapse:syn8699796, and check out the wiki for any updates/details.
+
+2. Select the Files tab, then go into the AverageResidueDistance data directory (syn8717211).
+
+3. The DrugPort processing results are located here (syn9704835) for those interested.
+
+4. Select the reference/assembly version of interest (GRCh37 with Ensembl version 74 (syn9701918), or GRCh38 with Ensembl version 87 (syn9704851)).
+
+5. You will need to download the hugo.uniprot.pdb.transcript.csv (syn9704852).
+
+6. Two download options are available, prioritization.tar.gz (syn9704853) contains all human proteins that have been preprocessed. This is a large file that can take an hour or more depending on internet speeds. Alternatively, you can download the prioritization/ (syn9705109) or any specific protein proximity files within. The proximity files are compressed for faster/more targeted downloading. 
+
+NOTE: Proximity data only contains pairs within 20Angstroms between mutations. This should be sufficient for many HotSpot3D applications.
+
+## Generate on your own
 1. (Optional) Run drugport module to parse Drugport data and generate a drugport parsing results flat file :
 
 		hotspot3d drugport --pdb-file-dir=pdb_files_dir
