@@ -26,6 +26,7 @@ sub new {
 	$this->{'clusters'} = undef;
 	$this->{'output'} = "hotspot3d.sigclus";
 	$this->{'simulations'} = 1000000;
+	$this->{'structure'} = undef;
 	bless $this, $class;
 	$this->process();
 	return $this;
@@ -41,6 +42,7 @@ sub process {
 		'clusters=s' => \$this->{'clusters'},
 		'output=s' => \$this->{'output_prefix'},
 		'simulations=i' => \$this->{'simulations'},
+		'structure=s'=> \$this->{'structure'},
 		'help' => \$help,
 	);
 	#my $NSIMS = $this ->{'simulations'};
@@ -73,25 +75,21 @@ sub process {
 	}
 
 #processing procedure
-#Read pairwise and store info
-	my $cluster_f= $this->{'clusters'}; #debug
-	my ($structures, $minMax)=$this->storePairwise($cluster_f);
-
 #retrieve cluster information
-	my ($clusters, $clus_store, $recurrence, $represent) = $this->getClusters($cluster_f, $structures);
-
-#retrieve best structure
-	my $bestStruc=$this->getBestStructure($clus_store,$represent, $minMax);
+	my $cluster_f= $this->{'clusters'}; #debug
+	my ($clusters, $clus_store, $recurrence) = $this->getClusters($cluster_f);
 
 # parse hup file
 	my ($genesOnPDB_hash_ref, $uniprot2HUGO_hash_ref, $HUGO2uniprot_hash_ref) = $this->processHUP( $hup_file ,$clusters);
 
 #parse aaabbrv file
 	my $AA_hash_ref = $this->processAA( );
-
+#retrieve best structure
+	my $struc_f=$this->{'structure'};
+	my $bestStruc=$this->getStructure($struc_f, $clus_store);
 
 #retrieve locations of mutations in clusters
-	my ($withinClusterSumDistance,$mass2pvalues)= $this->getPairwise( $clusters , $genesOnPDB_hash_ref,$bestStruc, $recurrence);
+	my ($withinClusterSumDistance,$mass2pvalues)= $this->getPairwise( $clusters , $genesOnPDB_hash_ref,$bestStruc);
 #process everything
 	$this ->getDistances($proximity_dir, $genesOnPDB_hash_ref, $HUGO2uniprot_hash_ref, $AA_hash_ref, $this->{'simulations'}, $clusters,$bestStruc, $clus_store, $recurrence, $withinClusterSumDistance,$mass2pvalues)
 } 
@@ -139,44 +137,13 @@ sub processAA {
 	return \%AA;
 }
 
-sub storePairwise{
-	my ($this,$cluster_f)=@_;
-	my $pairwiseHandle = &getFile( $this->{'pairwise'},"r" );
-
-	my %structures;
-	my %represent;
-	my $minMax = {};
-	while ( my $line = <$pairwiseHandle> ) {
-		chomp( $line );
-		my ( $gene1 , $mutation1 , $chain1 , $residue1 , $gene2 , $mutation2 , $chain2 , $residue2 , $pdbInfos ) = (split( "\t" , $line ))[0,4,5,6,9,13,14,15,19];
-		$chain1 =~ s/\[(.*)\]/$1/;
-		$chain2 =~ s/\[(.*)\]/$1/;
-		my @pdbInfos = split( '\|' , $pdbInfos );
-		foreach my $pdbInfo ( @pdbInfos ) {
-			my $pdb = (split( ' ' , $pdbInfo ))[1];
-			$structures{$gene1}{$mutation1}{$pdb}{$chain1} = $residue1;
-			$structures{$gene2}{$mutation2}{$pdb}{$chain2} = $residue2;
-			&checkMin( $minMax , $pdb , $gene1 , $chain1 , $residue1 );
-			&checkMin( $minMax , $pdb , $gene2 , $chain2 , $residue2 );
-			&checkMax( $minMax , $pdb , $gene1 , $chain1 , $residue1 );
-			&checkMax( $minMax , $pdb , $gene2 , $chain2 , $residue2 );
-		} #foreach pdbInfo in pdbInfos
-	}
-	$pairwiseHandle->close();
-	
-	return (\%structures,$minMax);
-}
-
 sub getClusters { #get cluster id for gene and mutation
 	print "getting clusters now\n";
-	my ($this, $cluster_f,$structures) = @_;
-
+	my ($this, $cluster_f) = @_;
 	my $cluster;
 	my %clusters;
 	my %clus_store;
 	my %recurrence;
-	my %represent;
-
 	my $clustersHandle = &getFile( $cluster_f, "r" );
 	while ( my $line = <$clustersHandle> ) {
 		chomp( $line );
@@ -196,125 +163,52 @@ sub getClusters { #get cluster id for gene and mutation
 			$clusters{$gene}{$mutation} = $clusterid;
 			$recurrence{$clusterid}{$mutation}=int($weight);
 			$clus_store{$clusterid}=\@genes;
-
-			foreach my $pdb ( keys %{$structures->{$gene}->{$mutation}} ) {
-				foreach my $chain ( keys %{$structures->{$gene}->{$mutation}->{$pdb}} ) {
-					$represent{$pdb}{$gene}{$chain}{$clusterid}{$mutation.":".$structures->{$gene}->{$mutation}->{$pdb}->{$chain}} = $weight;
-				}
-			}
 		}
 	}
 	$clustersHandle->close();
-	return \%clusters, \%clus_store,\%recurrence,\%represent;
+	return \%clusters, \%clus_store,\%recurrence;
 }
 
-
-
-sub getBestStructure{
-	my ( $this,$clus_store,$represent, $minMax) = @_;
-	my %complex;
+sub getStructure{
+	print "choosing best structure now\n";
+	my ($this, $struc_f, $clus_store) = @_;
+	my $strucHandle = &getFile( $struc_f, "r" );
 	my %bestStruc;
-	foreach my $pdb ( sort keys %{$represent} ) {
-		foreach my $gene ( sort keys %{$represent->{$pdb}} ) {
-			foreach my $chain ( sort keys %{$represent->{$pdb}->{$gene}} ) {
-				$chain =~ m/\[(.*)\]/;
-				foreach my $cluster ( sort keys %{$represent->{$pdb}->{$gene}->{$chain}} ) {
-					my ( $mutres , $mutation , $position );
-					my @mutations;
-					my %residues;
-					my $recurrence = 0;
-					foreach my $mutpos ( sort keys %{$represent->{$pdb}->{$gene}->{$chain}->{$cluster}} ) {
-						( $mutation , $position ) = split( ":" , $mutpos );
-						$recurrence += $represent->{$pdb}->{$gene}->{$chain}->{$cluster}->{$mutpos};
-						$mutres = join( "|" , ( $mutation , $position ) );
-						push @mutations , $mutres;
-						$residues{$position} = 1;
-					}
-					if ( exists $minMax->{$pdb}->{$gene}->{$chain} ) {
-						my $min = $minMax->{$pdb}->{$gene}->{$chain}->{'min'};
-						my $max = $minMax->{$pdb}->{$gene}->{$chain}->{'max'};
-						my @outline = ( $pdb , $gene , $chain , $cluster , $min , $max , scalar @mutations , scalar keys %residues , $recurrence , join( ";" , @mutations ) );
-						$complex{$cluster}{$pdb}{$gene}{$chain} = \@outline;
-					}
-				}
-			}
-		} #foreach pdb in represent => cluster
-	} #foreach cluster in represent
+	while ( my $line = <$strucHandle> ) {
+		chomp($line);
+		my ($clus,$PDB,$hugo1,$count)=(split(/\t/,$line))[0,1,2,5];
+	#	print"$hugo1\n";
+		my $hugo=(split(/\|/,$hugo1))[0];
+#		print"$hugo\n";
+		my @pair=(int($count),$PDB);
+		if (exists $clus_store->{$clus} ){
+			if (exists $bestStruc{$clus}){
+					my $test=$bestStruc{$clus}->[0];
+					if($count> $test){
+					$bestStruc{$clus}=\@pair;
 
-	foreach my $cluster ( sort keys %complex ) {
-		foreach my $pdb ( sort keys %{$complex{$cluster}} ) {
-			my ( @mutations , @geneChains );
-			my ( $mutations , $residues , $recurrence );
-			foreach my $gene ( sort keys %{$complex{$cluster}{$pdb}} ) {
-				my @chains;
-				foreach my $chain ( sort keys %{$complex{$cluster}{$pdb}{$gene}} ) {
-					my @outline = @{$complex{$cluster}{$pdb}{$gene}{$chain}};
-					$mutations += $outline[6];
-					$residues += $outline[7];
-					$recurrence += $outline[8];
-					push @chains , $chain;
-					push @mutations , $chains[-1]."\\";
-					$mutations[-1] .= $outline[-1];
-				} #foreach chain
-				push @geneChains , $gene."|".join( "/" , @chains );
-			} #foreach gene
-			my @complexLine = ( $cluster , $pdb , join( ";" , @geneChains ) , $mutations , $residues , $recurrence , join( ";" , @mutations ) );
-
-			my @pair=(int($recurrence),$pdb);
-			print"$cluster\n";
-			if (exists $clus_store->{$cluster} ){
-				print"cluster id exists\n";
-				if (exists $bestStruc{$cluster}){
-						my $test=$bestStruc{$cluster}->[0];
-						if(int($recurrence)> $test){
-							$bestStruc{$cluster}=\@pair;
-							print"new pair stored\n";
-							print"$cluster\t$recurrence\t$pdb\n";
-						}
-				}
-				else{
-					$bestStruc{$cluster}=\@pair;
 				}
 			}
 
-
-		} #foreach pdb
-	} #foreach cluster
-
-	return \%bestStruc;
-}
-
-sub checkMin {
-	my ( $minMax , $pdb , $gene , $chain , $residue ) = @_;
-	return unless ( $residue =~ /^\d+$/ );
-	if ( exists $minMax->{$pdb}->{$gene}->{$chain}->{'min'} ) {
-		if ( $minMax->{$pdb}->{$gene}->{$chain}->{'min'} <= $residue ) {
-			return;
+			else{
+				$bestStruc{$clus}=\@pair;
+			}
 		}
 	}
-	$minMax->{$pdb}->{$gene}->{$chain}->{'min'} = $residue;
+		print"loop working\n";
+
+	
+	$strucHandle->close();
+	print"while loop done\n";
+	return \%bestStruc
 }
-
-sub checkMax {
-	my ( $minMax , $pdb , $gene , $chain , $residue ) = @_;
-	return unless ( $residue =~ /^\d+$/ );
-	if ( exists $minMax->{$pdb}->{$gene}->{$chain}->{'max'} ) {
-		if ( $minMax->{$pdb}->{$gene}->{$chain}->{'max'} >= $residue ) {
-			return;
-		}
-	}
-	$minMax->{$pdb}->{$gene}->{$chain}->{'max'} = $residue;
-}
-
-
-
 
 
 sub getPairwise {
 	print "getting pairwise now\n"; #debug
-	my ( $this , $clusters , $genesOnPDBref,$bestStruc, $recurrence) = @_;
+	my ( $this , $clusters , $genesOnPDBref,$bestStruc) = @_;
 	my $pairwiseHandle = &getFile( $this->{'pairwise'},"r" );
-	my (%mass2pvalues,%withinClusterSumDistance);
+	my (%mass2pvalues, %res2Mut);
 	while ( my $line = <$pairwiseHandle> ) {
 		chomp( $line );
 		my @line = split( /\t/ , $line );
@@ -334,10 +228,14 @@ sub getPairwise {
 		#			print "pairwise exists in hup file\n"; #debug
 				
 					print"if statement in pairwise working\n";
-					my $rec1=$recurrence->{$cluster}->{$mu1};
-					my $rec2=$recurrence->{$cluster}->{$mu2};
+					&storeRes2Mut(\%res2Mut,$pdb,$res1,$mut1);
+					&storeRes2Mut(\%res2Mut,$pdb,$res2,$mut2);
+					
 
-					$withinClusterSumDistance{$cluster} += $rec1*$rec2*$dist;
+		#			my $rec1=$recurrence->{$cluster}->{$mu1};
+#					my $rec2=$recurrence->{$cluster}->{$mu2};
+
+#					$withinClusterSumDistance{$cluster} += $rec1*$rec2*$dist;
 					$mass2pvalues{$cluster}=$pval;
 				#	} #if gene,pdb,chain1 exists
 				}
@@ -347,7 +245,22 @@ sub getPairwise {
 	} #while pairwise file
 	$pairwiseHandle->close();
 #	print "got the pairwise info\n";
-	return  (\%withinClusterSumDistance,\%mass2pvalues);
+	return  (\%mass2pvalues);
+}
+
+#function to add array of mutations at a specific residue site
+sub storeRes2Mut{
+	my ($res2Mut,$pdb,$res,$mut)= @_;
+	if( exists $res2mut{$pdb}{$res}){
+		if(!grep $_ eq $mut, @{$res2mut{$pdb}{$res}){
+			push @{$res2mut{$pdb}{$res}}, $mut; 
+		}
+	}
+	else{
+		$res2mut{$pdb}{$res1}=($mut1);
+	}
+
+	return 1;
 }
 
 sub getProx{
@@ -371,7 +284,12 @@ sub getProx{
 #		print ("$aa1\t$aa2\t$pdb\t$best_pdb\t$key1\t$key2\n");	
 		if (exists $AAref->{$aa1} && exists $AAref->{$aa2} && $pdb eq $best_pdb && !exists $paircheck{$pdb}{$key1}{$key2} && !exists $paircheck{$pdb}{$key2}{$key1}) {
 			if(grep $_ eq $up2,@{$uniprotIDs}){ #if 2nd uniprot id is in uniprots that are in cluster
-				
+				my $clus1=$mut2Res->{$pdb}->{$res1}->[1];
+				my $clus2=$mut2Res->{$pdb}->{$res2}->[1];
+				my $mut1=$mut2Res->{$pdb}->{$res1}->[0];
+				my $mut2=$mut2Res->{$pdb}->{$res1}->[];
+
+
 				&checkKey($key1,\%res_count,$pdb,\%distances, $uni_length);	
 				&checkKey($key2,\%res_count,$pdb,\%distances, $uni_length);	
 
@@ -419,13 +337,12 @@ sub getDistances{
 
 		my $best_pdb=$bestStruc->{$clus}->[1]; #store best PDB for cluster
 		my @uniprotIDs;
-		print "$clus\n";
+
 		foreach my $gene(@{$clus_store->{$clus}}){				
 			my $uniprot = $HUGO2uniprotref->{$gene};
-			print"$gene\t$uniprot\n";	
 			if (! grep $_ eq $uniprot,@uniprotIDs){
 				push @uniprotIDs, $uniprot;  #store all unique uniprotIds in cluster
-			#	print "$uniprot\n";
+				print "$uniprot\n";
 				
 			}
 		}
@@ -493,10 +410,11 @@ sub getDistances{
 			print "why zero\n";#debug
 		}
 
-		if ($mass>2){
+		if ($mass >2){
+
 			$OUT->print( join( "\t" , ( $clus , $genes , $best_pdb ,$numResidues,$mass , $numPairs , $withinClusterAvgDistance{$clus} , $permutationTestPValue ) )."\n" );
-		}
-	
+		}	
+
 	}#foreach cluster
 		$OUT->close();
 	return 1;
