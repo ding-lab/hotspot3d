@@ -493,7 +493,9 @@ sub getDistances{
 			print "why zero\n";#debug
 		}
 
-		$OUT->print( join( "\t" , ( $clus , $genes , $best_pdb ,$numResidues,$mass , $numPairs , $withinClusterAvgDistance{$clus} , $permutationTestPValue ) )."\n" );
+		if ($mass>2){
+			$OUT->print( join( "\t" , ( $clus , $genes , $best_pdb ,$numResidues,$mass , $numPairs , $withinClusterAvgDistance{$clus} , $permutationTestPValue ) )."\n" );
+		}
 	
 	}#foreach cluster
 		$OUT->close();
