@@ -231,8 +231,9 @@ sub writeSiteROI {
 
 sub siteROIHeader {
 	my $this = @_;
-	my @header = ( "Gene1" , "Transcript1" , "TranscriptPosition1" , "Site1" ,
-				   "Chain1" , "Position1" , "Feature1" , "COSMIC1" ,
+	my @header = ( "Gene1" , "Transcript1" , "TranscriptPosition1" , 
+				   "Position1" , "SiteType1" , "Site1" ,
+				   "Chain1" , "Feature1" , "COSMIC1" ,
 				   "Chain2" , "Position2" , "Feature2" , "COSMIC2" ,
 				   "LinearDistance" , "DistanceInfo" );
 	return join( "\t" , @header );
@@ -253,8 +254,9 @@ sub writeSiteCOSMIC {
 
 sub siteCOSMICHeader {
 	my $this = @_;
-	my @header = ( "Gene1" , "Transcript1" , "TranscriptPosition1" , "Site1" ,
-				   "Chain1" , "Position1" , "Feature1" , "COSMIC1" ,
+	my @header = ( "Gene1" , "Transcript1" , "TranscriptPosition1" , 
+				   "Position1" , "SiteType1" , "Site1" ,
+				   "Chain1" , "Feature1" , "COSMIC1" ,
 				   "Chain2" , "Position2" , "Feature2" , "COSMIC2" ,
 				   "LinearDistance" , "DistanceInfo" );
 	return join( "\t" , @header );
@@ -778,14 +780,14 @@ sub proximitySearching {
 					if ( $this->siteExists( $sites , $uid1 , $uniprotcor1 ) ) {
 						#print "a site1: ".$sites->{$uid1}->{$uniprotcor1}."\n"; 
 						foreach my $site1 ( sort keys %{$sites->{$uid1}->{$uniprotcor1}} ) { 
-							my ( $gene , $transcript , $position , $uposition , $type ) = split( /\t/ , $site1 );
-							my $res = "p.".$AA->convertNameToSingle( $residue1 ).$uposition;
-							my $sitePart1 = join( "\t" , $gene , $transcript , $position , $res , @line[1,2] , $type , $line[6] );
+							my ( $gene1 , $transcript1 , $position1 , $uposition1 , $type1 ) = split( /\t/ , $site1 );
+							my $res1 = "p.".$AA->convertNameToSingle( $residue1 ).$uposition1;
+							my $sitePart1 = join( "\t" , $gene1 , $transcript1 , $position1 , $res1 , @line[1,2] , $type1 , $line[6] );
 							if ( $this->siteExists( $sites , $uid2 , $uniprotcor2 ) ) { #site-site
 								foreach my $site2 ( sort keys %{$sites->{$uid2}->{$uniprotcor2}} ) { 
-									( $gene , $transcript , $position , $uposition , $type ) = split( /\t/ , $site2 );
-									$res = "p.".$AA->convertNameToSingle( $residue2 ).$uposition;
-									my $sitePart2 = join( "\t" , $gene , $transcript , $position , $res , @line[8,9] , $type , $line[13] );
+									my ( $gene2 , $transcript2 , $position2 , $uposition2 , $type2 ) = split( /\t/ , $site2 );
+									my $res2 = "p.".$AA->convertNameToSingle( $residue2 ).$uposition2;
+									my $sitePart2 = join( "\t" , $gene2 , $transcript2 , $position2 , $res2 , @line[8,9] , $type2 , $line[13] );
 									push( @siteSiteResults , join( "\t" , ( $sitePart1 , $sitePart2 , $lineardis , $proximityinfor ) ) );
 								}
 							}
@@ -798,28 +800,30 @@ sub proximitySearching {
 									}
 								}
 							}
+							my $rsitePart1 = join( "\t" , $res1 , $line[1] , @line[5,6] );
 							$this->addToNearbyFeatureLists( $sites , $uniprotID , 
 									$uniprotcor1 , \@siteROIArray , \@siteCOSMICArray , 
-									$sitePart1 , $muPart2 , $lineardis , 
+									$rsitePart1 , $muPart2 , $lineardis , 
 									$proximityinfor , $domain2 , $cosmic2 );
 						}
 					} else {
 						if ( $this->siteExists( $sites , $uid2 , $uniprotcor2 ) ) {
 							foreach my $site2 ( sort keys %{$sites->{$uid2}->{$uniprotcor2}} ) { 
-								my ( $gene , $transcript , $position , $uposition , $type ) = split( /\t/ , $site2 );
-								my $res = "p.".$AA->convertNameToSingle( $residue2 ).$uposition;
-								my $sitePart = join( "\t" , $gene , $transcript , $position , $res , @line[8,9] , $type , $line[13] );
+								my ( $gene2 , $transcript2 , $position2 , $uposition2 , $type2 ) = split( /\t/ , $site2 );
+								my $res2 = "p.".$AA->convertNameToSingle( $residue2 ).$uposition2;
+								my $sitePart2 = join( "\t" , $gene2 , $transcript2 , $position2 , $res2 , @line[8,9] , $type2 , $line[13] );
 								if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 									#print "b site2: ".$sites->{$uid2}->{$uniprotcor2}."\n"; 
-									foreach my $mutationKey ( keys %{$mafHashref->{$uid2}->{$uniprotcor2}} ) {
+									foreach my $mutationKey ( keys %{$mafHashref->{$uid1}->{$uniprotcor1}} ) {
 										if ( $this->cutFiltering( $lineardis , $proximityinfor ) ) {
-											push( @mutationSiteResults , join( "\t" , ( $mutationKey , $muPart2 , $sitePart , $lineardis , $proximityinfor ) ) );
+											push( @mutationSiteResults , join( "\t" , ( $mutationKey , $muPart1 , $sitePart2 , $lineardis , $proximityinfor ) ) );
 										}
 									}
 								}
+								my $rsitePart2 = join( "\t" , $res2 , $line[8] , @line[12,13] );
 								$this->addToNearbyFeatureLists( $sites , $uid2 , 
 										$uniprotcor2 , \@siteROIArray , \@siteCOSMICArray , 
-										$sitePart , $muPart1 , $lineardis , 
+										$rsitePart2 , $muPart1 , $lineardis , 
 										$proximityinfor , $domain1 , $cosmic1 );
 							} #foreach site2
 						} #if site2 exists
