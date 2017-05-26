@@ -91,9 +91,9 @@ sub process {
 
 
 #retrieve locations of mutations in clusters
-	my ($withinClusterSumDistance,$mass2pvalues)= $this->getPairwise( $clusters , $genesOnPDB_hash_ref,$bestStruc, $recurrence);
+	my ($mass2pvalues,$res2Mut)= $this->getPairwise( $clusters,$bestStruc);
 #process everything
-	$this ->getDistances($proximity_dir, $genesOnPDB_hash_ref, $HUGO2uniprot_hash_ref, $AA_hash_ref, $this->{'simulations'}, $clusters,$bestStruc, $clus_store, $recurrence, $withinClusterSumDistance,$mass2pvalues)
+	$this ->getDistances($proximity_dir, $HUGO2uniprot_hash_ref, $AA_hash_ref, $this->{'simulations'}, $clusters,$bestStruc, $clus_store, $recurrence,$mass2pvalues, $res2Mut)
 } 
 
 #####
@@ -306,199 +306,218 @@ sub checkMax {
 	$minMax->{$pdb}->{$gene}->{$chain}->{'max'} = $residue;
 }
 
-
-
-
-
 sub getPairwise {
-	print "getting pairwise now\n"; #debug
-	my ( $this , $clusters , $genesOnPDBref,$bestStruc, $recurrence) = @_;
-	my $pairwiseHandle = &getFile( $this->{'pairwise'},"r" );
-	my (%mass2pvalues,%withinClusterSumDistance);
-	while ( my $line = <$pairwiseHandle> ) {
-		chomp( $line );
-		my @line = split( /\t/ , $line );
-		my ( $gene1 , $mu1 , $chain1 , $res1 , $gene2 , $mu2 , $chain2 , $res2 , $info ) = @line[0,4,5,6,9,13,14,15,19];
-		if ( exists $clusters->{$gene1}->{$mu1} && exists $clusters->{$gene2}->{$mu2} && $clusters->{$gene1}->{$mu1} eq $clusters->{$gene2}->{$mu2} ) 
-		{
-			my @infos = split( /\|/ , $info );
-			foreach my $dinfo ( @infos ) {
-				my ( $dist , $pdb , $pval ) = split( /\s/ , $dinfo );
-				my $cluster = $clusters->{$gene1}->{$mu1}; #store clusterid of mutation
-				my $best_pdb=$bestStruc->{$cluster}->[1]; #storing best pdb for cluster
-				if ($pdb eq $best_pdb){  #if current pdb is equal to pdb 
-			#	if ( exists $genesOnPDBref->{$gene1}->{$pdb}#{$chain1} #if PDB structure exists for gene1
-			#	&& exists $genesOnPDBref->{$gene2}->{$pdb}#{$chain2} #if PDB structure exists for gene2
-#				&& $chain1 eq $chain2 ) { #specific check to mimic SpacePAC restriction
-			#	){	
-		#			print "pairwise exists in hup file\n"; #debug
-				
-					print"if statement in pairwise working\n";
-					my $rec1=$recurrence->{$cluster}->{$mu1};
-					my $rec2=$recurrence->{$cluster}->{$mu2};
+        print "getting pairwise now\n"; #debug
+        my ( $this , $clusters , $bestStruc) = @_;
+        my $pairwiseHandle = &getFile( $this->{'pairwise'},"r" );
+        my (%mass2pvalues, %res2Mut);
+        while ( my $line = <$pairwiseHandle> ) {
+                chomp( $line );
+                my @line = split( /\t/ , $line );
+                my ( $gene1 , $mu1 , $chain1 , $res1 , $gene2 , $mu2 , $chain2 , $res2 , $info ) = @line[0,4,5,6,9,13,14,15,19];
+                if ( exists $clusters->{$gene1}->{$mu1} && exists $clusters->{$gene2}->{$mu2} && $clusters->{$gene1}->{$mu1} eq $clusters->{$gene2}->{$mu2} ) 
+                {
+                        my @infos = split( /\|/ , $info );
+                        foreach my $dinfo ( @infos ) {
+                                my ( $dist , $pdb , $pval ) = split( /\s/ , $dinfo );
+                                my $cluster = $clusters->{$gene1}->{$mu1}; #store clusterid of mutation
+                                my $best_pdb=$bestStruc->{$cluster}->[1]; #storing best pdb for cluster
+                                if ($pdb eq $best_pdb){  #if current pdb is equal to pdb 
+                #                       print "pairwise exists in hup file\n"; #debug
+                                
+                                        print"if statement in pairwise working\n";
+                                        &storeRes2Mut(\%res2Mut,$pdb,$res1,$mu1);
+                                        &storeRes2Mut(\%res2Mut,$pdb,$res2,$mu2);
+                                        
 
-					$withinClusterSumDistance{$cluster} += $rec1*$rec2*$dist;
-					$mass2pvalues{$cluster}=$pval;
-				#	} #if gene,pdb,chain1 exists
-				}
-			}#foreach dinfo
-				
-		} #if statement
-	} #while pairwise file
-	$pairwiseHandle->close();
-#	print "got the pairwise info\n";
-	return  (\%withinClusterSumDistance,\%mass2pvalues);
+
+                                        $mass2pvalues{$cluster}=$pval;
+                                #       } #if gene,pdb,chain1 exists
+                                }
+                        }#foreach dinfo
+                                
+                } #if statement
+        } #while pairwise file
+        $pairwiseHandle->close();
+#       print "got the pairwise info\n";
+        return  (\%mass2pvalues, \%res2Mut);
 }
+
+
+#function to add array of mutations at a specific residue site
+sub storeRes2Mut{
+        my ($res2Mut,$pdb,$res,$mut)= @_;
+        if( exists $res2Mut->{$pdb}->{$res}){
+                if(!grep $_ eq $mut, @{$res2Mut->{$pdb}->{$res}}){
+                        push @{$res2Mut->{$pdb}->{$res}}, $mut; 
+                }
+        }
+        else{
+                $res2Mut->{$pdb}->{$res}=($mut);
+        }
+
+        return 1;
+}
+
+
 
 sub getProx{
-	my ($this, $proximity_d, $genesOnPDBref, $uniprotIDs, $AAref, $clusters, $best_pdb) = @_;
+        my ($this, $proximity_d, $uniprotIDs, $AAref, $clusters, $best_pdb, $res2Mut,$recurrence, $clus) = @_;
 
-	my %distances;
-	my $uniprotRef=$uniprotIDs->[0]; #pick 1 uniprot ID to get distances
-	my $uni_length=scalar @{$uniprotIDs};
-	my $proxFile = $proximity_d.$uniprotRef.".ProximityFile.csv";
-#	print "proxfile: $proxFile\n"; #debug
-	my $proxHandle = &getFile( $proxFile , "r" );
-	my %paircheck;
-	my %res_count;
+        my %distances;
+        my $uniprotRef=$uniprotIDs->[0]; #pick 1 uniprot ID to get distances
+        my $uni_length=scalar @{$uniprotIDs};
+        my $proxFile = $proximity_d.$uniprotRef.".ProximityFile.csv";
+#       print "proxfile: $proxFile\n"; #debug
+        my $proxHandle = &getFile( $proxFile , "r" );
+        my (%paircheck, %res_count, %withinClusterSumDistance);
 
-	while(my $line = <$proxHandle>) {
-		chomp $line;
-#		delete $recurrence{$clusterid};			
-		my ( $up1 , $chain1 , $res1 , $aa1 , $up2 , $chain2 , $res2 , $aa2 , $dist , $pdb , $pval ) = (split( /\t/ , $line ))[0..2,4,7..9,11,14..16];
-		my $key1="$up1:$res1:$chain1";
-		my $key2="$up2:$res2:$chain2";
-#		print ("$aa1\t$aa2\t$pdb\t$best_pdb\t$key1\t$key2\n");	
-		if (exists $AAref->{$aa1} && exists $AAref->{$aa2} && $pdb eq $best_pdb && !exists $paircheck{$pdb}{$key1}{$key2} && !exists $paircheck{$pdb}{$key2}{$key1}) {
-			if(grep $_ eq $up2,@{$uniprotIDs}){ #if 2nd uniprot id is in uniprots that are in cluster
-				
-				&checkKey($key1,\%res_count,$pdb,\%distances, $uni_length);	
-				&checkKey($key2,\%res_count,$pdb,\%distances, $uni_length);	
+        while(my $line = <$proxHandle>) {
+                chomp $line;
+                my ( $up1 , $chain1 , $res1 , $aa1 , $up2 , $chain2 , $res2 , $aa2 , $dist , $pdb , $pval ) = (split( /\t/ , $line ))[0..2,4,7..9,11,14..16];
+                my $key1="$up1:$res1:$chain1";
+                my $key2="$up2:$res2:$chain2";
+#               print ("$aa1\t$aa2\t$pdb\t$best_pdb\t$key1\t$key2\n");  
+                if (exists $AAref->{$aa1} && exists $AAref->{$aa2} && $pdb eq $best_pdb && !exists $paircheck{$pdb}{$key1}{$key2} && !exists $paircheck{$pdb}{$key2}{$key1}) {
+                        if(grep $_ eq $up2,@{$uniprotIDs}){ #if 2nd uniprot id is in uniprots that are in cluster
+                                my $clus1=$res2Mut->{$pdb}->{$res1}->[0]; #retrieving cluster ID for residue
+                                my $clus2=$res2Mut->{$pdb}->{$res2}->[0];
+                                if ($clus1 eq $clus and $clus2 eq $clus){ #if pair of residues are in the same cluster
+                                        my $recsum1=0;
+                                        my $recsum2=0;
+                                        $recsum1=&sumWeight($recsum1,$res2Mut,$pdb,$res1,$recurrence,$clus); #get sum of weights for each mutation at a residue
+                                        $recsum2=&sumWeight($recsum2,$res2Mut,$pdb,$res2,$recurrence,$clus);
+                                        $withinClusterSumDistance{$clus} += $recsum1*$recsum2*$dist;
+                                }
 
-				push @{$distances{$pdb}} , $dist;
-				#print "WE GOT ONE\n";#debug
-#				print "2nd if statement working in getProx\n";			
-				$paircheck{$pdb}{$key1}{$key2}=1;
+                                &addZeroDist($key1,\%res_count,$pdb,\%distances, $uni_length);
+                                &addZeroDist($key2,\%res_count,$pdb,\%distances, $uni_length);
 
+                                push @{$distances{$pdb}} , $dist;
+                                $paircheck{$pdb}{$key1}{$key2}=1;
 
-			}
-		}
-	}
-		$proxHandle->close();
-	return \%distances;
+                        }
+                }
+        }
+                $proxHandle->close();
+        return \%distances, \%withinClusterSumDistance;
 
 }
 
 
-sub checkKey{
-	my ($key,$res_count,$pdb, $distances,$uni_length)=@_;
+sub sumWeight{
+        my ($recsum,$res2Mut,$pdb,$res,$recurrence,$clus);
+        foreach my $mut(@{$res2Mut->{$pdb}->{$res}}){
+                $recsum+=$recurrence->{$clus}->{$mut};
+        }
 
-	if (! grep $_ eq $key,@{$res_count->{$pdb}}){
+        return $recsum
+}
 
-		push @{$res_count->{$pdb}}, $key;
 
-		if ($uni_length==1){ #only push 0 distance if it's intramolecular cluster
-			push @{$distances->{$pdb}}, 0;
-		}
-	}
+sub addZeroDist{
+        my ($key,$res_count,$pdb, $distances,$uni_length)=@_;
 
-	return 1;
+        if (! grep $_ eq $key,@{$res_count->{$pdb}}){
+
+                push @{$res_count->{$pdb}}, $key;
+
+                if ($uni_length==1){ #only push 0 distance if it's intramolecular cluster
+                        push @{$distances->{$pdb}}, 0;
+                }
+        }
+
+        return 1;
 }
 
 sub getDistances{
-	my ($this, $proximity_d, $genesOnPDBref, $HUGO2uniprotref, $AAref, $NSIMS, $clusters,$bestStruc, $clus_store, $recurrence, $withinClusterSumDistance,$mass2pvalues) = @_;
-	print "getDistances started\n"; #debug
-	my $hash_count = keys %$genesOnPDBref;#debug
-	my %best_pdb;
+        my ($this, $proximity_d, $HUGO2uniprotref, $AAref, $NSIMS, $clusters,$bestStruc, $clus_store, $recurrence, $mass2pvalues, $res2Mut) = @_;
+        print "getDistances started\n"; #debug
+        my %best_pdb;
 
-	my $fout = $this->{'output_prefix'}.".".$NSIMS."sims.avgDist_pvalue";
-	my $OUT = &getFile( $fout , "w" );
-	$OUT->print( "Cluster\tGene\tPDB_ID\tNum_Residues\tNum_Mutations\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n" );
+        my $fout = $this->{'output_prefix'}.".".$NSIMS."sims.avgDist_pvalue";
+        my $OUT = &getFile( $fout , "w" );
+        $OUT->print( "Cluster\tGene\tPDB_ID\tNum_Residues\tNum_Mutations\tNum_Pairs\tAvg_Distance\tEstimated_PValue\n" );
 
-	foreach my $clus ( keys %{$clus_store} ) {
+        foreach my $clus ( keys %{$clus_store} ) {
 
-		my $best_pdb=$bestStruc->{$clus}->[1]; #store best PDB for cluster
-		my @uniprotIDs;
-		print "$clus\n";
-		foreach my $gene(@{$clus_store->{$clus}}){				
-			my $uniprot = $HUGO2uniprotref->{$gene};
-			print"$gene\t$uniprot\n";	
-			if (! grep $_ eq $uniprot,@uniprotIDs){
-				push @uniprotIDs, $uniprot;  #store all unique uniprotIds in cluster
-			#	print "$uniprot\n";
-				
-			}
-		}
+                my $best_pdb=$bestStruc->{$clus}->[1]; #store best PDB for cluster
+                my @uniprotIDs;
 
-		#get background distances for cluster 	
-		my $distances=$this->getProx($proximity_d, $genesOnPDBref, \@uniprotIDs, $AAref, $clusters, $best_pdb);		
-	
-		print "printing cluster: $clus\n";
-		print "PDB: $best_pdb\n";#debug
-		my @distances = sort {$a <=> $b} @{$distances->{$best_pdb}};
-		#my @distances = sort {$a <=> $b} keys %{$distances{$pdb}{$chain}};
-		my $numDistances = scalar( @distances );
+                foreach my $gene(@{$clus_store->{$clus}}){
+                        my $uniprot = $HUGO2uniprotref->{$gene};
+                        if (! grep $_ eq $uniprot,@uniprotIDs){
+                                push @uniprotIDs, $uniprot;  #store all unique uniprotIds in cluster
+                                print "$uniprot\n";
 
-		#print STDOUT $tossedPairs{$pdb}{$chain}." pairs thrown out\n";
-		my $genes=join( ":" , @{$clus_store->{$clus}});		
-		my %withinClusterAvgDistance;
-		my ( $mass , $numPairs, $numResidues );
-		$mass=0;
-		$numResidues=0;
-		foreach my $mut(keys %{$recurrence->{$clus}}){
-			my $rec=$recurrence->{$clus}->{$mut};	
-			print"$rec\t$mut\n";
-			$mass+=$rec;
-			$numResidues+=1;
-		}
+                        }
+                }
 
-		$numPairs = ( $mass ) * ( $mass - 1 ) / 2;
-#		print"distances:@distances\n";					
-		if ( $mass > 2 ) {
-		
-			$withinClusterAvgDistance{$clus} = $withinClusterSumDistance->{$clus} / $numPairs;
-#						print "cluster: $cluster, avg distance: $withinClusterAvgDistance{$cluster}, sum distance: $withinClusterSumDistance->{$cluster}\n";#debug
-			delete $mass2pvalues->{$clus};
-		} elsif ( $mass == 2 ) {
-#print STDOUT "Cluster ".$cluster." has ".$mass." residues, so its p-value is ".$mass2pvalues->{$cluster}."\n"; #debug
-			$OUT->print( join( "\t" , ( $clus , $genes , $best_pdb , $numResidues, $mass , $numPairs , $withinClusterSumDistance->{$clus} , $mass2pvalues->{$clus} ) )."\n" );
-		} elsif ( $mass == 1 ) {
-#						print STDOUT "Cluster ".$cluster." has ".$mass." residue, so it has no p-value\n";#debug
-			$OUT->print( join( "\t" , ( $clus , $genes , $best_pdb , $numResidues, $mass , $numPairs , 0 , "NA" ) )."\n" );
-		} #if mass block
+                #get background distances for cluster and the sum of all pairwise residue distances in cluster
+                my ($distances, $withinClusterSumDistance)=$this->getProx($proximity_d, \@uniprotIDs, $AAref, $clusters, $best_pdb, $res2Mut, $recurrence, $clus);
 
-#				print STDOUT $hugo."\t".$pdb."\t".$chain."\n";
-		my %below;
-#					print STDOUT "Simulation\tSum_Distances\tAvg_Distance\n";
-		for ( my $simulation = 0; $simulation < $NSIMS ; $simulation++ ) {
-			my $sumDists = 0;
-			for ( my $i = 0; $i < $numPairs ; $i++ ) {
-				my $randIndex = int( rand( $numDistances ) );
-				$sumDists += $distances[$randIndex];
-			} #foreach random pick
-			my $avgDist = $sumDists / $numPairs;
-#						print STDOUT $simulation."\t".$sumDists."\t".$avgDist."\n";
-			if ( $avgDist < $withinClusterAvgDistance{$clus} ) {
-				$below{$clus}++;
-				}
-		} #foreach simulation
-		my $permutationTestPValue;
-		if(exists $below{$clus}){
-			$permutationTestPValue = $below{$clus} / $NSIMS;
+                print "printing cluster: $clus\n";
+                print "PDB: $best_pdb\n";#debug
+                my @distances = sort {$a <=> $b} @{$distances->{$best_pdb}};
+                #my @distances = sort {$a <=> $b} keys %{$distances{$pdb}{$chain}};
+                my $numDistances = scalar( @distances );
 
-		#	print " below: $below{$cluster}\t";#debug
-		#	print STDOUT "Estimated p-value: ".$permutationTestPValue."\n";
-		} else{
-			$permutationTestPValue=0;
-			print "why zero\n";#debug
-		}
+                #print STDOUT $tossedPairs{$pdb}{$chain}." pairs thrown out\n";
+                my $genes=join( ":" , @{$clus_store->{$clus}});
+                my %withinClusterAvgDistance;
+                my ( $mass , $numPairs, $numResidues );
+                $mass=0;
+                $numResidues=0;
+                foreach my $mut(keys %{$recurrence->{$clus}}){
+                        my $rec=$recurrence->{$clus}->{$mut};
+                        print"$rec\t$mut\n";
+                        $mass+=$rec;
+                        $numResidues+=1;
+                }
 
-		$OUT->print( join( "\t" , ( $clus , $genes , $best_pdb ,$numResidues,$mass , $numPairs , $withinClusterAvgDistance{$clus} , $permutationTestPValue ) )."\n" );
-	
-	}#foreach cluster
-		$OUT->close();
-	return 1;
+                $numPairs = ( $mass ) * ( $mass - 1 ) / 2;
+#               print"distances:@distances\n";                                  
+                if ( $mass > 2 ) {
+
+                        $withinClusterAvgDistance{$clus} = $withinClusterSumDistance->{$clus} / $numPairs;
+                        delete $mass2pvalues->{$clus};
+                } elsif ( $mass == 2 ) {
+                        $OUT->print( join( "\t" , ( $clus , $genes , $best_pdb , $numResidues, $mass , $numPairs , $withinClusterSumDistance->{$clus} , $mass2pvalues->{$clus} ) )."\n" );
+                } elsif ( $mass == 1 ) {
+                        $OUT->print( join( "\t" , ( $clus , $genes , $best_pdb , $numResidues, $mass , $numPairs , 0 , "NA" ) )."\n" );
+                } #if mass block
+                my %below;
+                for ( my $simulation = 0; $simulation < $NSIMS ; $simulation++ ) {
+                        my $sumDists = 0;
+                        for ( my $i = 0; $i < $numPairs ; $i++ ) {
+                                my $randIndex = int( rand( $numDistances ) );
+                                $sumDists += $distances[$randIndex];
+                        } #foreach random pick
+                        my $avgDist = $sumDists / $numPairs;
+                        if ( $avgDist < $withinClusterAvgDistance{$clus} ) {
+                                $below{$clus}++;
+                                }
+                } #foreach simulation
+                my $permutationTestPValue;
+                if(exists $below{$clus}){
+                        $permutationTestPValue = $below{$clus} / $NSIMS;
+
+                } else{
+                        $permutationTestPValue=0;
+                        print "why zero\n";#debug
+                }
+
+                if ($mass >2){
+
+                        $OUT->print( join( "\t" , ( $clus , $genes , $best_pdb ,$numResidues,$mass , $numPairs , $withinClusterAvgDistance{$clus} , $permutationTestPValue ) )."\n" );
+                }
+
+        }#foreach cluster
+                $OUT->close();
+        return 1;
 }
+
+
 
 sub getFile {
 	my ( $file , $rw ) = @_;
