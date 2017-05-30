@@ -93,7 +93,7 @@ sub process {
 #retrieve locations of mutations in clusters
 	my ($mass2pvalues,$res2Mut)= $this->getPairwise( $clusters,$bestStruc);
 #process everything
-	$this ->getDistances($proximity_dir, $HUGO2uniprot_hash_ref, $AA_hash_ref, $this->{'simulations'}, $clusters,$bestStruc, $clus_store, $recurrence,$mass2pvalues, $res2Mut)
+	$this ->getDistances($proximity_dir, $HUGO2uniprot_hash_ref, $uniprot2HUGO_hash_ref, $AA_hash_ref, $this->{'simulations'}, $clusters,$bestStruc, $clus_store, $recurrence,$mass2pvalues, $res2Mut)
 } 
 
 #####
@@ -116,7 +116,7 @@ sub processHUP{
 				$genesOnPDB{$hugo}{$pdb} = 1;
 				print "hugos: $hugo\n";#debug
 			}
-			$uniprot2HUGO{$uniprot}{$hugo} = 1;
+			$uniprot2HUGO{$uniprot}= $hugo;
 			$HUGO2uniprot{$hugo} = $uniprot;
 			print "HUGO: $hugo\n";
 		}
@@ -326,8 +326,8 @@ sub getPairwise {
                 #                       print "pairwise exists in hup file\n"; #debug
                                 
                                         print"if statement in pairwise working\n";
-                                        &storeRes2Mut(\%res2Mut,$pdb,$res1,$mu1);
-                                        &storeRes2Mut(\%res2Mut,$pdb,$res2,$mu2);
+                                        &storeRes2Mut(\%res2Mut,$pdb,$res1,$mu1, $chain1);
+                                        &storeRes2Mut(\%res2Mut,$pdb,$res2,$mu2, $chain2);
                                         
 
 
@@ -346,14 +346,15 @@ sub getPairwise {
 
 #function to add array of mutations at a specific residue site
 sub storeRes2Mut{
-        my ($res2Mut,$pdb,$res,$mut)= @_;
-        if( exists $res2Mut->{$pdb}->{$res}){
-                if(!grep $_ eq $mut, @{$res2Mut->{$pdb}->{$res}}){
-                        push @{$res2Mut->{$pdb}->{$res}}, $mut; 
+        my ($res2Mut,$pdb,$res,$mut, $chain)= @_;
+        if( exists $res2Mut->{$pdb}->{$res}->{$chain}){
+                if(!grep $_ eq $mut, @{$res2Mut->{$pdb}->{$res}->{$chain}}){
+                        push @{$res2Mut->{$pdb}->{$res}->{$chain}}, $mut; 
                 }
         }
         else{
-                $res2Mut->{$pdb}->{$res}=($mut);
+                $res2Mut->{$pdb}->{$res}->{$chain}=();
+                push @{$res2Mut->{$pdb}->{$res}->{$chain}}, $mut; 
         }
 
         return 1;
@@ -362,7 +363,7 @@ sub storeRes2Mut{
 
 
 sub getProx{
-        my ($this, $proximity_d, $uniprotIDs, $AAref, $clusters, $best_pdb, $res2Mut,$recurrence, $clus) = @_;
+        my ($this, $proximity_d, $uniprotIDs, $AAref, $clusters, $best_pdb, $res2Mut,$recurrence, $clus, $uniprot2HUGO) = @_;
 
         my %distances;
         my $uniprotRef=$uniprotIDs->[0]; #pick 1 uniprot ID to get distances
@@ -377,19 +378,25 @@ sub getProx{
                 my ( $up1 , $chain1 , $res1 , $aa1 , $up2 , $chain2 , $res2 , $aa2 , $dist , $pdb , $pval ) = (split( /\t/ , $line ))[0..2,4,7..9,11,14..16];
                 my $key1="$up1:$res1:$chain1";
                 my $key2="$up2:$res2:$chain2";
+		my $gene1=$uniprot2HUGO->{$up1};
+		my $gene2=$uniprot2HUGO->{$up2};
 #               print ("$aa1\t$aa2\t$pdb\t$best_pdb\t$key1\t$key2\n");  
                 if (exists $AAref->{$aa1} && exists $AAref->{$aa2} && $pdb eq $best_pdb && !exists $paircheck{$pdb}{$key1}{$key2} && !exists $paircheck{$pdb}{$key2}{$key1}) {
                         if(grep $_ eq $up2,@{$uniprotIDs}){ #if 2nd uniprot id is in uniprots that are in cluster
-                                my $clus1=$res2Mut->{$pdb}->{$res1}->[0]; #retrieving cluster ID for residue
-                                my $clus2=$res2Mut->{$pdb}->{$res2}->[0];
-                                if ($clus1 eq $clus and $clus2 eq $clus){ #if pair of residues are in the same cluster
-                                        my $recsum1=0;
-                                        my $recsum2=0;
-                                        $recsum1=&sumWeight($recsum1,$res2Mut,$pdb,$res1,$recurrence,$clus); #get sum of weights for each mutation at a residue
-                                        $recsum2=&sumWeight($recsum2,$res2Mut,$pdb,$res2,$recurrence,$clus);
-                                        $withinClusterSumDistance{$clus} += $recsum1*$recsum2*$dist;
-                                }
-
+                                if(exists $res2Mut->{$pdb}->{$res1}->{$chain1} && exists $res2Mut->{$pdb}->{$res2}->{$chain2}){ 
+					print"$pdb\t$key1\t$key2\n";
+					my @arraymut1=@{$res2Mut->{$pdb}->{$res1}->{$chain1}};
+					my @arraymut2=@{$res2Mut->{$pdb}->{$res2}->{$chain2}};
+					my $clus1=$clusters->{$gene1}->{$arraymut1[0]}; #retrieving cluster ID for residue
+					my $clus2=$clusters->{$gene2}->{$arraymut2[0]};
+					if ($clus1 eq $clus and $clus2 eq $clus){ #if pair of residues are in the same cluster
+						my $recsum1=0;
+						my $recsum2=0;
+						$recsum1=&sumWeight($recsum1,$res2Mut,$pdb,$res1,$recurrence,$clus); #get sum of weights for each mutation at a residue
+						$recsum2=&sumWeight($recsum2,$res2Mut,$pdb,$res2,$recurrence,$clus);
+						$withinClusterSumDistance{$clus} += $recsum1*$recsum2*$dist;
+					}
+				}
                                 &addZeroDist($key1,\%res_count,$pdb,\%distances, $uni_length);
                                 &addZeroDist($key2,\%res_count,$pdb,\%distances, $uni_length);
 
@@ -431,7 +438,7 @@ sub addZeroDist{
 }
 
 sub getDistances{
-        my ($this, $proximity_d, $HUGO2uniprotref, $AAref, $NSIMS, $clusters,$bestStruc, $clus_store, $recurrence, $mass2pvalues, $res2Mut) = @_;
+        my ($this, $proximity_d, $HUGO2uniprotref,$uniprot2HUGO, $AAref, $NSIMS, $clusters,$bestStruc, $clus_store, $recurrence, $mass2pvalues, $res2Mut) = @_;
         print "getDistances started\n"; #debug
         my %best_pdb;
 
@@ -454,7 +461,7 @@ sub getDistances{
                 }
 
                 #get background distances for cluster and the sum of all pairwise residue distances in cluster
-                my ($distances, $withinClusterSumDistance)=$this->getProx($proximity_d, \@uniprotIDs, $AAref, $clusters, $best_pdb, $res2Mut, $recurrence, $clus);
+                my ($distances, $withinClusterSumDistance)=$this->getProx($proximity_d, \@uniprotIDs, $AAref, $clusters, $best_pdb, $res2Mut, $recurrence, $clus, $uniprot2HUGO);
 
                 print "printing cluster: $clus\n";
                 print "PDB: $best_pdb\n";#debug
