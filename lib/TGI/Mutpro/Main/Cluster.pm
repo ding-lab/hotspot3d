@@ -1071,7 +1071,7 @@ sub readSite {
 		$site->gene( $gene );
 		$site->chromosome( $transcript );
 		$site->start( $position );
-		$site->stop( $position );
+		$site->stop( $NULL );
 		$site->reference( $NULL );
 		$site->alternate( $PTM );
 		$proteinSite->transcript( $transcript );
@@ -1158,7 +1158,7 @@ sub readMutationSitePairs {
 		$site->gene( $gene2 );
 		$site->chromosome( $transcript2 );
 		$site->start( $transcriptPosition2 );
-		$site->stop( $position2 );
+		$site->stop( $NULL );
 		$site->reference( $NULL );
 		$site->alternate( $PTM );
 		$proteinMutation->transcript( $transcript2 );
@@ -1242,7 +1242,7 @@ sub readSiteSitePairs {
 		$tsite1->gene( $gene1);
 		$tsite1->chromosome( $transcript1 );
 		$tsite1->start( $transcriptPosition1 );
-		$tsite1->stop( $position1 );
+		$tsite1->stop( $NULL );
 		$tsite1->reference( $NULL );
 		$tsite1->alternate( $PTM );
 		$proteinSite1->transcript( $transcript1 );
@@ -1253,7 +1253,7 @@ sub readSiteSitePairs {
 		$tsite2->gene( $gene2 );
 		$tsite2->chromosome( $transcript2 );
 		$tsite2->start( $transcriptPosition2 );
-		$tsite2->stop( $position2 );
+		$tsite2->stop( $NULL );
 		$tsite2->reference( $NULL );
 		$tsite2->alternate( $PTM );
 		$proteinSite2->aminoAcidChange( $site2 );
