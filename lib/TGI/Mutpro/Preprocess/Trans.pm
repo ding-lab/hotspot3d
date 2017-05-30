@@ -138,10 +138,10 @@ sub getPeptides {
     ## get peptide file 
 	my $url = $this->makeEnsemblFastaURL();
     my $downloadFile = $peptidesFile.".gz";
+	my $decompressor = Archive::Extract->new( 'archive' => $downloadFile );
 	if ( not -e $downloadFile ) {
 		getstore( $url, $downloadFile );
 	}
-	my $decompressor = Archive::Extract->new( 'archive' => $downloadFile );
 	$decompressor->extract( to => $peptidesFile );
     #system( "gzip -d $downloadFile" );
     # load peptide seqs
