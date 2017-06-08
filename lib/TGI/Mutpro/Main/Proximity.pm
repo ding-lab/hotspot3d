@@ -418,8 +418,8 @@ sub setOptions {
 			}
 		}
 	} else {
-		unless( $this->{'maf_file'} and ( -e $this->{'maf_file'} ) ) { 
-			warn "You must provide a maf-ile and/or a site-file\n"; 
+		unless( $this->{'maf_file'} or ( -e $this->{'maf_file'} ) ) { 
+			warn "You must provide a maf-file and/or a site-file\n"; 
 			die $this->help_text(); 
 		}
 	}
@@ -565,7 +565,7 @@ sub getTransMaptoUniprot {
 sub getSites {
 	my ( $this , $trans_to_uniprot ) = @_;
 	my $sites = {};
-	if ( defined $this->siteListFile() ) {
+	if ( $this->siteListFile() ne "" ) {
 		my $fh = new FileHandle;
 		unless( $fh->open( $this->siteListFile() ) ) {
 			die "Could not open sites file\n";
