@@ -86,9 +86,9 @@ For the latest stable version:
 
 For the latest beta version:
 
-	git checkout v1.7.1
+	git pull origin v1.7.2
     
-	cpanm HotSpot3D-1.7.1.tar.gz
+	cpanm HotSpot3D-1.7.2.tar.gz
 
 Final note: Installations under some organizations may use an internal perl version. 
 To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
