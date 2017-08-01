@@ -514,61 +514,51 @@ sub vertexFilter {
 	if ( $this->{'vertex_type'} eq $SITE ) {
 		print STDOUT "Filtering vertices\n";
 #TODO if using a different .maf from search step, then some mutations can be missed
-		foreach my $structure ( keys %{$temp_distance_matrix} ) {
+		my $vertexMap = {}; #a hash to map isSameProteinPosition vertices (and others to their selves)-- map=f()
+		my @mKeys = sort keys %{$temp_mutations}; #an array to store all the mutation keys
+
+		#filter same vertices and generate a map
+		foreach my $mutationKey1 ( @mKeys ) {
+			next if not exists $temp_mutations->{$mutationKey1};
+			foreach my $mutationKey2 ( @mKeys ) {
+				next if not exists $temp_mutations->{$mutationKey2};
+				if ( $mutationKey1 eq $mutationKey2 ) {
+					$vertexMap->{$mutationKey2} = $mutationKey1;
+					# print "ACSW::VertexFilter::Equal $mutationKey2 \=\=\> $mutationKey1\n";
+					next;
+				}
+				elsif ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #if same site
+					$vertexMap->{$mutationKey2} = $mutationKey1;
+					print "ACSW::VertexFilter::SameSite $mutationKey2 \=\=\> $mutationKey1\n";
+					delete $temp_mutations->{$mutationKey2};
+				}
+			}
+		}
+		print "ACSW::VertexFilter::mutations filtering done\n";
+
+		#generate representative annotations
+		foreach my $mutationKey ( keys %{$temp_mutations} ) {
+			my ( $ra , $pk ) = $this->getARepresentativeAnnotation( $temp_mutations , $mutationKey );
+			$mutations->{$mutationKey}->{$ra}->{$pk} = 1;
+		}
+		print "ACSW::VertexFilter::mutations representative annotation done\n";
+
+		#use mk'=f(mk) vertex map in the distance matrix
+		foreach my $structure ( keys %{$temp_distance_matrix} ) {		
 			foreach my $mutationKey1 ( keys %{$temp_distance_matrix->{$structure}} ) {
-				foreach my $mutationKey2 ( keys %{$temp_distance_matrix->{$structure}} ) {
-					if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #skip if same site
-						next;
-					} else { #not the same site
-						my $seenIt = 0;
-						foreach my $mutationKey3 ( keys %{$distance_matrix->{$structure}} ) {
-							next if $mutationKey3 eq $mutationKey1;
-							next if $mutationKey3 eq $mutationKey2;
-							if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey3 ) ) {
-								$seenIt = 1;
-								print "update ".$mutationKey1." to ".$mutationKey3."\n";
-								$mutationKey1 = $mutationKey3;
-							}
-							if ( $this->isSameProteinPosition( $temp_mutations , $mutationKey2 , $mutationKey3 ) ) {
-								$seenIt = 1;
-								print "update ".$mutationKey2." to ".$mutationKey3."\n";
-								$mutationKey2 = $mutationKey3;
-							}
-							if ( $seenIt ) {
-								last;
-							}
+				my $mutationKey1prime = $vertexMap->{$mutationKey1}; # mk1'=f(mk1)
+				foreach my $mutationKey2 ( keys %{$temp_distance_matrix->{$structure}->{$mutationKey1}} ) {
+					my $mutationKey2prime = $vertexMap->{$mutationKey2}; # mk2'=f(mk2)
+					if ( not defined $mutationKey1prime and not defined $mutationKey2prime ) {
+						print "ACSW::VertexFilter::Error::undefined prime keys $mutationKey1 \= $mutationKey1prime and $mutationKey2 \= $mutationKey2prime\n";
+					}
+					if ( exists $distance_matrix->{$structure}->{$mutationKey1prime}->{$mutationKey2prime} ) {
+						if ( $distance_matrix->{$structure}->{$mutationKey1prime}->{$mutationKey2prime} ne $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2}) {
+							print "ACSW::VertexFilter::Error::non-matching distances $mutationKey1 \= $mutationKey1prime and $mutationKey2 \= $mutationKey2prime, d\($mutationKey1,$mutationKey2\) ne d\($mutationKey1prime,$mutationKey2prime\)\n";
 						}
-						if ( $seenIt == 0 ) {
-							if ( exists $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} ) {
-								my ( $ra1 , $pk1 , $ra2 , $pk2 );
-
-								( $ra1 , $pk1 ) = $this->getARepresentativeAnnotation(
-													$temp_mutations , $mutationKey1 );
-								$mutations->{$mutationKey1}->{$ra1}->{$pk1} = 1;
-								$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = 
-									$temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
-
-								( $ra2 , $pk2 ) = $this->getARepresentativeAnnotation(
-													$temp_mutations , $mutationKey2 );
-								$mutations->{$mutationKey2}->{$ra2}->{$pk2} = 1;
-								$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = 
-									$temp_distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
-							}
-						}
-#						if ( exists $distance_matrix->{$structure}->{$mutationKey1} ) { #have we seen this key before
-#							print "checkPartners of key1: ".$mutationKey1."\t";
-#							$this->checkPartners( $distance_matrix , $structure , $mutationKey1 , $mutationKey2 , $temp_distance_matrix , $temp_mutations , $mutations );
-#						} else {
-#							print "first pass of key1: ".$mutationKey1."\t";
-#							$distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2} = $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
-#						}	
-#						if ( exists $distance_matrix->{$structure}->{$mutationKey2} ) {
-#							print "checkPartners of key2: ".$mutationKey2."\n";
-#							$this->checkPartners( $distance_matrix , $structure , $mutationKey2 , $mutationKey1 , $temp_distance_matrix , $temp_mutations , $mutations );
-#						} else {
-#							print "first pass of key2: ".$mutationKey2."\n";
-#							$distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1} = $temp_distance_matrix->{$structure}->{$mutationKey2}->{$mutationKey1};
-#						}
+					}
+					else {
+						$distance_matrix->{$structure}->{$mutationKey1prime}->{$mutationKey2prime} = $temp_distance_matrix->{$structure}->{$mutationKey1}->{$mutationKey2};
 					}
 				}
 			}
@@ -579,6 +569,8 @@ sub vertexFilter {
 	}
 	$temp_mutations = undef;
 	$temp_distance_matrix = undef;
+	# print "distance_matrix\n";
+	# print Dumper $distance_matrix;
 	return;
 }
 
