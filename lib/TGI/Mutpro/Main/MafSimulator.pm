@@ -3,7 +3,7 @@ package MafSimulator;
 #----------------------------------
 # $Author: R Jay Mashl
 # $Date: 2016-10-10 10:42:04 -0500 $
-# $Version: 0.1 $
+# $Version: 0.2 $ Revised by Amila Weerasinghe (2017-08-01)
 # $URL: $
 # $Doc: $ simulated MAF generator for HotSpot3D
 # $Doc: $ subs getCoverage, determineCoverage, determineRatio based on preliminary code from Adam D Scott
@@ -46,39 +46,77 @@ sub getCoverage {
     die "ERROR: Could not open/write sites file ".$sitesFn."\n"          if ( ! defined $SITES_FH );
 
     # Process variant MAF
-    while ( <$MAF_FH> ) {
-        chomp;
-        next if( /^Hugo/i );
-        my ( $gene , $chr , $start , $stop , $ref , $alt , $transcript , $aachange ) = (split( /\t/ , $_ ))[0,1,2,3,4,7,9,12];
-        print "Current gene = $gene\n" if $debug;
-        if( $targetGene ) {
-            next if(! exists $Gene_h{$gene} );
-            $Gene_h{$gene} = 1;
-        }
-        if( ! exists $variants->{$gene} ) {
-        print "   not seen before\n" if $debug;
-            $variants->{$gene}{'vars'}     = ();
-            $variants->{$gene}{'pdbDepth'} = ();
-            $variants->{$gene}{'numvars'}  = 0;
-        } else {
-            print "   seen before\n" if $debug;
-        }
-        my $position =  $aachange;
-        $position    =~ s/\D+(\d+)\D*/$1/;
-        print "    aachange, pos = $aachange , $position\n" if $debug;
-        # Rules:
-        # 1. Repeated variants (with different annotations, e.g., ACAD8 11:134132450) count as one
-        # 2. Different mutations at same position (e.g., ABCB6  p.R375Q, p.R375W) are treated as independent hotspot.
-        #     W A R N I N G: The hotspot clusters output for these simulations lists "position-based cluster" instead.
-        #     However, this module produces histograms for both variant- and position-based clusters.
-        if( ! exists $variants->{$gene}{'vars'}{$aachange} ) {
-            $variants->{$gene}{'vars'}{$aachange}      =  { 'pos' => $position, 'isCovered' => 0 };
-            $variants->{$gene}{'pdbDepth'}{$position}  =  0;
-            $variants->{$gene}{'numvars'}              += 1;
-        }
+    my $headline = $MAF_FH->getline(); chomp( $headline );
+    my $mafi = 0;
+    my %mafcols = map{ ( $_ , $mafi++ ) } split( /\t/ , $headline );
+    unless( defined( $mafcols{"Hugo_Symbol"} )
+            and defined( $mafcols{"Chromosome"} )
+            and defined( $mafcols{"Start_Position"} )
+            and defined( $mafcols{"End_Position"} )
+            and defined( $mafcols{"Reference_Allele"} )
+            and defined( $mafcols{"Tumor_Seq_Allele2"} )
+            and defined( $mafcols{"Tumor_Sample_Barcode"} )
+            and defined( $mafcols{$opts->{'transcript_id_header'}} )  ## might have to change according to the MAF
+            and defined( $mafcols{$opts->{'amino_acid_header'}} )    ## might have to change according to the MAF
+            ) {
+        die "not a valid .maf file! Check transcript and amino acid change headers.\n";
     }
-    if( $targetGene ) { foreach( keys %Gene_h ) { print "# Warning: gene $_ was not found in the MAF\n" if( $Gene_h{$_} == 0 ); } }
+    my @mafcols = ( $mafcols{"Hugo_Symbol"},
+                    $mafcols{"Chromosome"},
+                    $mafcols{"Start_Position"},
+                    $mafcols{"End_Position"},
+                    $mafcols{"Variant_Classification"},
+                    $mafcols{"Reference_Allele"},
+                    $mafcols{"Tumor_Seq_Allele2"},
+                    $mafcols{"Tumor_Sample_Barcode"},
+                    $mafcols{$opts->{'transcript_id_header'}},
+                    $mafcols{$opts->{'amino_acid_header'}} );
+
+    print STDOUT "Reading in .maf ...\n";
+    map {
+        chomp;
+        my @line = split /\t/;
+        #print $_."\n";
+        if ( $#line >= $mafcols[-1] && $#line >= $mafcols[-2] ) { #makes sure custom maf cols are in range
+            my ( $gene , $chr , $start , $stop , $classification , $ref ,
+                 $alt , $barID , $transcript , $aachange );
+            
+                ( $gene , $chr , $start , $stop , $classification , $ref ,
+                  $alt , $barID , $transcript , $aachange 
+                ) = @line[@mafcols];
+
+            print "Current gene = $gene\n" if $debug;
+            if( $targetGene ) {
+                next if(! exists $Gene_h{$gene} );
+                $Gene_h{$gene} = 1;
+            }
+            if( ! exists $variants->{$gene} ) {
+            print "   not seen before\n" if $debug;
+                $variants->{$gene}{'vars'}     = ();
+                $variants->{$gene}{'pdbDepth'} = ();
+                $variants->{$gene}{'numvars'}  = 0;
+            } else {
+                print "   seen before\n" if $debug;
+            }
+            my $position =  $aachange;
+            $position    =~ s/\D+(\d+)\D*/$1/;
+            print "    aachange, pos = $aachange , $position\n" if $debug;
+            # Rules:
+            # 1. Repeated variants (with different annotations, e.g., ACAD8 11:134132450) count as one
+            # 2. Different mutations at same position (e.g., ABCB6  p.R375Q, p.R375W) are treated as independent hotspot.
+            #     W A R N I N G: The hotspot clusters output for these simulations lists "position-based cluster" instead.
+            #     However, this module produces histograms for both variant- and position-based clusters.
+            if( ! exists $variants->{$gene}{'vars'}{$aachange} ) {
+                $variants->{$gene}{'vars'}{$aachange}      =  { 'pos' => $position, 'isCovered' => 0 };
+                $variants->{$gene}{'pdbDepth'}{$position}  =  0;
+                $variants->{$gene}{'numvars'}              += 1;
+            }    
+
+        } #if columns in range
+    } $MAF_FH->getlines; #map
     $MAF_FH->close();
+
+    if( $targetGene ) { foreach( keys %Gene_h ) { print "# Warning: gene $_ was not found in the MAF\n" if( $Gene_h{$_} == 0 ); } }
 
     # Process transcripts
     my $statsHdr = join( "\t", "#Gene","UniProt","TxLen","TxFractionCovered","NumMafVars","NumMafVarsCovered", "AvgPdbDepthAtMafVarPositions",
