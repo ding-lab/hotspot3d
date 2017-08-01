@@ -8,11 +8,7 @@
 use strict;
 use warnings;
 
-<<<<<<< HEAD
 our $VERSION = 'V1.7.3';
-=======
-our $VERSION = 'V1.8.0';
->>>>>>> vertexFilter
 
 use Carp;
 use FileHandle;
