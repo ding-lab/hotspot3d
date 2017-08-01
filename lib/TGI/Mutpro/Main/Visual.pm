@@ -38,7 +38,7 @@ sub new {
     $this->{_SITE_COLOR} = '0,0,1';
     $this->{_COMPOUND_COLOR} = 'util.cbag';
     $this->{_MUT_STYLE} = 'spheres';
-    $this->{_SITE_STYLE} = 'sticks';
+    $this->{_SITE_STYLE} = 'spheres';
     $this->{_COMPOUND_STYLE} = 'sticks';
     $this->{_BG_COLOR} = 'white';
     $this->{_NO_LABEL} = undef;

@@ -518,7 +518,6 @@ sub printDrugs {
 	} else {
 		$fh->print( $NULL );
 	}
-	$fh->print( "\t" );
 	return;
 }
 

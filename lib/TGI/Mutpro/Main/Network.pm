@@ -569,9 +569,9 @@ sub collectOutputLines {
 				my $reported = shift @alternateAnnotations;
 				$weight = $mutations->{$mutationKey2}->{$refAlt}->{$reported};
 				( $reportedTranscript , $reportedAAChange ) = @{$this->splitProteinKey( $reported )};
-				my $alternateAnnotations = join( "|" , @alternateAnnotations );
-				if ( not defined $alternateAnnotations ) {
-					$alternateAnnotations = $NULL;
+				my $alternateAnnotations = $NULL;
+				if ( scalar @alternateAnnotations > 0 ) {
+					$alternateAnnotations = join( "|" , @alternateAnnotations );
 				}
 				my $out = join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
 

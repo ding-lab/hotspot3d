@@ -10,7 +10,7 @@ Usage
 
          Stable:     v0.6.0 
 
-           Beta:     up to v1.7.2
+           Beta:     up to v1.7.3
         
          Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
 
@@ -86,9 +86,9 @@ For the latest stable version:
 
 For the latest beta version:
 
-	git pull origin v1.7.2
+	git pull origin v1.7.3
     
-	cpanm HotSpot3D-1.7.2.tar.gz
+	cpanm HotSpot3D-1.7.3.tar.gz
 
 Final note: Installations under some organizations may use an internal perl version. 
 To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
