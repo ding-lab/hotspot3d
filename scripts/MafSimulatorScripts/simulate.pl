@@ -3,7 +3,7 @@
 #----------------------------------
 # $Author: R Jay Mashl
 # $Date: 2016-10-10 10:42:04 -0500 $
-# $Revision: 0.1 $
+# $Revision: 0.2 $ Revised by Amila Weerasinghe (2017-08-01)
 # $URL: $
 # $Doc: $ driver for simulated MAF generator for HotSpot3D
 #----------------------------------
@@ -23,6 +23,8 @@ my $offsetDefault           = 0;
 my $sitesOutDefault         = "sites.out";
 my $sizeHistoOutDefault     = "sizes.histo";
 my $statsOutDefault         = "stats.out";
+my $transcriptHeaderDefault = "transcript_name";
+my $aminoAcidHeaderDefault  = "amino_acid_change";
 
 # Commands and options
 my $command;
@@ -44,6 +46,8 @@ $opts->{'sizeHistoFn'}       =  $sizeHistoOutDefault;
 $opts->{'srcMaf'}            =  undef;
 $opts->{'statsFn'}           =  $statsOutDefault;
 $opts->{'transcripts'}       =  undef;
+$opts->{'transcript_id_header'} = $transcriptHeaderDefault;
+$opts->{'amino_acid_header'} = $aminoAcidHeaderDefault;
 
 GetOptions(
     'clustersListFile=s' => \$opts->{'clustersListFile'},
@@ -64,6 +68,8 @@ GetOptions(
     'size-histo=s'       => \$opts->{'sizeHistoFn'},
     'source-maf=s'       => \$opts->{'srcMaf'},
     'transcripts=s'      => \$opts->{'transcripts'},
+    'amino-acid-header=s' => \$opts->{'amino_acid_header'},
+    'transcript-id-header=s' => \$opts->{'transcript_id_header'},
     ) or abort();
 
 # Check for errors
@@ -103,7 +109,7 @@ sub help {
 
 
 Usage:
-  $0  --command getCoverage  --transcripts <csv_file>  --maf <maf_file>  [--geneList <hugo_gene1>,<hugo_gene2>,... | --geneListFile <gene_list>]  [--sites <outfile> [default: $sitesOutDefault]]  [--site-stats <outfile> [default: $statsOutDefault]]
+  $0  --command getCoverage  --transcripts <csv_file>  --maf <maf_file>  [--geneList <hugo_gene1>,<hugo_gene2>,... | --geneListFile <gene_list>]  [--sites <outfile> [default: $sitesOutDefault]]  [--site-stats <outfile> [default: $statsOutDefault]] [--amino_acid_header <amino_acid_header> [default: $aminoAcidHeaderDefault]] [--transcript-id-header <transcript-id-header> [default: $transcriptHeaderDefault]]
 
   $0  --command randomize    --sites <infile>  --site-stats <infile>  [--distributions <outfile>]  [--geneList <hugo_gene1>,<hugo_gene2>,... |  --geneListFile <gene_list>]  [--num-shuffles <int> [default: $numShufflesDefault]]  [--random-unique]  [--offset <int> [default: $offsetDefault]]
 
