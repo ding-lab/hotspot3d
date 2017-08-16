@@ -103,6 +103,11 @@ sub new {
     $this->{'MinPts'} = undef;
     $this->{'number_of_runs'} = undef;
     $this->{'probability_cut_off'} = undef;
+
+	$this->{'JSON_status'} = undef;
+	$this->{'mutations_json_hash'} = undef;
+	$this->{'distance_matrix_json_hash'} = undef;
+
     bless $this, $class;
     $this->process();
     return $this;
@@ -242,6 +247,9 @@ sub setOptions {
         'minPts=f' => \$this->{'MinPts'},
         'number-of-runs=f' => \$this->{'number_of_runs'},
         'probability-cut-off=f' => \$this->{'probability_cut_off'},
+		'use-JSON' => \$this->{'JSON_status'},
+		'mutations-hash-json-file=s' => \$this->{'mutations_json_hash'},
+		'distance-matrix-json-file=s' => \$this->{'distance_matrix_json_hash'},
 
         'help' => \$help,
     );
@@ -338,10 +346,22 @@ sub setOptions {
 	} else {
 		warn "HotSpot3D::Cluster::setOptions warning: no pairwise-file included (cannot produce mutation-mutation clusters)!\n";
 	}
+	if ( defined $this->{'JSON_status'} ) {
+		$this->{'JSON_status'} = 1;
+		warn "HotSpot3D::Cluster::setOptions warning: use-JSON flag used (will not look for pairwise data or maf file)\n";
+		if ( not defined $this->{'mutations_json_hash'} or not defined $this->{'distance_matrix_json_hash'}  ) {
+			die "HotSpot3D::Cluster::setOptions Error: use-JSON flag is used, but json file locations are not provided!\n";
+		}
+		elsif ( not -e $this->{'mutations_json_hash'} or not -e $this->{'mutations_json_hash'} ) {	
+			die "HotSpot3D::Cluster::setOptions Error: use-JSON flag is used, but the provided JSON files do not exist!\n";
+		}
+	}
+	else { $this->{'JSON_status'} = 0; }
+
 	if (  not defined $this->pairwiseFile() and
 		  not defined $this->sitePairsFile() and
 		  not defined $this->musitePairsFile() and
-		  not defined $this->drugsCleanFile() ) {
+		  not defined $this->drugsCleanFile() and not $this->{'JSON_status'} ) {
 		warn "HotSpot3D::Cluster::setOptions error: no pair file provided. Need at least one of *.pairwise, *.clean, *.sites, *.musites.\n";
 		die $this->help_text();
 	}
@@ -1901,6 +1921,11 @@ Usage: hotspot3d cluster [options]
 --max-processes              Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
 --gene-list-file             Choose mutations from the genes given in this list
 --structure-list-file        Choose mutations from the structures given in this list
+--use-JSON                   Use pre-encoded mutations and distance-matrix hashes in json format, default (no flag): do not use json
+--mutations-hash-json-file   JSON encoded mutations hash file produced by a previous cluster run
+--distance-matrix-json-file  JSON encoded distance-matrix hash file produced by a previous cluster run
+
+
 
 --help                       this message
 

@@ -17,6 +17,7 @@ use FileHandle;
 use Data::Dumper qw(Dumper);
 use List::Util qw[min max shuffle];
 use Getopt::Long;
+use JSON;
 
 our @ISA = qw( TGI::Mutpro::Main::Cluster );
 
@@ -51,18 +52,6 @@ sub process {
     my $mutations = {};
     my $WEIGHT = "weight";
 
-    $this->readMAF( $temp_mutations );
-    $this->getDrugMutationPairs( $temp_distance_matrix );
-    $this->getMutationMutationPairs( $temp_distance_matrix );
-    $this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
-    #$this->initializeSameSiteDistancesToZero( $distance_matrix );
-    #$this->networkClustering( $mutations , $distance_matrix );
-    $this->setSameSiteDistancesToZero( $distance_matrix, $mutations );
-
-    # my ( $help, $options );
-    # if ( $help ) { print STDERR $this->help_text(); exit 0; }
-    unless( $this->{'pairwise_file'} ) { warn 'You must provide a pairwise file! ', "\n"; die $this->help_text(); }
-    unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
     if ( not defined $this->{'Epsilon'} ) {
     	warn "HotSpot3D::Cluster warning: no Epsilon value given, setting to default Epsilon value = 10\n";
 			$this->{'Epsilon'} = $EPSILONDEFAULT;
@@ -88,9 +77,35 @@ sub process {
 
     #####################################################
 
-    # print "distance matrix\n";
+	if ( $this->{'JSON_status'} ) {
+		$mutations = readHash( $this->{'mutations_json_hash'} );
+		$distance_matrix = readHash( $this->{'distance_matrix_json_hash'} );	
+	}
+	else {
+		unless( $this->{'pairwise_file'} ) { warn 'You must provide a pairwise file! ', "\n"; die $this->help_text(); }
+    	unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
+
+		$this->readMAF( $temp_mutations );
+		$this->getDrugMutationPairs( $temp_distance_matrix );
+		$this->getMutationMutationPairs( $temp_distance_matrix );
+		$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+  
+		printHash( $distance_matrix, "distance_matrix_hash" );
+		printHash( $mutations, "mutations_hash" );
+	}
+
+    #print "distance matrix\n";
+    #print Dumper $distance_matrix;
+    #print "mutations\n";
+    #print Dumper $mutations;
+    #printHash( $distance_matrix, "distance_matrix_hash" );
+    #printHash( $mutations, "mutations_hash" );
+    #print "read from JSON\n";
+    #readHash( $distance_matrix, "distance_matrix_hash.json" );
+    #readHash( $mutations, "mutations_hash.json" );
+    # print "distance matrix from JSON\n";
     # print Dumper $distance_matrix;
-    # print "mutations\n";
+    # print "mutations from JSON\n";
     # print Dumper $mutations;
 
     $this->densityClustering( $mutations, $distance_matrix );
@@ -455,7 +470,13 @@ sub GetFileName {
     my $this = shift @_;
 
     my @tempArray = split( "/",$this->{'pairwise_file'}) ;
-    $this->{'pairwise_file_name_only'} = pop @tempArray;
+
+    if ( not defined @tempArray ) {
+    	$this->{'pairwise_file_name_only'} = 'HS3D.DensityClustering';
+    }
+    else {
+    	$this->{'pairwise_file_name_only'} = pop @tempArray;
+    }
 
     return $this;
 }
@@ -1131,6 +1152,31 @@ sub setRWD {
     #print "$this->{'R_path'}\n";
 
 
+}
+
+sub printHash {
+    my ( $hashRef, $fileName ) = @_;
+    my $outfile = join( "", $fileName, ".json" ) ;
+    my $OUT = FileHandle->new( "$outfile" , "w" );
+
+    my $json = encode_json $hashRef;
+    $OUT->print( $json );
+    return;
+}
+
+sub readHash {
+    my $fileName = shift @_;
+    my $hashRef = {};
+    print "read JSON hash: $fileName\n";
+    my $fh = new FileHandle;
+    die "Could not open $fileName\n" unless( $fh->open( $fileName , "r" ) );
+
+    my $json = <$fh>;
+    $fh->close();
+
+    $hashRef = decode_json( $json );
+
+    return $hashRef;
 }
 
 sub help_text{

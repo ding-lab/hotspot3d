@@ -680,6 +680,7 @@ sub densityVisual {
 			last;
 		}
 	}
+	$fh->print( "\n\# $CurrentSC.$CurrentLevel.$CurrentSub\n" );
 
 	if (not defined $PrevEntry) {
 		print "******** None of the variants appear in the given PDB structure *********\n";
@@ -813,17 +814,21 @@ sub setFirstColors {
 	my $GeneName = $1;
 	my $MutName = $2;
 
+	$fh->print( "\n\# ".$ClusterArrayRef->[0]."\n" ); # commented line with cluster id at the start of a new cluster
+
 	foreach my $key (keys %{$this->{mutations}->{$variant}}) {
 		my @ChainRes = split(":", $key);
 		my $chain = shift @ChainRes;
 		my $res = shift @ChainRes;
 
 		if ($SecondDigit == 0) { # super cluster
-			$fh->print( "\n" );
+			# $fh->print( "\n\# ".$ClusterArrayRef->[0]."\n" );
+			$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
 			$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
+			$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
 		}
 		elsif ($SecondDigit == 1) { # first level
-			$fh->print( "\n" );
+			# $fh->print( "\n\# ".$ClusterArrayRef->[0]."\n" );
 			$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
 			$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
 			$fh->print( "sele ".$currentColor."_".$GeneName."_".$MutName."_".$chain.", (resi ".$res." and chain ".$chain.");\n" );
@@ -832,7 +837,7 @@ sub setFirstColors {
 			$this->{ClusterColors}->{$ClusterArrayRef->[0]} = $currentColor; # To keep track of the color of a given cluster ID. Usefull in setting surfaces
 		}
 		elsif ($SecondDigit > 1) { # higher levels 
-			$fh->print( "\n" );  
+			# $fh->print( "\n" );  
 			if ( $ClusterArrayRef->[5] eq 2 ) { # this subcluster doesn't cover anything below it (no need to check PROCESSED)
 				$fh->print( "color ".$currentColor.", (resi ".$res." and chain ".$chain.");\n" );
 				$fh->print( "show spheres, (resi ".$res." and chain ".$chain.");\n" );
