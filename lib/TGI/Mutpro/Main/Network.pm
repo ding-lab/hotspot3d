@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Network;
 #----------------------------------
 # $Authors: Adam Scott, Sohini Sengupta, & Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 6.1 $
+# $Revision: 7.0 $
 # $URL: $
 # $Doc: $ determine mutation clusters from HotSpot3D inter, intra, and druggable data
 # 
@@ -49,6 +49,9 @@ my $DEPENDENT = 1; #"dependent";
 my $ANY = "any";
 my $MINCLUSTERSIZE = 2;
 my $NULL = "-";
+
+my $MAXWEIGHT = 20;
+my $MAXGEODESIC = 10;
 
 my $MULTIMER = "multimer";
 my $MONOMER = "monomer";
@@ -435,9 +438,12 @@ sub calculateVertexScore {
 						}
 					}
 					#print join( "\t" , ( $weight , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\t";
-					if ( $mutationKey1 ne $mutationKey2 ) {
-						$C += $weight/( 2**$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
-					} else { #mutationKey1 is same as mutationKey2
+					if ( $mutationKey1 ne $mutationKey2 ) { #geodesic is non-zero
+						#$C += $weight/( 2**$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
+						my $weightExponential = &exponential( $weight , $MAXWEIGHT );
+						my $geodesicExponential = &exponential( $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} , $MAXGEODESIC );
+						$C += $weight*$weightExponential*$geodesicExponential;
+					} else { #mutationKey1 is same as mutationKey2, geodesic is zer
 						if ( $this->{'vertex_type'} eq $WEIGHT ) { 
 							$C += $weight;
 						} else {
@@ -465,6 +471,11 @@ sub calculateVertexScore {
 #	}
 
 	return $centrality;
+}
+
+sub exponential {
+	my ( $numerator , $denominator ) = @_;
+	return exp( -1 * abs( $numerator / $denominator ) );
 }
 
 sub anyFiniteGeodesicsRemaining {
