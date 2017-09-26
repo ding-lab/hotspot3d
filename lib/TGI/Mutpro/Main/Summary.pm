@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Summary;
 #----------------------------------
 # $Authors: Adam Scott and Matthew Bailey
 # $Date: 2015-05-21
-# $Revision: 0.3 $
+# $Revision: 0.4 $
 # $URL: $
 # $Doc: $ summarize clusters
 # 
@@ -27,6 +27,10 @@ my $NULL = "NA";
 my $fill = "%.3f";
 my $count = "%i";
 
+my $EXPONENTIALS = "Exponentials_Score";
+my $CLOSENESSCENTRALITY = "Closeness_Centrality";
+my $CLUSTERCLOSENESS = "Cluster_Closeness";
+
 sub new {
     my $class = shift;
     my $this = {};
@@ -38,7 +42,7 @@ sub new {
     $this->{drugmass} = {};
     $this->{vertexmass} = {};
     $this->{degrees} = {};
-    $this->{centralities} = {};
+    $this->{scores} = {};
     $this->{geodesics} = {};
     $this->{centroids} = {};
     $this->{genes} = {};
@@ -103,7 +107,7 @@ sub readClustersFile {
 				and defined( $cols{"Gene/Drug"} )
 				and defined( $cols{"Mutation/Gene"} )
 				and defined( $cols{"Degree_Connectivity"} )
-				and defined( $cols{"Closeness_Centrality"} )
+				and defined( $cols{$CLOSENESSCENTRALITY} || $cols{$EXPONENTIALS} )
 				and defined( $cols{"Geodesic_From_Centroid"} )
 				and defined( $cols{"Recurrence"} || $cols{"Weight"} ) 
 				and defined( $cols{"Chromosome"} ) 
@@ -117,9 +121,9 @@ sub readClustersFile {
 						$cols{"Gene/Drug"} , 
 						$cols{"Mutation/Gene"} , 
 						$cols{"Degree_Connectivity"} , 
-						$cols{"Closeness_Centrality"} , 
+						( $cols{$CLOSENESSCENTRALITY} || $cols{$EXPONENTIALS} ), 
 						$cols{"Geodesic_From_Centroid"} , 
-						($cols{"Recurrence"} || $cols{"Weight"}) ,
+						( $cols{"Recurrence"} || $cols{"Weight"} ) ,
 						$cols{"Chromosome"} , 
 						$cols{"Start"} ,
 						$cols{"Stop"} ,
@@ -130,15 +134,20 @@ sub readClustersFile {
 			if ( $line =~ /Recurrence/ ) {
 				$this->{isrecurrence} = 1;
 			}
+			if ( $line =~ /$CLOSENESSCENTRALITY/ ) {
+				$this->{vertex_score} = $CLOSENESSCENTRALITY;
+			} elsif ( $line =~ /$EXPONENTIALS/ ) {
+				$this->{vertex_score} = $EXPONENTIALS;
+			}
 		} else {
 			my @line = split( "\t" , $line );
-			my ( $id , $genedrug , $aagene , $degree , $centrality , 
+			my ( $id , $genedrug , $aagene , $degree , $score , 
 				 $geodesic , $recurrence, $chromosome, $start, $stop, 
 				 $ref, $alt, $trans, $alt_trans 
 			) = @line[@cols];
 
 			$this->sum( 'degrees' , $id , $degree );
-			$this->sum( 'centralities' , $id , $centrality );
+			$this->sum( 'scores' , $id , $score );
 			$this->sum( 'geodesics' , $id , $geodesic );
 			$this->{transcripts}->{$id}->{$trans} += 1;
 			my @list;
@@ -199,9 +208,9 @@ sub writeSummary {
 	foreach my $id ( sort { $a cmp $b } keys %{$this->{vertexmass}} ) {
 		$this->printClusterID( $fh , $id );
 		$this->printCentroid( $fh , $id );
-		$this->printCentrality( $fh , $id );
+		$this->printScore( $fh , $id );
 		$this->printRecurrenceMass( $fh , $id );
-		$this->printAvgCentrality( $fh , $id );
+		$this->printAvgScore( $fh , $id );
 		$this->printAvgRecurrenceMass( $fh , $id );
 		$this->printAvgDegree( $fh , $id );
 		$this->printAvgGeodesic( $fh , $id );
@@ -228,11 +237,17 @@ sub writeSummary {
 
 sub printHeader {
 	my ( $this , $fh ) = @_;
+	my $vertexSum = "Cluster_Closeness";
+	my $avgVertexScore = "Avg_Centrality";
+	if ( $this->{vertex_score} eq $EXPONENTIALS ) { 
+		$vertexSum = "Cluster_Exponentials_Score";
+		$avgVertexScore = "Avg_Exponentials";
+	}
 	$fh->print( join( "\t" , ( 	"Cluster_ID" , 
 								"Centroid" , 
-								"Cluster_Closeness" , 
+								$vertexSum , 
 								"Recurrence_Mass" , 
-								"Avg_Centrality" , 
+								$avgVertexScore , 
 								"Avg_Recurrence" , 
 								"Avg_Degree" , 
 								"Avg_Geodesic" , 
@@ -290,10 +305,10 @@ sub printAvgDegree {
 	return;
 }
 
-sub printCentrality {
+sub printScore {
 	my ( $this , $fh , $id ) = @_;
-	if ( exists $this->{centralities}->{$id} ) {
-		$fh->printf( $fill , $this->{centralities}->{$id} ); #Centrality (cluster closeness)
+	if ( exists $this->{scores}->{$id} ) {
+		$fh->printf( $fill , $this->{scores}->{$id} ); #Score (cluster closeness)
 	} else {
 		$fh->print( $NULL );
 	}
@@ -301,10 +316,10 @@ sub printCentrality {
 	return;
 }
 
-sub printAvgCentrality {
+sub printAvgScore {
 	my ( $this , $fh , $id ) = @_;
-	if ( exists $this->{centralities}->{$id} ) {
-		$fh->printf( $fill , $this->avg( 'centralities' , $id , 'vertexmass' ) ); #Avg_Frequency (average recurrence)
+	if ( exists $this->{scores}->{$id} ) {
+		$fh->printf( $fill , $this->avg( 'scores' , $id , 'vertexmass' ) ); #Avg_Frequency (average recurrence)
 	} else {
 		$fh->print( $NULL );
 	}
