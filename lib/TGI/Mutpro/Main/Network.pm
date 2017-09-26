@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Network;
 #----------------------------------
 # $Authors: Adam Scott, Sohini Sengupta, & Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 7.0 $
+# $Revision: 8.0 $
 # $URL: $
 # $Doc: $ determine mutation clusters from HotSpot3D inter, intra, and druggable data
 # 
@@ -50,6 +50,8 @@ my $ANY = "any";
 my $MINCLUSTERSIZE = 2;
 my $NULL = "-";
 
+my $CENTRALITY = "centrality";
+my $EXPONENTIALS = "exponentials";
 my $MAXWEIGHT = 20;
 my $MAXGEODESIC = 10;
 
@@ -179,8 +181,10 @@ sub writeHeader {
     print STDOUT "\tCreating cluster output file: ".$outFilename."\n";
     my $fh = new FileHandle;
     die "Could not create clustering output file\n" unless( $fh->open( $outFilename , "w" ) );
+	my $score = "Closeness_Centrality";
+	if ( $this->{'vertex_score'} eq $EXPONENTIALS ) { $score = "Exponentials_Score"; }
     $fh->print( join( "\t" , (  "Cluster" , "Gene/Drug" , "Mutation/Gene" ,
-                                "Degree_Connectivity" , "Closeness_Centrality" ,
+                                "Degree_Connectivity" , $score ,
                                 "Geodesic_From_Centroid" , "Weight" ,
                                 "Chromosome" , "Start" , "Stop" ,
                                 "Reference" , "Alternate" ,
@@ -349,22 +353,22 @@ sub determineCentroid {
 }
 
 sub determineSubClusters {
-	my ( $this , $centrality , $geodesics , $structure ) = @_;
+	my ( $this , $scores , $geodesics , $structure ) = @_;
 	my $subClusters = {};
 	my $moreToFind = 1;
 	my $subClusterID = -1;
 	while ( $moreToFind == 1 ) {
 		my $score = 0;
-		my $centroidScore = 0;
+		my $centroidScore = $MAXWEIGHT - 2*$MAXWEIGHT;
 		my $centroid;
 		$subClusterID++;
 		print "Finding subcluster: ".$subClusterID."\n";
 		my $checked = 0;
-		foreach my $mutationKey ( keys %{$centrality} ) {
+		foreach my $mutationKey ( keys %{$scores} ) {
 			next if $this->hasBeenProcessed( $structure , $mutationKey );
 			$checked++;
-			foreach my $refAlt ( keys %{$centrality->{$mutationKey}} ) {
-				$score = $centrality->{$mutationKey}->{$refAlt};
+			foreach my $refAlt ( keys %{$scores->{$mutationKey}} ) {
+				$score = $scores->{$mutationKey}->{$refAlt};
 				( $centroid , $centroidScore ) = $this->determineCentroid( 
 						$mutationKey , $score ,	$centroid , $centroidScore );
 			}
@@ -395,6 +399,8 @@ sub determineSubClusters {
 				$moreToFind = 0;
 			} else {
 				#print "Found ".$vertices." from ".$checked." checked in ".$subClusterID." with centroid ".$centroid."\n";
+				print( "WARNING: vertices remain, but no centroids identified\n" );
+				$moreToFind = 0;
 			}
 		} else {
 			print "Found ".$vertices." from ".$checked." checked in ".$subClusterID." with centroid ".$centroid."\n";
@@ -406,7 +412,7 @@ sub determineSubClusters {
 sub calculateVertexScore {
 	my ( $this , $mutations , $geodesics , $structure ) = @_;
 	#my ( $this , $mutations , $geodesics , $structure ) = @_;
-	my $centrality = {};
+	my $scores = {};
 	#print STDOUT "HotSpot3D::Cluster::calculateVertexScore\n";#.$x." by ";
 	my $max=0;
 	my $centroid = "";
@@ -439,22 +445,30 @@ sub calculateVertexScore {
 					}
 					#print join( "\t" , ( $weight , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\t";
 					if ( $mutationKey1 ne $mutationKey2 ) { #geodesic is non-zero
-						#$C += $weight/( 2**$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
-						my $weightExponential = &exponential( $weight , $MAXWEIGHT );
-						my $geodesicExponential = &exponential( $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} , $MAXGEODESIC );
-						$C += $weight*$weightExponential*$geodesicExponential;
-					} else { #mutationKey1 is same as mutationKey2, geodesic is zer
-						if ( $this->{'vertex_type'} eq $WEIGHT ) { 
-							$C += $weight;
+						if ( $this->{'vertex_score'} eq $EXPONENTIALS ) {
+							$C += $this->exponential( $weight ,
+								$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
 						} else {
-							if ( $refAlt1 ne $refAlt2 ) {
+							$C += $this->closenessCentrality( $weight , 
+								$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
+						}
+					} else { #mutationKey1 is same as mutationKey2, geodesic is zer
+						if ( $this->{'vertex_score'} eq $EXPONENTIALS ) {
+							$C += $this->exponential( $weight , 
+								$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
+						} else {
+							if ( $this->{'vertex_type'} eq $WEIGHT ) { 
 								$C += $weight;
 							} else {
-								$C += $weight - 1;
+								if ( $refAlt1 ne $refAlt2 ) {
+									$C += $weight;
+								} else {
+									$C += $weight - 1;
+								}
 							}
 						}
 					}
-					$centrality->{$mutationKey1}->{$refAlt1} = $C;
+					$scores->{$mutationKey1}->{$refAlt1} = $C;
 					#print join( "\t" , ( "cid=".$superClusterID.".".$subClusterID , "cent=".$centroid , "maxCc=".$max , "Cc=".$C ) )."\n";
 				} #foreach refAlt2
 			} #foreach mutationKey2
@@ -470,12 +484,22 @@ sub calculateVertexScore {
 #		}
 #	}
 
-	return $centrality;
+	return $scores;
+}
+
+sub closenessCentrality {
+	my ( $this , $weight , $geodesic ) = @_;
+	return $weight / ( 2**$geodesic );
 }
 
 sub exponential {
-	my ( $numerator , $denominator ) = @_;
-	return exp( -1 * abs( $numerator / $denominator ) );
+	my ( $this , $weight , $geodesic ) = @_;
+	my $weightExp = exp( -1 * abs( $weight ) / $this->{'weight_scale'} );
+	my $geodesicExp = exp( -1 * abs( $geodesic ) / $this->{'length_scale'} );
+	my $sign = 1;
+	if ( $weight < 0 ) { $sign = -1; }
+	my $score = $sign * $weightExp * $geodesicExp;
+	return $score;
 }
 
 sub anyFiniteGeodesicsRemaining {
@@ -499,10 +523,10 @@ sub determineStructureClusters {
 	my $geodesics = $this->initializeGeodesics( $clusterings , $superClusterID ,
 							$structure , $distance_matrix , $mutations );
 	$this->floydWarshall( $geodesics , $structure );
-	my $centrality = $this->calculateVertexScore( $mutations , $geodesics , $structure );
-	my $subClusters = $this->determineSubClusters( $centrality , $geodesics , $structure );
+	my $scores = $this->calculateVertexScore( $mutations , $geodesics , $structure );
+	my $subClusters = $this->determineSubClusters( $scores , $geodesics , $structure );
 	$this->collectOutputLines( $mutations , $geodesics , $structure , 
-			$superClusterID , $centrality , $subClusters , $linesToWrite );
+			$superClusterID , $scores , $subClusters , $linesToWrite );
 	return;
 }
 

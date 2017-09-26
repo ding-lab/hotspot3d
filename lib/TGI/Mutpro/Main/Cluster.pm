@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Cluster;
 #----------------------------------
 # $Authors: Adam Scott, Sohini Sengupta, & Amila Weerasinghe
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 6 $
+# $Revision: 7 $
 # $URL: $
 # $Doc: $ determine mutation clusters from HotSpot3D inter, intra, and druggable data
 # 
@@ -37,7 +37,6 @@ my $RECURRENCE = "recurrence";
 my $UNIQUE = "unique";
 my $SITE = "site";
 my $PVALUEDEFAULT = 0.05;
-my $DISTANCEDEFAULT = 10;
 my $MAXDISTANCE = 10000;
 my $AVERAGEDISTANCE = "average";
 my $SHORTESTDISTANCE = "shortest";
@@ -48,6 +47,11 @@ my $DEPENDENT = 1; #"dependent";
 my $ANY = "any";
 my $NULL = "-";
 my $PTM = "ptm";
+
+my $CENTRALITY = "centrality";
+my $EXPONENTIALS = "exponentials";
+my $MAXGEODESIC = 10;
+my $MAXWEIGHT = 20;
 
 my $MULTIMER = "multimer";
 my $MONOMER = "monomer";
@@ -75,11 +79,14 @@ sub new {
     $this->{'3d_distance_cutoff'} = undef;
     $this->{'linear_cutoff'} = 0;
 	$this->{'max_radius'} = 10;
+    $this->{'length_scale'} = $MAXGEODESIC;
 	$this->{'vertex_type'} = $SITE;
 	$this->{'distance_measure'} = $AVERAGEDISTANCE;
     $this->{'amino_acid_header'} = "amino_acid_change";
     $this->{'transcript_id_header'} = "transcript_name";
     $this->{'weight_header'} = $WEIGHT;
+    $this->{'weight_scale'} = $MAXWEIGHT;
+    $this->{'vertex_score'} = $CENTRALITY;
     $this->{'clustering'} = undef;
 
 	$this->{'parallel'} = undef;
@@ -230,6 +237,9 @@ sub setOptions {
         'amino-acid-header=s' => \$this->{'amino_acid_header'},
         'transcript-id-header=s' => \$this->{'transcript_id_header'},
         'weight-header=s' => \$this->{'weight_header'},
+        'weight-scale=f' => \$this->{'weigth_scale'},
+        'length-scale=f' => \$this->{'length_scale'},
+        'vertex-score=s' => \$this->{'vertex_score'},
         'clustering=s' => \$this->{'clustering'},
         'structure-dependent' => \$this->{'structure_dependence'},
         'subunit-dependent' => \$this->{'subunit_dependence'},
@@ -353,6 +363,10 @@ sub setOptions {
 		warn "vertex-type option not recognized as \'recurrence\', \'unique\', \'site\', or \'weight\'\n";
 		die $this->help_text();
 	}
+	if ( $this->{'vertex_score'} ne $CENTRALITY and $this->{'vertex_score'} ne $EXPONENTIALS ) {
+		warn "vertex-score option not recognized as \'centrality\' or \'exponentials\'\n";
+		die $this->help_text();
+	}
 	if ( $this->{'distance_measure'} ne $AVERAGEDISTANCE
 		 and $this->{'distance_measure'} ne $SHORTESTDISTANCE ) {
 		warn "distance-measure option not recognized as \'shortest\' or \'average\'\n";
@@ -400,6 +414,9 @@ sub setOptions {
 	print STDOUT " subunit-dependent     = ".$this->{'subunit_dependence'}."\n";
 	print STDOUT " meric-type            = ".$this->{'meric_type'}."\n";
 	print STDOUT " parallel              = ".$this->{'parallel'}."\n";
+	print STDOUT " weigth-scale          = ".$this->{'weight_scale'}."\n";
+	print STDOUT " length-scale          = ".$this->{'length_scale'}."\n";
+	print STDOUT " vertex-score          = ".$this->{'vertex_score'}."\n";
 	if ( defined $this->{'max_processes'} ) {
 		print STDOUT " max-processes         = ".$this->{'max_processes'}."\n";
 	}
@@ -1888,6 +1905,9 @@ Usage: hotspot3d cluster [options]
                                  unique vertices are the specific genomic changes
                                  site vertices are the affected protein positions
                                  weight vertices are the genomic mutations with a numerical weighting
+--weight-scale               Weight scale used to control scoring of vertices, default: 20
+--length-scale               Length scale used to control scoring of vertices, default: 10
+--vertex-score               Vertex score system to use (centrality, exponentials), default: centrality
 --distance-measure           Pair distance to use (shortest or average), default: average
 --structure-dependent        Clusters for each structure or across all structures, default (no flag): independent
 --subunit-dependent          Clusters for each subunit or across all subunits, default (no flag): independent
