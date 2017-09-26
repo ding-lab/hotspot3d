@@ -1,7 +1,7 @@
 package TGI::Mutpro::Preprocess::HugoGeneMethods;
 #
 #----------------------------------
-# $Authors: Beifang Niu
+# $Authors: Beifang Niu & Adam D Scott
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision: $
 # $URL: $
@@ -10,12 +10,12 @@ package TGI::Mutpro::Preprocess::HugoGeneMethods;
 #
 use strict;
 use warnings;
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 use Carp;
 use LWP::Simple;
 use TGI::Mutpro::Preprocess::HugoGene;
-my $HugoUrl = "http://www.genenames.org/cgi-bin/hgnc_downloads?".
+my $HugoUrl = "https://www.genenames.org/cgi-bin/hgnc_downloads?".
     "title=HGNC+output+data&hgnc_dbtag=on&".
     "col=gd_hgnc_id&".
     "col=gd_app_sym&".
@@ -117,6 +117,9 @@ sub makeHugoGeneObjects {
 	my $list = shift;
     my %hugo_objects;
     my $page = get($HugoUrl);
+	if ( not $page ) {
+		die "HotSpot3D::HugoGeneMethods::makeHugoGeneObjects ERROR: no data from url request.\n";
+	}
     foreach my $line (split /\n/, $page) {
 		if ($line =~ /withdrawn/i || $line =~ /HGNC ID\s+Approved\s+Symbol\s+/) { next; }
 		my @entries = split /\t/, $line;
