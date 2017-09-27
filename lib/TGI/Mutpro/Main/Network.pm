@@ -346,8 +346,14 @@ sub isRadiusOkay {
 sub determineCentroid {
 	my ( $this , $mutationKey , $newScore , 
 		 $currentCentroid , $currentScore ) = @_;
-	if ( $newScore > $currentScore ) {
-		return ( $mutationKey , $newScore );
+	if ( $this->{'vertex_score'} eq $EXPONENTIALS ) {
+		if ( abs( $newScore ) > abs( $currentScore ) ) {
+			return ( $mutationKey , $newScore );
+		}
+	} else {
+		if ( $newScore > $currentScore ) {
+			return ( $mutationKey , $newScore );
+		}
 	}
 	return ( $currentCentroid , $currentScore );
 }
@@ -359,7 +365,7 @@ sub determineSubClusters {
 	my $subClusterID = -1;
 	while ( $moreToFind == 1 ) {
 		my $score = 0;
-		my $centroidScore = $MAXWEIGHT - 2*$MAXWEIGHT;
+		my $centroidScore = 0;
 		my $centroid;
 		$subClusterID++;
 		print "Finding subcluster: ".$subClusterID."\n";
@@ -496,8 +502,7 @@ sub exponential {
 	my ( $this , $weight , $geodesic ) = @_;
 	my $weightExp = abs( $weight / $this->{'weight_scale'} );
 	my $geodesicExp = $geodesic / $this->{'length_scale'};
-	my $weightShifted = $weight + $MAXWEIGHT + 1;
-	my $score = $weightShifted * exp( $weightExp - $geodesicExp );
+	my $score = $weight * exp( $weightExp - $geodesicExp );
 	return $score;
 }
 
