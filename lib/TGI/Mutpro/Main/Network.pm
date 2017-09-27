@@ -494,11 +494,10 @@ sub closenessCentrality {
 
 sub exponential {
 	my ( $this , $weight , $geodesic ) = @_;
-	my $weightExp = exp( -1 * abs( $weight ) / $this->{'weight_scale'} );
-	my $geodesicExp = exp( -1 * abs( $geodesic ) / $this->{'length_scale'} );
-	my $sign = 1;
-	if ( $weight < 0 ) { $sign = -1; }
-	my $score = $sign * $weightExp * $geodesicExp;
+	my $weightExp = abs( $weight / $this->{'weight_scale'} );
+	my $geodesicExp = $geodesic / $this->{'length_scale'};
+	my $weightShifted = $weight + $MAXWEIGHT + 1;
+	my $score = $weightShifted * exp( $weightExp - $geodesicExp );
 	return $score;
 }
 
