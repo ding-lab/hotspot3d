@@ -346,6 +346,9 @@ sub isRadiusOkay {
 sub determineCentroid {
 	my ( $this , $mutationKey , $newScore , 
 		 $currentCentroid , $currentScore ) = @_;
+	if ( not $currentScore ) {
+		return ( $mutationKey , $newScore );
+	}
 	if ( $this->{'vertex_score'} eq $EXPONENTIALS ) {
 		if ( abs( $newScore ) > abs( $currentScore ) ) {
 			return ( $mutationKey , $newScore );
@@ -365,7 +368,7 @@ sub determineSubClusters {
 	my $subClusterID = -1;
 	while ( $moreToFind == 1 ) {
 		my $score = 0;
-		my $centroidScore = 0;
+		my $centroidScore;
 		my $centroid;
 		$subClusterID++;
 		print "Finding subcluster: ".$subClusterID."\n";
@@ -437,6 +440,8 @@ sub calculateVertexScore {
 			#print $mutationKey1."|".$proteinKey1."\n";
 			foreach $mutationKey2 ( keys %{$geodesics->{$structure}->{$mutationKey1}}) {
 #TODO take only contributions within radius of centroid
+				my $geodesic = $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2};
+				my $term = 0;
 				#next if ( not $this->isRadiusOkay( $geodesics , $structure , $mutationKey1 , $mutationKey2 ) );
 				foreach my $refAlt2 ( sort keys %{$mutations->{$mutationKey2}} ) {
 					#print $refAlt2."\n";
@@ -444,6 +449,7 @@ sub calculateVertexScore {
 					my $proteinKey2 = shift @proteinKeys2;
 					#print "\t".$mutationKey2."|".$proteinKey2."\t";
 					$weight = 1;
+					$term = 0;
 					if ( $this->{'vertex_type'} ne $UNIQUE ) {
 						if ( exists $mutations->{$mutationKey2} ) {
 							$weight = $mutations->{$mutationKey2}->{$refAlt2}->{$proteinKey2};
@@ -452,16 +458,17 @@ sub calculateVertexScore {
 					#print join( "\t" , ( $weight , $geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} ) )."\t";
 					if ( $mutationKey1 ne $mutationKey2 ) { #geodesic is non-zero
 						if ( $this->{'vertex_score'} eq $EXPONENTIALS ) {
-							$C += $this->exponential( $weight ,
-								$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
+							$term = $this->exponential( $weight , $geodesic );
+							$C += $term;
+							#print( "weight: ".$weight."\t\tgeodesic: ".$geodesic."\t\tterm: ".$term."\t\tnewC: ".$C."\n" );
 						} else {
-							$C += $this->closenessCentrality( $weight , 
-								$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
+							$C += $this->closenessCentrality( $weight , $geodesic );
 						}
 					} else { #mutationKey1 is same as mutationKey2, geodesic is zer
 						if ( $this->{'vertex_score'} eq $EXPONENTIALS ) {
-							$C += $this->exponential( $weight , 
-								$geodesics->{$structure}->{$mutationKey1}->{$mutationKey2} );
+							$term = $this->exponential( $weight , $geodesic );
+							$C += $term;
+							#print( "weight: ".$weight."\t\tgeodesic: ".$geodesic."\t\tterm: ".$term."\t\tnewC: ".$C."\n" );
 						} else {
 							if ( $this->{'vertex_type'} eq $WEIGHT ) { 
 								$C += $weight;
@@ -550,9 +557,9 @@ sub determineStructureClusters {
 
 sub collectOutputLines {
 	#$this->collectOutputLines( $fh , $mutations , $geodesics , $structure , 
-	#		$superClusterID , $subClusterID , $centroid , $centrality );
+	#		$superClusterID , $subClusterID , $centroid , $scores );
 	my ( $this , $mutations , $geodesics , $structure ,
-		 $superClusterID , $centrality , $subClusters , $linesToWrite ) = @_;
+		 $superClusterID , $scores , $subClusters , $linesToWrite ) = @_;
 	my $clusterID = $superClusterID;
 	foreach my $subClusterID ( sort {$a<=>$b} keys %{$subClusters->{$structure}} ) {
 		#print STDOUT "HotSpot3D::Cluster::collectOutputLines\n"; 
@@ -572,7 +579,7 @@ sub collectOutputLines {
 		my ( $reportedTranscript , $reportedAAChange );
 		my $weight;
 		foreach my $refAlt ( sort keys %{$mutations->{$centroid}} ) {
-			my $closenessCentrality = $centrality->{$centroid}->{$refAlt};
+			my $score = $scores->{$centroid}->{$refAlt};
 #TODO make sure this works for in_frame_ins
 			my ( $reference , $alternate ) = @{ TGI::Mutpro::Main::Cluster::uncombine( $refAlt ) };
 			@alternateAnnotations = sort keys %{$mutations->{$centroid}->{$refAlt}};
@@ -584,7 +591,7 @@ sub collectOutputLines {
 				$alternateAnnotations = $NULL;
 			}
 			my $out = join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
-									   $degrees , $closenessCentrality , 
+									   $degrees , $score , 
 									   $geodesic , $weight ,
 									   $chromosome , $start , $stop ,
 									   $reference , $alternate ,
@@ -602,7 +609,7 @@ sub collectOutputLines {
 			$proteinChanges = {};
 			foreach my $refAlt ( sort keys %{$mutations->{$mutationKey2}} ) {
 #TODO make sure this works for in_frame_ins
-				my $closenessCentrality = $centrality->{$mutationKey2}->{$refAlt};
+				my $score = $scores->{$mutationKey2}->{$refAlt};
 				my ( $reference , $alternate ) = @{ TGI::Mutpro::Main::Cluster::uncombine( $refAlt ) };
 				@alternateAnnotations = sort keys %{$mutations->{$mutationKey2}->{$refAlt}};
 				my $reported = shift @alternateAnnotations;
@@ -614,7 +621,7 @@ sub collectOutputLines {
 				}
 				my $out = join( "\t" , ( $clusterID , $gene , $reportedAAChange , 
 
-										   $degrees , $closenessCentrality , 
+										   $degrees , $score , 
 										   $geodesic , $weight ,
 										   $chromosome , $start , $stop ,
 										   $reference , $alternate ,
