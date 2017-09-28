@@ -107,6 +107,7 @@ sub new {
 	$this->{'JSON_status'} = undef;
 	$this->{'mutations_json_hash'} = undef;
 	$this->{'distance_matrix_json_hash'} = undef;
+	$this->{'siteVertexMap_json_hash'} = undef;
 
     bless $this, $class;
     $this->process();
@@ -250,6 +251,7 @@ sub setOptions {
 		'use-JSON' => \$this->{'JSON_status'},
 		'mutations-hash-json-file=s' => \$this->{'mutations_json_hash'},
 		'distance-matrix-json-file=s' => \$this->{'distance_matrix_json_hash'},
+		'siteVertexMap-json-file=s' => \$this->{'siteVertexMap_json_hash'},
 
         'help' => \$help,
     );
@@ -349,10 +351,10 @@ sub setOptions {
 	if ( defined $this->{'JSON_status'} ) {
 		$this->{'JSON_status'} = 1;
 		warn "HotSpot3D::Cluster::setOptions warning: use-JSON flag used (will not look for pairwise data or maf file)\n";
-		if ( not defined $this->{'mutations_json_hash'} or not defined $this->{'distance_matrix_json_hash'}  ) {
+		if ( not defined $this->{'mutations_json_hash'} or not defined $this->{'distance_matrix_json_hash'} or not defined $this->{'siteVertexMap_json_hash'}  ) {
 			die "HotSpot3D::Cluster::setOptions Error: use-JSON flag is used, but json file locations are not provided!\n";
 		}
-		elsif ( not -e $this->{'mutations_json_hash'} or not -e $this->{'mutations_json_hash'} ) {	
+		elsif ( not -e $this->{'mutations_json_hash'} or not -e $this->{'mutations_json_hash'} or not -e $this->{'siteVertexMap_json_hash'} ) {	
 			die "HotSpot3D::Cluster::setOptions Error: use-JSON flag is used, but the provided JSON files do not exist!\n";
 		}
 	}
@@ -530,8 +532,8 @@ sub launchClustering {
 
 sub vertexFilter {
 #$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
-	my ( $this , $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix ) = @_;
-	if ( $this->{'vertex_type'} eq $SITE ) {
+	my ( $this , $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix, $siteVertexMap ) = @_;
+	if ( $this->{'vertex_type'} eq $SITE or $this->{'clustering'} eq $DENSITY ) {
 		print STDOUT "Filtering vertices\n";
 #TODO if using a different .maf from search step, then some mutations can be missed
 		my $vertexMap = {}; #a hash to map isSameProteinPosition vertices (and others to their selves)-- map=f()
@@ -542,13 +544,15 @@ sub vertexFilter {
 			next if not exists $temp_mutations->{$mutationKey1};
 			foreach my $mutationKey2 ( @mKeys ) {
 				next if not exists $temp_mutations->{$mutationKey2};
-				if ( $mutationKey1 eq $mutationKey2 ) {
+				if ( $mutationKey1 eq $mutationKey2 ) { # this if condition is important to capture mk2=mk1 cases to $siteVertexMap hash
 					$vertexMap->{$mutationKey2} = $mutationKey1;
+					$siteVertexMap->{$mutationKey1}->{$mutationKey2} = $temp_mutations->{$mutationKey2};
 					# print "ACSW::VertexFilter::Equal $mutationKey2 \=\=\> $mutationKey1\n";
 					next;
 				}
 				elsif ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #if same site
 					$vertexMap->{$mutationKey2} = $mutationKey1;
+					$siteVertexMap->{$mutationKey1}->{$mutationKey2} = $temp_mutations->{$mutationKey2};
 					print "ACSW::VertexFilter::SameSite $mutationKey2 \=\=\> $mutationKey1\n";
 					delete $temp_mutations->{$mutationKey2};
 				}
@@ -558,8 +562,14 @@ sub vertexFilter {
 
 		#generate representative annotations
 		foreach my $mutationKey ( keys %{$temp_mutations} ) {
-			my ( $ra , $pk ) = $this->getARepresentativeAnnotation( $temp_mutations , $mutationKey );
-			$mutations->{$mutationKey}->{$ra}->{$pk} = 1;
+			my ( $ra , $pk, $highestRecurrence, $totalRecurrence ) = $this->getARepresentativeAnnotation( $temp_mutations , $mutationKey, $siteVertexMap );
+			if ( $this->{'vertex_type'} eq $SITE ) {
+				$mutations->{$mutationKey}->{$ra}->{$pk} = 1; # weight = 1 for SITE
+			}
+			else {
+				$mutations->{$mutationKey}->{$ra}->{$pk} = $totalRecurrence; # weight = total recurrence/weight for RECURRENCE/WEIGHT
+			}
+			
 		}
 		print "ACSW::VertexFilter::mutations representative annotation done\n";
 
@@ -583,30 +593,56 @@ sub vertexFilter {
 				}
 			}
 		}
+		# print "vertex_map\n";
+		# print Dumper $vertexMap;
 	} else {
 		%{$mutations} = %{$temp_mutations};
 		%{$distance_matrix} = %{$temp_distance_matrix};
 	}
 	$temp_mutations = undef;
 	$temp_distance_matrix = undef;
-	# print "distance_matrix\n";
-	# print Dumper $distance_matrix;
+	
 	return;
 }
 
-sub getARepresentativeAnnotation {
-	my ( $this , $mutations , $mutationKey ) = @_;
-	my $ra = ".:.";
-	my $pk = ".:p.";
-	foreach my $refAlt ( keys %{$mutations->{$mutationKey}} ) {
-		$ra = $refAlt;
-		foreach my $proteinKey ( keys %{$mutations->{$mutationKey}->{$refAlt}} ) {
-			$pk = $proteinKey;
-			last;
+sub getARepresentativeAnnotation { # choose a representative out of all the mutations detected as same protein position
+	my ( $this , $mutations , $mutationKey, $siteVertexMap ) = @_;
+	# my $ra = ".:.";
+	# my $pk = ".:p.";
+	my ($ra, $pk, $highestRecurrence ) = undef;
+	my $totalRecurrence = 0;
+
+	foreach my $mk ( keys %{$siteVertexMap->{$mutationKey}} ) {
+		foreach my $refAlt ( keys %{$siteVertexMap->{$mutationKey}->{$mk}} ) {
+			my $lastPK; # to store one proteinKey from one ref:alt
+			foreach my $proteinKey ( keys %{$siteVertexMap->{$mutationKey}->{$mk}->{$refAlt}} ) {
+				$lastPK = $proteinKey;
+				if ( $mk eq $mutationKey ) { # to make sure our selected refAlt and pKey are members of the mutationKey used in downstream
+					if ( not defined $highestRecurrence ) { # assigning to the first entry
+						$ra = $refAlt;
+						$pk = $proteinKey;
+						$highestRecurrence = $siteVertexMap->{$mutationKey}->{$mk}->{$refAlt}->{$proteinKey};
+					}
+					elsif ( $highestRecurrence < $siteVertexMap->{$mutationKey}->{$mk}->{$refAlt}->{$proteinKey} ) { # this recurrence is larger than everything seen so far
+						$ra = $refAlt;
+						$pk = $proteinKey;
+						$highestRecurrence = $siteVertexMap->{$mutationKey}->{$mk}->{$refAlt}->{$proteinKey};
+					}
+				}
+			}
+			$totalRecurrence += $siteVertexMap->{$mutationKey}->{$mk}->{$refAlt}->{$lastPK}; # add the recurrence of one proteinKey per ref:alt
 		}
-		last;
 	}
-	return ( $ra , $pk );
+		
+	# foreach my $refAlt ( keys %{$mutations->{$mutationKey}} ) {
+	# 	$ra = $refAlt;
+	# 	foreach my $proteinKey ( keys %{$mutations->{$mutationKey}->{$refAlt}} ) {
+	# 		$pk = $proteinKey;
+	# 		last;
+	# 	}
+	# 	last;
+	# }
+	return ( $ra , $pk, $highestRecurrence, $totalRecurrence );
 }
 
 sub checkPartners {

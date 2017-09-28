@@ -3,7 +3,7 @@ package TGI::Mutpro::Main::Density;
 #----------------------------------
 # $Authors: Amila Weerasinghe
 # $Date: 2016-11-28 14:34:50 -0500 (Mon Nov 28 14:34:50 CST 2016) $
-# $Revision:  
+# $Revision: 2017-09-28 by A.W. (adding the recurrence and weight based clustering) 
 # $URL: $
 # $Doc: $ Determine density-based clusters from Hotspot3D pairwise data.
 # 
@@ -33,6 +33,11 @@ my $DEPENDENT = "dependent";
 my $LOCAL = "local";
 my $NONE = "none";
 
+my $WEIGHT = "weight";
+my $RECURRENCE = "recurrence";
+my $UNIQUE = "unique";
+my $SITE = "site";
+
 sub new {
     my $class = shift;
     my $this = shift;
@@ -50,6 +55,7 @@ sub process {
     my $temp_mutations = {};
     my $distance_matrix = {};
     my $mutations = {};
+    my $siteVertexMap = {}; # a hash to store refAlt and pKey info when "SITE" specific clustering is done.
     my $WEIGHT = "weight";
 
     if ( not defined $this->{'Epsilon'} ) {
@@ -73,26 +79,41 @@ sub process {
     #####################################################
     
     $this->GetFileName(); # just to get only the name from the pairwise file destination
-    $this->setRWD(); # to retieve the path to TGI::Mutpro::Main. Used to call RScripts using perl
+    $this->setRWD(); # to retrieve the path to TGI::Mutpro::Main. Used to call RScripts using perl
 
     #####################################################
 
 	if ( $this->{'JSON_status'} ) {
 		$mutations = readHash( $this->{'mutations_json_hash'} );
-		$distance_matrix = readHash( $this->{'distance_matrix_json_hash'} );	
+		$distance_matrix = readHash( $this->{'distance_matrix_json_hash'} );
+        $siteVertexMap = readHash( $this->{'siteVertexMap_json_hash'} );	
 	}
 	else {
 		unless( $this->{'pairwise_file'} ) { warn 'You must provide a pairwise file! ', "\n"; die $this->help_text(); }
     	unless( -e $this->{'pairwise_file'} ) { warn "The input pairwise file (".$this->{'pairwise_file'}.") does not exist! ", "\n"; die $this->help_text(); }
 
 		$this->readMAF( $temp_mutations );
+        # print "temp_mutations\n";
+        # print Dumper $temp_mutations;
 		$this->getDrugMutationPairs( $temp_distance_matrix );
 		$this->getMutationMutationPairs( $temp_distance_matrix );
-		$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+		$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix, $siteVertexMap );
+        # $this->setSameSiteDistancesToZero( $distance_matrix, $mutations );
   
 		printHash( $distance_matrix, "distance_matrix_hash" );
 		printHash( $mutations, "mutations_hash" );
+        printHash( $siteVertexMap, "siteVertexMap_hash" );
+
+        # print "mutations\n";
+        # print Dumper $mutations;
+        # print "distance_matrix\n";
+        # print Dumper $distance_matrix;
+        # print "siteVertexMap\n";
+        # print Dumper $siteVertexMap;
 	}
+
+    $this->{"siteVertexMap"} = $siteVertexMap; # store the reference to siteVertexMap
+    $this->{"mutationsHashRef"} = $mutations; # store the reference to mutations 
 
     #print "distance matrix\n";
     #print Dumper $distance_matrix;
@@ -352,7 +373,7 @@ sub GetNeighbors { # retrieves the epsilon-neighborhood
 sub GetCoreDistance {
     my ( $Obj, $neighbors, $MinPts, $mutations ) = @_;
 
-    $neighbors->{$Obj} = 0; # adding the object so that it's counted towards the MinPts
+    $neighbors->{$Obj} = 0; # adding the object so that it is counted towards the MinPts
     my $CoreDist = undef;
     my $neighbors_count = 0;
     my @keys = sort { $neighbors->{$a} <=> $neighbors->{$b} } keys %{$neighbors}; # sort keys according to distances
@@ -360,9 +381,14 @@ sub GetCoreDistance {
     # print Dumper \@keys;
 
     for (my $i = 0; $i < scalar @keys; $i++) {
-        # print "$keys[$i]\n";
-        # print "\tneighbors_count prev = $neighbors_count\n";
-        $neighbors_count = $neighbors_count + scalar keys %{$mutations->{$keys[$i]}}; # add the number of Ref:Alt for the key
+        my $mk = $keys[$i]; # neighboring mutation key
+        foreach my $refAlt ( keys %{$mutations->{$mk}} ) {
+            # print "$keys[$i]\n";
+            # print "\tneighbors_count prev = $neighbors_count\n";
+            my $pk = ( keys %{$mutations->{$mk}->{$refAlt}} )[0]; # get the first protein key corresponding to the ref:alt (there will be just one)
+            my $weight = $mutations->{$mk}->{$refAlt}->{$pk}; # get the weight (for SITE=1, RECURRENCE=total frequency, WEIGHT=total weight)
+            $neighbors_count += $weight; # add the number of "mutations" to the count (the number depends on what you're clustering on; as explained above)
+        }
         #print "\tneighbors_count after = $neighbors_count\n";
         if ( $neighbors_count >= $MinPts ) {
             $CoreDist = $neighbors->{$keys[$i]};
@@ -471,11 +497,10 @@ sub GetFileName {
 
     my @tempArray = split( "/",$this->{'pairwise_file'}) ;
 
-    if ( not defined @tempArray ) {
-    	$this->{'pairwise_file_name_only'} = 'HS3D.DensityClustering';
-    }
-    else {
-    	$this->{'pairwise_file_name_only'} = pop @tempArray;
+    $this->{'pairwise_file_name_only'} = pop @tempArray;
+
+    if ( not defined $this->{'pairwise_file_name_only'} or $this->{'pairwise_file_name_only'} eq '' ) {
+        $this->{'pairwise_file_name_only'} = 'HS3D.DensityClustering';
     }
 
     return $this;
@@ -502,18 +527,18 @@ sub RunSuperClustersID {
         if ( $InitialSet[$i][1] == 10 ) {
             #print "RD($i)=10\n";
 
-            if ( $InitialSet[$i-1][1] == 10 ) {
-                $scs = $i;
-            }
-            else {
+            # if ( $InitialSet[$i-1][1] == 10 ) {
+            #     $scs = $i;
+            # }
+            # else {
                 $Clusters{SuperClusters}{$scs} = $i;
                 $scs = $i;
-            }       
+            # }       
         }
     }
     #print Dumper \%Clusters;
 
-    # Go inside each super cluster and start scanning from smallest r(x):
+    # Go inside each super cluster and start scanning from the smallest r(x):
     my $idSuperCluster = -1;
 
     foreach my $superC ( sort { $Clusters{SuperClusters}{$a} <=> $Clusters{SuperClusters}{$b} } keys %{$Clusters{SuperClusters}} ) {
@@ -533,15 +558,22 @@ sub RunSuperClustersID {
         }
 
         # Recording the Super Cluster
-        if ($Clusters{SuperClusters}{$superC} - $superC >= $MinPts) {
+        my $superClusterCount = 0; # a counter to record the number of weights (recurrence/pathogenicity) inside a super cluster
+        for (my $i = $superC; $i <= $Clusters{SuperClusters}{$superC}-1 ; $i++) {
+            $superClusterCount += $InitialSet[$i][4]; # add the weight (for SITE=1, RECURRENCE=frequency, WEIGHT=weight)
+        }
+        # check if the current super cluster satisfies the MinPts condition
+        if ( $superClusterCount >= $MinPts ) {
             $idSuperCluster++;
             my $ClusTot = 0;
             for (my $t = $superC+1; $t <= $Clusters{SuperClusters}{$superC}-1; $t++) { # start+1 b/c I want to get rid of the first tall peak, (-1 b/c end has included the start of the next)
-                $ClusTot = $ClusTot + $InitialSet[$t][1];
+                $ClusTot += $InitialSet[$t][1];
             }
-            my $ClusAvg = $ClusTot/($Clusters{SuperClusters}{$superC}-1 - $superC);
+            if ( $ClusTot == 0 ) { # according to the above calculation singletons will have a defined $ClusTot value equals to zero
+                $ClusTot = 0.1 * $superClusterCount; # this way, singleton super clusters will have avg cluster density = 0.1
+            }
+            my $ClusAvg = $ClusTot/$superClusterCount;
             push @ClusterArray, [$superC,$Clusters{SuperClusters}{$superC}-1,9.9,$ClusAvg,$idSuperCluster."."."0"."."."0"]; # Artificially recording the super cluster. Randomly picked 9.9. (-1 b/c end has included the start of the next)
-            
         }
 
         # Start scanning from epsilon prime= minimum r(x) to maximum r(x):
@@ -551,22 +583,27 @@ sub RunSuperClustersID {
         my $TempSubClusterRef;
         my $idLevel = 1;
 
-        for (my $Cutoff = $InitialSet[$MinRDat][1] + 0.1; $Cutoff <=  $MaxRD + 0.5 ; $Cutoff += 0.1) {
+        for (my $Cutoff = $InitialSet[$MinRDat][1] ; $Cutoff <=  $MaxRD + 0.5 ; $Cutoff += 0.1) {
             my $idSubCluster = 1;
             my $n = $superC;
             my $counter = 0;
             my $s = $superC;
             while ($n < $Clusters{SuperClusters}{$superC}) { # n < (end of the super cluster) bc we don't want the last bar in the super cluster in a sub cluster
                 if ($InitialSet[$n][1] < $Cutoff) {
-                    $counter++;
+                    $counter += $InitialSet[$n][4]; # add the weight (for SITE=1, RECURRENCE=frequency, WEIGHT=weight)
+                    # $counter++;
                     if ($counter >= $MinPts) {
                         $Clusters{SubClusters}{$superC}{$s} = $n;
                     }
-                $n++;
+                    $n++;
                 }
                 else {
+                    if ( $Cutoff == $InitialSet[$MinRDat][1] and $InitialSet[$n][4] >= $MinPts ) { # allowing singleton sub clusters to form at the lowest level
+                        $Clusters{SubClusters}{$superC}{$n} = $n; 
+                    }
+                    # regular sub cluster stuff
                     $s = $n;
-                    $counter = 0;
+                    $counter = $InitialSet[$n][4]; # reset $counter with the next bar having RD>Cutoff
                     $n++;
                 }
             }
@@ -583,10 +620,18 @@ sub RunSuperClustersID {
                     my @OrderedE = @{$Clusters{SubClusters}{$superC}}{@OrderedS};
                     foreach my $start (@OrderedS) {
                         my $ClusTot = 0;
-                        for (my $t = $start+1; $t <= $Clusters{SubClusters}{$superC}{$start}; $t++) { # start+1 b/c I want to get rid of the first tall peak
-                            $ClusTot = $ClusTot + $InitialSet[$t][1];
+                        my $tempCounter = 0;
+                        if ( $start == $Clusters{SubClusters}{$superC}{$start} ) { # this sub cluster is a singleton
+                            $ClusTot = 0.1; # singletons are given cluster avg = 0.1 #$InitialSet[$start][1];
+                            $tempCounter = 1;
                         }
-                        my $ClusAvg = $ClusTot/($Clusters{SubClusters}{$superC}{$start}-$start);
+                        else { # this sub cluster is NOT a singleton
+                            for (my $t = $start+1; $t <= $Clusters{SubClusters}{$superC}{$start}; $t++) { # start+1 b/c I want to get rid of the first tall peak
+                                $ClusTot = $ClusTot + ($InitialSet[$t][1] * $InitialSet[$t][4]);
+                                $tempCounter += $InitialSet[$t][4];
+                            }
+                        }
+                        my $ClusAvg = $ClusTot/$tempCounter;
                         push @ClusterArray, [$start,$Clusters{SubClusters}{$superC}{$start},$Cutoff,$ClusAvg,$idSuperCluster.".".$idLevel.".".$idSubCluster];
                         $idSubCluster++;
                     }
@@ -607,19 +652,21 @@ sub RunSuperClustersID {
                             $es = $Clusters{SubClusters}{$superC}{$subC} - $subCpre;
                             $ee = $Clusters{SubClusters}{$superC}{$subC} - $TempSubClusterRef->{$subCpre};
                             #print "\t\tFor subC=$subC, subCpre=$subCpre: ($ss, $es, $se, $ee)";
-                            if (($ss*$es)> 0 && ($se*$ee) > 0) {
-                                $OverlapCheck = 0; # one of new sub clusters does not overlap with the previous sub cluster in consideration, check the next previous sub cluster
-                                #print "\tOverlapCheck = $OverlapCheck  continue checking\n";
-                            }
-                            else { # one of new sub clusters overlaps with one of the previous sub clusters
-                                if ( (($Clusters{SubClusters}{$superC}{$subC} - $subC) / ($TempSubClusterRef->{$subCpre} - $subCpre)) >= 2 ) { # the expansion of the cluster is more than 100% --> record
-                                    $OverlapCheck = 0;
+                            if ( $Clusters{SubClusters}{$superC}{$subC} - $subC != 0 and $TempSubClusterRef->{$subCpre} - $subCpre != 0 ) { # singletons are not considered for the overlap check
+                                if (($ss*$es)> 0 && ($se*$ee) > 0) {
+                                    $OverlapCheck = 0; # one of new sub clusters does not overlap with the previous sub cluster in consideration, check the next previous sub cluster
+                                    #print "\tOverlapCheck = $OverlapCheck  continue checking\n";
                                 }
-                                else {
-                                    $OverlapCheck = 1;
-                                    #print "\tOverlapCheck = $OverlapCheck  stop checking, found one overlap\n";
+                                else { # one of new sub clusters overlaps with one of the previous sub clusters (if check is necessary to avoid dividing by zeros)
+                                    if ( (($Clusters{SubClusters}{$superC}{$subC} - $subC) / ($TempSubClusterRef->{$subCpre} - $subCpre)) >= 2 ) { # the expansion of the cluster is more than 100% --> record
+                                        $OverlapCheck = 0;
+                                    }
+                                    else {
+                                        $OverlapCheck = 1;
+                                        #print "\tOverlapCheck = $OverlapCheck  stop checking, found one overlap\n";
+                                    }
+                                    last; # one of new sub clusters overlaps with one of the previous sub clusters (or its size increased by more than 100%), stop checking
                                 }
-                                last; # one of new sub clusters overlaps with one of the previous sub clusters (or its size increased by more than 100%), stop checking
                             }
                         }
                         if ($OverlapCheck == 0) {
@@ -632,10 +679,18 @@ sub RunSuperClustersID {
                         my @OrderedE = @{$Clusters{SubClusters}{$superC}}{@OrderedS};
                         foreach my $start (@OrderedS) {
                             my $ClusTot = 0;
-                            for (my $t = $start+1; $t <= $Clusters{SubClusters}{$superC}{$start}; $t++) { # start+1 b/c I want to get rid of the first tall peak
-                                $ClusTot = $ClusTot + $InitialSet[$t][1];
+                            my $tempCounter = 0;
+                            if ( $start == $Clusters{SubClusters}{$superC}{$start} ) { # this sub cluster is a singleton
+                                $ClusTot = 0.1; # singletons are given cluster avg = 0.1 #$InitialSet[$start][1];
+                                $tempCounter = 1;
                             }
-                            my $ClusAvg = $ClusTot/($Clusters{SubClusters}{$superC}{$start} - $start);
+                            else { # this sub cluster is NOT a singleton
+                                for (my $t = $start+1; $t <= $Clusters{SubClusters}{$superC}{$start}; $t++) { # start+1 b/c I want to get rid of the first tall peak
+                                    $ClusTot = $ClusTot + ($InitialSet[$t][1] * $InitialSet[$t][4]);
+                                    $tempCounter += $InitialSet[$t][4];
+                                }
+                            }
+                            my $ClusAvg = $ClusTot/$tempCounter;
                             push @ClusterArray, [$start,$Clusters{SubClusters}{$superC}{$start},$Cutoff,$ClusAvg,$idSuperCluster.".".$idLevel.".".$idSubCluster];
                             $idSubCluster++;
                         }
@@ -847,10 +902,10 @@ sub getClusterProbabilities{
 
     for (my $i = 0; $i < scalar @InitialCuts; $i++) {
         $InitialCuts[$i][0] =~ /(\d+)\.(\d+)\.(\d+)/g;
-        if ($2 != 0) {
+        if ($2 != 0) { # sub clusters
             $this->{"InitialCuts"}->{$1}->{$2} = $InitialCuts[$i][3];
         }
-        else {
+        else { # super clusters, put epsilon'=10
             $this->{"InitialCuts"}->{$1}->{$2} = 10;
         }
         $this->{"Variants"}->{$InitialCuts[$i][1].":".$InitialCuts[$i][2]}->{"run0"}->{$1}->{$2}->{$3}->{"AverageDensity"} = $InitialCuts[$i][4];
@@ -871,7 +926,7 @@ sub getClusterProbabilities{
 
         $this->MainOPTICS( $structure , $distance_matrix, $mutations ); # Generate a random ordred RD set (random OPTICS)
 
-        $this->GetSuperClusters($this->{CurrentRDarray}); # Identify super clusters
+        $this->GetSuperClusters($this->{CurrentRDarray}, $MinPts); # Identify super clusters
         # print "CurrentRDarray\n";
         # print Dumper $this->{CurrentRDarray};
         # print "CurrentSuperClusters\n";
@@ -915,6 +970,9 @@ sub getClusterProbabilities{
 
     } # end of run
 
+    # print "memberships\n";
+    # print Dumper $this->{"Memberships"};
+
     # Data to generate the Cluster Membership Probability Plot
     my $FinalDataFile1 = "./ProbabilityData.$this->{'pairwise_file_name_only'}";
     open (OUT, ">$FinalDataFile1");
@@ -940,8 +998,10 @@ sub getClusterProbabilities{
     # Clusters output file (will be used in the visual)
     my $FinalDataFile2 = "./$Epsilon.$MinPts.$this->{'pairwise_file_name_only'}.Prob.$this->{'probability_cut_off'}.clusters";
     open (OUT, ">$FinalDataFile2");
-        print OUT "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence\tEpsilon_prime\tAvg_density\tCovering_clusters\tChromosome\tStart\tStop\tReference\tAlternate\tTranscript\tAlternative_Transcripts\n";
+        print OUT "Cluster\tGene/Drug\tMutation/Gene\tDegree_Connectivity\tCloseness_Centrality\tGeodesic_From_Centroid\tRecurrence/Weight\tEpsilon_prime\tAvg_density\tCovering_clusters\tChromosome\tStart\tStop\tReference\tAlternate\tTranscript\tAlternative_Transcripts\n";
 
+        # print "this->variants\n";
+        # print Dumper $this->{Variants};
         for (my $SCID = 0; $SCID < scalar keys %{$this->{Memberships}}; $SCID++) {
             for (my $levelID = 0; $levelID < scalar keys %{$this->{Memberships}->{$SCID}}; $levelID++) {
                 for (my $SubID = 0; $SubID < scalar keys %{$this->{Memberships}->{$SCID}->{$levelID}}; $SubID++) {
@@ -951,8 +1011,43 @@ sub getClusterProbabilities{
                             my $CurrentAvgDensity = $this->{Variants}->{$variant}->{run0}->{$SCID}->{$levelID}->{$SubID}->{AverageDensity};
                             my $CoveringClusters =  $this->{Variants}->{$variant}->{run0}->{$SCID}->{$levelID}->{$SubID}->{CoveringClusters};
                             my $genomicAnnotation = $this->{Variants}->{$variant}->{run0}->{$SCID}->{$levelID}->{$SubID}->{Annotations};
-                            $variant =~ /(\w+)\:(\D\.\D+\d+\D)/g;
-                            print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t0\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation\n";
+                            $variant =~ /(\w+)\:(\D\.\D+\d+\D+)/g;
+                            # print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t0\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation\n";
+
+                            # print clusters with other mutations (not only representative vertices, but all)
+                            
+                            my $gene = $1;
+                            my ( $chromosome, $start, $stop, $ref, $alt, $transcript ) = ( split /\t/, $genomicAnnotation )[0,1,2,3,4,5];
+                            my $mKey1 = join( ":", $gene, $chromosome, $start, $stop );
+                            my $refAlt1 = join( ":", $ref, $alt );
+                            my $pKey1 = join( ":", $transcript, $2 );
+                            my $recurrence1 = $this->{"siteVertexMap"}->{$mKey1}->{$mKey1}->{$refAlt1}->{$pKey1};
+                            print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t$recurrence1\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation\n"; # representative vertex
+
+                            foreach my $mKey2 ( keys %{$this->{"siteVertexMap"}->{$mKey1}} ) {
+                                my ( $chromosome2, $start2, $stop2 ) = (split /:/, $mKey2)[1,2,3];
+                                
+                                foreach my $refAlt2 ( keys %{$this->{"siteVertexMap"}->{$mKey1}->{$mKey2}} ) {
+                                    my ( $ref2, $alt2 ) = split /:/, $refAlt2;
+                                    
+                                    foreach my $pKey2 ( keys %{$this->{"siteVertexMap"}->{$mKey1}->{$mKey2}->{$refAlt2}} ) {
+                                        
+                                        my ( $transcript2, $aa2 ) =  split /:/, $pKey2;
+                                        my $recurrence2 = $this->{"siteVertexMap"}->{$mKey1}->{$mKey2}->{$refAlt2}->{$pKey2};
+                                        my $genomicAnnotation2 = join( "\t", $chromosome2, $start2, $stop2, $ref2, $alt2, $transcript2, "1" ); # included "1" in the alternateTrans field
+                                        
+                                        if ( $mKey2 eq $mKey1 and $refAlt1 eq $refAlt2 ) { # if two mutation keys and ref:alt's are equal, output all the other pKeys
+                                            if ( $pKey2 ne $pKey1 ) {
+                                                $recurrence1 = $this->{"siteVertexMap"}->{$mKey1}->{$mKey2}->{$refAlt2}->{$pKey2};
+                                                print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t$recurrence1\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation2\n";
+                                            }
+                                        }
+                                        else { # other mutations which are at the same site (alternate ones)
+                                            print OUT "$SCID.$levelID.$SubID\t$gene\t$aa2\t0\t0\t0\t$recurrence2\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation2\n";
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -990,18 +1085,23 @@ sub getClusterProbabilities{
 ##   Probability sub-methods
 #####
 
-sub GetSuperClusters { # Identify super clusters:
-    my ($this, $arrayRef) = @_;
+sub GetSuperClusters { # Identify super clusters: (singleton super clusters are possible to form)
+    my ($this, $arrayRef, $MinPts) = @_;
 
     my $scs = 0; # super cluster start
+    my $superClusterCount = ${$arrayRef}[$scs][4]; # count the weight (for SITE=1, RECURRENCE=frequency, WEIGHT=weight)
     for (my $i = 1; $i < scalar @{$arrayRef}; $i++) {
         #print "i=$i\n";
         if ( ${$arrayRef}[$i][1] == 10 ) {
             #print "RD($i)=10\n";
-            $scs = $i;  
+            if ( $superClusterCount >= $MinPts ) {
+                $this->{"CurrentSuperClusters"}->{$scs} = $i-1;
+            }
+            $scs = $i; # reset the super cluster starting point
+            $superClusterCount = ${$arrayRef}[$scs][4]; # reset the count  
         }
         else {
-            $this->{"CurrentSuperClusters"}->{$scs} = $i;
+            $superClusterCount += ${$arrayRef}[$i][4]; # add the weight (for SITE=1, RECURRENCE=frequency, WEIGHT=weight)
         }   
     }
     return 1;
@@ -1055,15 +1155,20 @@ sub GetSubClusters {
             my $s = $nStart;
             while ($n <= $this->{SuperClusterMap}->{$SCID}->{$nStart}) {
                 if (${$this->{CurrentRDarray}}[$n][1] < $EpsilonCut) {
-                    $counter++;
+                    $counter += ${$this->{CurrentRDarray}}[$n][4]; # add the weight (for SITE=1, RECURRENCE=frequency, WEIGHT=weight)
+                    # $counter++;
                     if ($counter >= $MinPts) {
                         $this->{SubClusters}->{$SCID}->{$levelID}->{$s} = $n;
                     }
                     $n++;
                 }
                 else {
+                    if ( $levelID == 1 and ${$this->{CurrentRDarray}}[$n][4] >= $MinPts ) { # allowing singleton sub clusters to form at the lowest level
+                        $this->{SubClusters}->{$SCID}->{$levelID}->{$n} = $n; 
+                    }
+                    # regular sub cluster stuff
                     $s = $n;
-                    $counter = 0;
+                    $counter = ${$this->{CurrentRDarray}}[$s][4]; # reset the count
                     $n++;
                 }
             }

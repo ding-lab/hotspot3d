@@ -6,6 +6,8 @@ z = read.table(args[2], sep = "\t")
 RD<-y[[2]]
 ID<-y[[1]]
 
+z[z$V1==z$V2,"V3"] = 0.1 # show singletons at RD=0.1
+
 y0<-z[[1]] 
 x0<-z[[3]] 
 y1<-z[[2]]+1 
