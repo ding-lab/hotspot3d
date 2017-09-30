@@ -349,14 +349,8 @@ sub determineCentroid {
 	if ( not $currentScore ) {
 		return ( $mutationKey , $newScore );
 	}
-	if ( $this->{'vertex_score'} eq $EXPONENTIALS ) {
-		if ( abs( $newScore ) > abs( $currentScore ) ) {
-			return ( $mutationKey , $newScore );
-		}
-	} else {
-		if ( $newScore > $currentScore ) {
-			return ( $mutationKey , $newScore );
-		}
+	if ( abs( $newScore ) > abs( $currentScore ) ) {
+		return ( $mutationKey , $newScore );
 	}
 	return ( $currentCentroid , $currentScore );
 }
