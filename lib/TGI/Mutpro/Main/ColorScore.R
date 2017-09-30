@@ -1,14 +1,49 @@
 #!/usr/bin/env Rscript
+
+# Authors : Amila Weerasinghe
+# Generates a reachability plot colored by weight (*.Horiz.weights.pdf)
+
 args = commandArgs(trailingOnly=TRUE)
 d <- read.table(args[1], header=FALSE, sep = "\t") # data table with variant,RD,genomic_annotations,weight
 
 segData = read.table(args[2], sep = "\t") # data table with start,stop,epsilon',clusterID
+
+#################################################################
+### process the segData so that cluster labels do not overlap ###
+#################################################################
+
+# make a column to show process status
+segData$Processed = 0
+
+# display singleton clusters at RD=0.1
+segData[segData$V1==segData$V2,"V3"] = 0.1
+segData[segData$V1==segData$V2,"Processed"] = 1
+
+segData$textOffset = 0
+
+# now start from the first un-processed row and see if there are nearby levels
+unprocessed = segData[segData$Processed==0,]
+
+while ( length(unprocessed$V1) != 0 ) {
+  # take the first un-processed one and the nearby stuff
+  tab = segData[segData$V3<unprocessed$V3[1]+0.5 & segData$V3>=unprocessed$V3[1] & segData$V2==unprocessed$V2[1],]
+  offset = 0.1
+  # go through each row in tab and add offset
+  for (i in c(1:length(tab$V1))) {
+    segData[segData$V3<unprocessed$V3[1]+0.5 & segData$V3>=unprocessed$V3[1] & segData$V2==unprocessed$V2[1],][i,"textOffset"] = offset
+    offset = offset + 0.1
+  }
+  segData[segData$V3<unprocessed$V3[1]+0.5 & segData$V3>=unprocessed$V3[1] & segData$V2==unprocessed$V2[1],]$Processed = 1
+  unprocessed = segData[segData$Processed==0,] # update the unprocessed table
+}
+#################################################################
 
 y0<-segData[[3]]
 x0<-segData[[1]]+1
 y1<-segData[[3]]
 x1<-segData[[2]]+1
 Cluster<-segData[[5]]
+labelOffset <- segData$textOffset
 
 names(d)[1] <- "variant"
 names(d)[2] <- "RD"
@@ -37,7 +72,7 @@ for (i in values) {
   p <- p + geom_segment(x=x0[i], y=y0[i], xend=x1[i], yend=y1[i])
 }
 
-p <- p + annotate("text", x = x1+1, y = y0, label = Cluster, size = 2)
+p <- p + annotate("text", x = x1+labelOffset, y = y0, label = Cluster, size = 2)
 
 p <- p + ggtitle(paste("Reachability Plot with weights: Epsilon=",args[4],"MinPts=",args[5]))
 
