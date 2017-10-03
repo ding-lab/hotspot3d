@@ -1014,6 +1014,10 @@ sub getClusterProbabilities{
                             $variant =~ /(\w+)\:(\D\.\D+\d+\D+)/g;
                             # print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t0\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation\n";
 
+                            if ( scalar keys %{$this->{Memberships}->{$SCID}->{$levelID}->{$SubID}} == 1 and $CurrentAvgDensity == 0.1 ) { # artificially reset epsilon-prime to 0.1 for singleton clusters
+                                $CurrentEpsilon = 0.1;
+                            }
+
                             # print clusters with other mutations (not only representative vertices, but all)
                             
                             my $gene = $1;
