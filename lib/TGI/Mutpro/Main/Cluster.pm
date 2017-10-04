@@ -563,8 +563,8 @@ sub vertexFilter {
 #TODO if using a different .maf from search step, then some mutations can be missed
 		my $vertexMap = {}; #a hash to map isSameProteinPosition vertices (and others to their selves)-- map=f()
 		my $vfHash = makeVertexFilterHash( $this , $temp_mutations , $temp_distance_matrix ); # a hash with mutationKeys by uniprot id
-		print "vfHash\n";
-		print Dumper $vfHash;
+		# print "vfHash\n";
+		# print Dumper $vfHash;
 
 		foreach my $uniprotID ( keys %{$vfHash} ) {
 			my @mKeys = sort keys %{$vfHash->{$uniprotID}}; #an array to store all the mutation keys corresponding to the uniprotID under consideration
@@ -583,7 +583,7 @@ sub vertexFilter {
 					elsif ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #if same site
 						$vertexMap->{$mutationKey2} = $mutationKey1;
 						$siteVertexMap->{$mutationKey1}->{$mutationKey2} = $temp_mutations->{$mutationKey2};
-						print "ACSW::VertexFilter::SameSite $mutationKey2 \=\=\> $mutationKey1\n";
+						# print "ACSW::VertexFilter::SameSite $mutationKey2 \=\=\> $mutationKey1\n";
 						delete $temp_mutations->{$mutationKey2};
 					}
 				}
@@ -624,8 +624,8 @@ sub vertexFilter {
 				}
 			}
 		}
-		print "vertex_map\n";
-		print Dumper $vertexMap;
+		# print "vertex_map\n";
+		# print Dumper $vertexMap;
 	} else {
 		%{$mutations} = %{$temp_mutations};
 		%{$distance_matrix} = %{$temp_distance_matrix};

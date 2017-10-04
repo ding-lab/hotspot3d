@@ -104,12 +104,12 @@ sub process {
 		printHash( $mutations, "mutations_hash" );
         printHash( $siteVertexMap, "siteVertexMap_hash" );
 
-        print "mutations\n";
-        print Dumper $mutations;
-        print "distance_matrix\n";
-        print Dumper $distance_matrix;
-        print "siteVertexMap\n";
-        print Dumper $siteVertexMap;
+        # print "mutations\n";
+        # print Dumper $mutations;
+        # print "distance_matrix\n";
+        # print Dumper $distance_matrix;
+        # print "siteVertexMap\n";
+        # print Dumper $siteVertexMap;
 	}
 
     $this->{"siteVertexMap"} = $siteVertexMap; # store the reference to siteVertexMap
