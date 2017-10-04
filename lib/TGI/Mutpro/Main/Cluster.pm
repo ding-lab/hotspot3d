@@ -115,6 +115,7 @@ sub new {
 	$this->{'mutations_json_hash'} = undef;
 	$this->{'distance_matrix_json_hash'} = undef;
 	$this->{'siteVertexMap_json_hash'} = undef;
+	$this->{'hup_file'} = undef;
 
     bless $this, $class;
     $this->process();
@@ -262,6 +263,7 @@ sub setOptions {
 		'mutations-hash-json-file=s' => \$this->{'mutations_json_hash'},
 		'distance-matrix-json-file=s' => \$this->{'distance_matrix_json_hash'},
 		'siteVertexMap-json-file=s' => \$this->{'siteVertexMap_json_hash'},
+		'hup-file=s'	=> \$this->{'hup_file'},
 
         'help' => \$help,
     );
@@ -405,6 +407,12 @@ sub setOptions {
 	$tempMericHash->{$INTER} = 0;
 	if ( not exists $tempMericHash->{$this->{'meric_type'}} ) {
 		die "Error: meric-type should be one of the following: intra, monomer, homomer, inter, heteromer, multimer, unspecified\n";
+	}
+	if ( $this->{'vertex_type'} eq $SITE or $this->{'clustering'} eq $DENSITY ) {
+		if ( not defined $this->{'hup_file'} or not -e $this->{'hup_file'} ) {
+			warn "If you're using SITE and/or DENSITY, you must provide a valid hugo.uniprot.pdb.csv file location using --hup-file option\n";
+			die $this->help_text();
+		}
 	}
 
 	##### START gene-list and structure-list options
@@ -554,24 +562,30 @@ sub vertexFilter {
 		print STDOUT "Filtering vertices\n";
 #TODO if using a different .maf from search step, then some mutations can be missed
 		my $vertexMap = {}; #a hash to map isSameProteinPosition vertices (and others to their selves)-- map=f()
-		my @mKeys = sort keys %{$temp_mutations}; #an array to store all the mutation keys
+		my $vfHash = makeVertexFilterHash( $this , $temp_mutations , $temp_distance_matrix ); # a hash with mutationKeys by uniprot id
+		print "vfHash\n";
+		print Dumper $vfHash;
 
-		#filter same vertices and generate a map
-		foreach my $mutationKey1 ( @mKeys ) {
-			next if not exists $temp_mutations->{$mutationKey1};
-			foreach my $mutationKey2 ( @mKeys ) {
-				next if not exists $temp_mutations->{$mutationKey2};
-				if ( $mutationKey1 eq $mutationKey2 ) { # this if condition is important to capture mk2=mk1 cases to $siteVertexMap hash
-					$vertexMap->{$mutationKey2} = $mutationKey1;
-					$siteVertexMap->{$mutationKey1}->{$mutationKey2} = $temp_mutations->{$mutationKey2};
-					# print "ACSW::VertexFilter::Equal $mutationKey2 \=\=\> $mutationKey1\n";
-					next;
-				}
-				elsif ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #if same site
-					$vertexMap->{$mutationKey2} = $mutationKey1;
-					$siteVertexMap->{$mutationKey1}->{$mutationKey2} = $temp_mutations->{$mutationKey2};
-					print "ACSW::VertexFilter::SameSite $mutationKey2 \=\=\> $mutationKey1\n";
-					delete $temp_mutations->{$mutationKey2};
+		foreach my $uniprotID ( keys %{$vfHash} ) {
+			my @mKeys = sort keys %{$vfHash->{$uniprotID}}; #an array to store all the mutation keys corresponding to the uniprotID under consideration
+
+			#filter same vertices and generate a map
+			foreach my $mutationKey1 ( @mKeys ) {
+				next if not exists $temp_mutations->{$mutationKey1};
+				foreach my $mutationKey2 ( @mKeys ) {
+					next if not exists $temp_mutations->{$mutationKey2};
+					if ( $mutationKey1 eq $mutationKey2 ) { # this if condition is important to capture mk2=mk1 cases to $siteVertexMap hash
+						$vertexMap->{$mutationKey2} = $mutationKey1;
+						$siteVertexMap->{$mutationKey1}->{$mutationKey2} = $temp_mutations->{$mutationKey2};
+						# print "ACSW::VertexFilter::Equal $mutationKey2 \=\=\> $mutationKey1\n";
+						next;
+					}
+					elsif ( $this->isSameProteinPosition( $temp_mutations , $mutationKey1 , $mutationKey2 ) ) { #if same site
+						$vertexMap->{$mutationKey2} = $mutationKey1;
+						$siteVertexMap->{$mutationKey1}->{$mutationKey2} = $temp_mutations->{$mutationKey2};
+						print "ACSW::VertexFilter::SameSite $mutationKey2 \=\=\> $mutationKey1\n";
+						delete $temp_mutations->{$mutationKey2};
+					}
 				}
 			}
 		}
@@ -610,8 +624,8 @@ sub vertexFilter {
 				}
 			}
 		}
-		# print "vertex_map\n";
-		# print Dumper $vertexMap;
+		print "vertex_map\n";
+		print Dumper $vertexMap;
 	} else {
 		%{$mutations} = %{$temp_mutations};
 		%{$distance_matrix} = %{$temp_distance_matrix};
@@ -620,6 +634,32 @@ sub vertexFilter {
 	$temp_distance_matrix = undef;
 	
 	return;
+}
+
+sub makeVertexFilterHash { # a hash to do vertex filtering by UniprotID
+	my ( $this , $temp_mutations , $temp_distance_matrix ) = @_;
+
+	my $vfHash = {};
+	my $hugoToUniprot = {};
+	# read hugo.uniprot.pdb.transcript file
+	my $fh = new FileHandle;
+	die "Could not open hugo.uniprot.pdb.csv file\n" unless( $fh->open( $this->{'hup_file'} , "r" ) );
+	
+	while ( my $line = <$fh> ) {
+		chomp( $line ); 
+		my ( $hugo, $uniprot ) = ( split /\t/, $line )[0,1];
+		$hugoToUniprot->{$hugo} = $uniprot;		
+	}
+	$fh->close();
+
+	# go through each mutation key and make a hash with uniprotID->transcript->{mutations}
+	foreach my $mutationKey ( keys %{$temp_mutations} ) {
+		my $hugo = ( split /:/,$mutationKey )[0];
+		my $uniprot = $hugoToUniprot->{$hugo};
+		# add this part of the mutation hash to vfHash
+		$vfHash->{$uniprot}->{$mutationKey} = 0;
+	}
+	return $vfHash;
 }
 
 sub getARepresentativeAnnotation { # choose a representative out of all the mutations detected as same protein position
@@ -1535,7 +1575,7 @@ sub isSameProteinPosition { # shared
 				$aaPosition1 =  $1;
 			} else {
 				unless ( $refAlt1 =~ m/$PTM/ ) {
-					print "...next, no match aaChange1\n";
+					# print "...next, no match aaChange1\n";
 					next;
 				}
 			}
@@ -1549,7 +1589,7 @@ sub isSameProteinPosition { # shared
 						$aaPosition2 =  $1;
 					} else {
 						unless ( $refAlt2 =~ m/$PTM/ ) {
-							print "...next, no match aaChange2\n";
+							# print "...next, no match aaChange2\n";
 							next;
 						}
 					}
@@ -1917,7 +1957,11 @@ sub density_help_text{
 Usage: hotspot3d density [options]
 
                              REQUIRED
---pairwise-file              3D pairwise data file
+--pairwise-file              A .pairwise file with mutation-mutation pairs (provide maf-file)
+
+                             CONDITIONAL REQUIREMENT
+--maf-file                   .maf file used in proximity search step
+                                 necessary for pairwise, drug-clean, or musites pair data
 
                              OPTIONAL
 --Epsilon                    Epsilon value, default: 10
@@ -1925,7 +1969,10 @@ Usage: hotspot3d density [options]
 --number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
 --probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100
 --distance-measure           Pair distance to use (shortest or average), default: average
---structure-dependent        Clusters for each structure or across all structures (dependent or independent), default: independent 
+--structure-dependent        Clusters for each structure or across all structures (dependent or independent), default: independent
+--use-JSON                   Use pre-encoded mutations and distance-matrix hashes in json format, default (no flag): do not use json
+--mutations-hash-json-file   JSON encoded mutations hash file produced by a previous cluster run
+--distance-matrix-json-file  JSON encoded distance-matrix hash file produced by a previous cluster run 
 
 --help                       this message
 
@@ -1948,22 +1995,16 @@ Usage: hotspot3d cluster [options]
                              CONDITIONAL REQUIREMENT
 --maf-file                   .maf file used in proximity search step
                                  necessary for pairwise, drug-clean, or musites pair data
+--hup-file                   hugo.uniprot.pdb.csv file location (this file is generated inside the preprocess data directory)
+                                 required if --vertex-type=site or --clustering=density
 
-                             OPTIONAL
---output-prefix              Output prefix, default: 3D_Proximity
---p-value-cutoff             P_value cutoff (<), default: 0.05 (if 3d-distance-cutoff also not set)
---3d-distance-cutoff         3D distance cutoff (<), default: 100 (if p-value-cutoff also not set)
---linear-cutoff              Linear distance cutoff (> peptides), default: 0
---max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
+                             OPTIONAL (General)
 --clustering                 Cluster using network or density-based methods (network or density), default: network
 --vertex-type                Graph vertex type for network-based clustering (recurrence, unique, site or weight), default: site
                                  recurrence vertices are the genomic mutations for each sample from the given .maf
                                  unique vertices are the specific genomic changes
                                  site vertices are the affected protein positions
                                  weight vertices are the genomic mutations with a numerical weighting
---weight-scale               Weight scale used to control scoring of vertices, default: 20
---length-scale               Length scale used to control scoring of vertices, default: 10
---vertex-score               Vertex score system to use (centrality, exponentials), default: centrality
 --distance-measure           Pair distance to use (shortest or average), default: average
 --structure-dependent        Clusters for each structure or across all structures, default (no flag): independent
 --subunit-dependent          Clusters for each subunit or across all subunits, default (no flag): independent
@@ -1977,9 +2018,26 @@ Usage: hotspot3d cluster [options]
 --max-processes              Set if using parallel type local (CAUTION: make sure you know your max CPU processes)
 --gene-list-file             Choose mutations from the genes given in this list
 --structure-list-file        Choose mutations from the structures given in this list
+
+                              OPTIONAL (Network)
+--output-prefix              Output prefix, default: 3D_Proximity
+--p-value-cutoff             P_value cutoff (<), default: 0.05 (if 3d-distance-cutoff also not set)
+--3d-distance-cutoff         3D distance cutoff (<), default: 100 (if p-value-cutoff also not set)
+--linear-cutoff              Linear distance cutoff (> peptides), default: 0
+--max-radius                 Maximum cluster radius (max network geodesic from centroid, <= Angstroms), default: 10
+--weight-scale               Weight scale used to control scoring of vertices, default: 20
+--length-scale               Length scale used to control scoring of vertices, default: 10
+--vertex-score               Vertex score system to use (centrality, exponentials), default: centrality
+
+                              OPTIONAL (Density)
 --use-JSON                   Use pre-encoded mutations and distance-matrix hashes in json format, default (no flag): do not use json
 --mutations-hash-json-file   JSON encoded mutations hash file produced by a previous cluster run
 --distance-matrix-json-file  JSON encoded distance-matrix hash file produced by a previous cluster run
+--Epsilon                    Epsilon value, default: 10
+--MinPts                     MinPts, default: 4
+--number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
+--probability-cut-off        Clusters will be formed with variants having at least this probability, default: 100
+
 
 
 

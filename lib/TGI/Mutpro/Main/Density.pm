@@ -104,12 +104,12 @@ sub process {
 		printHash( $mutations, "mutations_hash" );
         printHash( $siteVertexMap, "siteVertexMap_hash" );
 
-        # print "mutations\n";
-        # print Dumper $mutations;
-        # print "distance_matrix\n";
-        # print Dumper $distance_matrix;
-        # print "siteVertexMap\n";
-        # print Dumper $siteVertexMap;
+        print "mutations\n";
+        print Dumper $mutations;
+        print "distance_matrix\n";
+        print Dumper $distance_matrix;
+        print "siteVertexMap\n";
+        print Dumper $siteVertexMap;
 	}
 
     $this->{"siteVertexMap"} = $siteVertexMap; # store the reference to siteVertexMap
@@ -1013,6 +1013,10 @@ sub getClusterProbabilities{
                             my $genomicAnnotation = $this->{Variants}->{$variant}->{run0}->{$SCID}->{$levelID}->{$SubID}->{Annotations};
                             $variant =~ /(\w+)\:(\D\.\D+\d+\D+)/g;
                             # print OUT "$SCID.$levelID.$SubID\t$1\t$2\t0\t0\t0\t0\t$CurrentEpsilon\t$CurrentAvgDensity\t$CoveringClusters\t$genomicAnnotation\n";
+
+                            if ( scalar keys %{$this->{Memberships}->{$SCID}->{$levelID}->{$SubID}} == 1 and $CurrentAvgDensity == 0.1 ) { # artificially resetting epsilon-prime to 0.1 for singleton clusters
+                                $CurrentEpsilon = 0.1;
+                            }
 
                             # print clusters with other mutations (not only representative vertices, but all)
                             
