@@ -36,7 +36,7 @@ my $WEIGHT = "weight";
 my $RECURRENCE = "recurrence";
 my $UNIQUE = "unique";
 my $SITE = "site";
-my $PVALUEDEFAULT = 0.05;
+my $PVALUEDEFAULT = 1;
 my $MAXDISTANCE = 10000;
 my $AVERAGEDISTANCE = "average";
 my $SHORTESTDISTANCE = "shortest";
@@ -409,9 +409,11 @@ sub setOptions {
 		die "Error: meric-type should be one of the following: intra, monomer, homomer, inter, heteromer, multimer, unspecified\n";
 	}
 	if ( $this->{'vertex_type'} eq $SITE or $this->{'clustering'} eq $DENSITY ) {
-		if ( not defined $this->{'hup_file'} or not -e $this->{'hup_file'} ) {
-			warn "If you're using SITE and/or DENSITY, you must provide a valid hugo.uniprot.pdb.csv file location using --hup-file option\n";
-			die $this->help_text();
+		if ( $this->{'JSON_status'} == 0 ) {
+			if ( not defined $this->{'hup_file'} or not -e $this->{'hup_file'} ) {
+				warn "If you're using SITE and/or DENSITY, you must provide a valid hugo.uniprot.pdb.csv file location using --hup-file option\n";
+				die $this->help_text();
+			}
 		}
 	}
 
@@ -2033,6 +2035,7 @@ Usage: hotspot3d cluster [options]
 --use-JSON                   Use pre-encoded mutations and distance-matrix hashes in json format, default (no flag): do not use json
 --mutations-hash-json-file   JSON encoded mutations hash file produced by a previous cluster run
 --distance-matrix-json-file  JSON encoded distance-matrix hash file produced by a previous cluster run
+--siteVertexMap-json-file    JSON encoded siteVertexMap hash file produced by a previous cluster run
 --Epsilon                    Epsilon value, default: 10
 --MinPts                     MinPts, default: 4
 --number-of-runs             Number of density clustering runs to perform before the cluster membership probability being calculated, default: 10
