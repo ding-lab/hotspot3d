@@ -877,9 +877,9 @@ sub drug_proximity_postprocessing {
 		warn "HotSpot3D Search Warning: Skipping drugport proximity, because no results file given.\n";
 		return;
 	}
-	my $sub_fh_target = new FileHandle;
+	my $sub_fh_target = FileHandle->new( "$output_prefix.drugs.target", "w" );
 	my $sub_fh_drugport_parsing = new FileHandle;
-	my $sub_fh_nontarget = new FileHandle; 
+	my $sub_fh_nontarget = FileHandle->new( "$output_prefix.drugs.nontarget", "w" ); 
 	my $sub_fh_output = new FileHandle;
 	unless( $sub_fh_drugport_parsing->open( "$drugport_parsing_results" ) ) {
 		warn "Could not open drugprot parsing output file\n";
