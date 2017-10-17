@@ -559,12 +559,15 @@ sub convertAA {
     my %threeToOne;
     foreach (keys %oneToThree) { $threeToOne{$oneToThree{$_}} = $_; }
     if ( defined $oneToThree{$residue} ) {
-	return $oneToThree{$residue};
-    }elsif ( defined $threeToOne{$residue} ) {
-	return $threeToOne{$residue};
-    }elsif ( length( $residue ) <= 3 ) {
+		return $oneToThree{$residue};
+    } elsif ( defined $threeToOne{$residue} ) {
+		return $threeToOne{$residue};
+    } elsif ( length( $residue ) <= 3 ) {
         length( $residue ) == 1 ? return "Z" : return $residue;
-    } else { carp "Unrecognized format for amino acid '$residue'"; }
+    } else {
+		carp "Unrecognized format for amino acid '$residue'";
+	}
+	return undef;
 }
 
 sub printStructure {

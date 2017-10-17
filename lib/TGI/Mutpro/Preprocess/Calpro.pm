@@ -532,10 +532,11 @@ sub checkOffsets {
 			# print STDERR "Unexpected format for \$uniprotA ($uniprotA) in $line.  Skipping. \n"; }
 		next if ( $uniprotA !~ /^\w+$/ ); 
 		next if ( $uniprotB !~ /^\w+$/ || $offsetA !~ /^-?\d+$/ || $offsetB !~ /^-?\d+$/ || $positionA !~ /^-?\d+$/ || $positionB !~ /^-?\d+$/ );
+		#if not an AA, convertAA returns original value if length aminoAcid <= 3, 'Z' if length == 1, undef otherwise
 		$aminoAcidA = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidA );
 		$aminoAcidB = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidB );
 		next if ( !defined $aminoAcidA || !defined $aminoAcidB );
-		#next unless ( TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidA ) and TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidB )
+		#check if position has an amino acid & whether its name is same as converted aminoAcid
 		if ( defined $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} && $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} ne $aminoAcidA ) {
 			print $coorfh "Inconsistent amino acids for $uniprotA position $positionA+$offsetA in $pdbId: '$pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA}' and $aminoAcidA \n";
 		}
@@ -553,6 +554,7 @@ sub checkOffsets {
 			$uniprotSequenceRef = $this->getUniprotSeq( $uniprot );
 			$pdbUniprotErrorCount{$pdbId}{$uniprot} = 0;
 			foreach $position ( sort {$a<=>$b} keys %{$pdbUniprotPosition{$pdbId}{$uniprot}} ) {
+				#check if position exists in sequence and it has correct amino acid
 				if ( !defined $$uniprotSequenceRef{$position} || $$uniprotSequenceRef{$position} ne $pdbUniprotPosition{$pdbId}{$uniprot}{$position} ) {
 					$pdbUniprotErrorCount{$pdbId}{$uniprot}++;
 				}
