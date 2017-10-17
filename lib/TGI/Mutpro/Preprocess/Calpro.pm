@@ -300,7 +300,11 @@ sub writeProximityFile {
 			# Get AminoAcid object for residue in chain '$uniprotChain', 
 			# at position $position
 			$uniprotAminoAcidRef = $$peptideRef{$uniprotChain}->getAminoAcidObject( $residuePosition );
-			next if ( $$uniprotAminoAcidRef->isAA() == 0 );
+			next if ( $$uniprotAminoAcidRef->isHOH() == 0 ); #skip water, but not other compounds
+			#my $thisIsProtein1 = 1;
+			#if ( not $$uniprotAminoAcidRef->isAA() ) {
+			#	$thisIsProtein1 = 0;
+			#}
 			$uniprotAaName = $$uniprotAminoAcidRef->name();
 			# 	Updated	170510 : use a hash with chain and regions for retrieving the offset
 			$uniprotChainOffset = getOffset( $allOffsets, $uniprotChain, $residuePosition );
@@ -339,7 +343,11 @@ sub writeProximityFile {
 				foreach $position ( sort {$a<=>$b} @tmp_array_positions ) {
 					$otherChainOffset = getOffset( $allOffsets, $chain, $position );
 					$aaObjRef = $$peptideRef{$chain}->getAminoAcidObject($position);
-					next if ( $$aaObjRef->isAA() == 0 );
+					next if ( $$aaObjRef->isHOH() == 0 ); #skip water, but not other compounds
+					#my $thisIsProtein2 = 1;
+					#if ( not $$uniprotAminoAcidRef->isAA() ) {
+					#	$thisIsProtein2 = 0;
+					#}
 					if ( (defined $otherChainOffset) and ($otherChainOffset eq "N/A") ) { 
 						$correctedPosition = $position;
 					} else { 
