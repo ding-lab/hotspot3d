@@ -533,6 +533,7 @@ sub convertAA {
     # Convert single amino acid code to triplet
     # or triplet to single amino acid code
     my $residue = $_[0];
+    my $convertedAA = undef;
     $residue = uc $residue;
     my %oneToThree =  (
 		       A => 'ALA',
@@ -559,15 +560,12 @@ sub convertAA {
     my %threeToOne;
     foreach (keys %oneToThree) { $threeToOne{$oneToThree{$_}} = $_; }
     if ( defined $oneToThree{$residue} ) {
-		return $oneToThree{$residue};
-    } elsif ( defined $threeToOne{$residue} ) {
-		return $threeToOne{$residue};
-    } elsif ( length( $residue ) <= 3 ) {
-        length( $residue ) == 1 ? return "Z" : return $residue;
-    } else {
-		carp "Unrecognized format for amino acid '$residue'";
-	}
-	return undef;
+	return $oneToThree{$residue};
+    }elsif ( defined $threeToOne{$residue} ) {
+	return $threeToOne{$residue};
+    }elsif ( length( $residue ) <= 3 ) {
+        length( $residue ) == 1 ? return "Z" : return $convertedAA;
+    } else { return $convertedAA; carp "Unrecognized format for amino acid '$residue'"; }
 }
 
 sub printStructure {

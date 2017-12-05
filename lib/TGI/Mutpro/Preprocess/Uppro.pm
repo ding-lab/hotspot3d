@@ -22,6 +22,7 @@ use List::MoreUtils qw( uniq );
 
 use TGI::Mutpro::Preprocess::Uniprot;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
+use TGI::Files::File;
 use TGI::Files::MAF;
 use TGI::Files::List;
 
@@ -168,8 +169,8 @@ sub process {
         $fh->print( "\t$alias_list\n" );
     }
     $fh->close();
-	my $cmd_list_submit_file_fh;
-    unless( open ( $cmd_list_submit_file_fh, ">", $this->{'cmd_list_submit_file'} ) ) { die "HotSpot3D Uppro Error: Could not open cmd file (".$this->{'cmd_list_submit_file'}.")"; }
+	my $cmd_list_submit_file_fh = new FileHandle; #TGI::Files::File->new( $this->{'cmd_list_submit_file'} ) ;
+        unless( $cmd_list_submit_file_fh -> open ( $this->{'cmd_list_submit_file'}, "w" ) )  { die "HotSpot3D Uppro Error: Could not open cmd file (".$this->{'cmd_list_submit_file'}.")"; }
 	print STDOUT "Creating ".$this->{'cmd_list_submit_file'}."\n";
 	my $command = "";
 	if ( $this->{'parallel'} eq $BSUB ) {
@@ -215,12 +216,15 @@ sub makeBSUBCalproCommand {
 sub makeSerialCalproCommand {
 	my ( $this , $inpro_dir , $cmd_list_submit_file_fh , $uniprotid_toupdate ) = @_;
     my $log_dir = "$this->{'output_dir'}\/Logs\/";
+	my $serialCommand = "echo Serially Running Calpro Commands";
 	map {
 		system("touch $inpro_dir/$_.ProximityFile.csv");
 		my $command = $this->makeCalproCommand( $_ );
 		print STDOUT $command."\n"; 
 		$cmd_list_submit_file_fh->print( $command."\n" );
+		$serialCommand .= ";".$command;
 	} keys %{$uniprotid_toupdate};
+	return $serialCommand;
 }
 
 sub makeLocalCalproCommand {
