@@ -300,7 +300,7 @@ sub writeProximityFile {
 			# Get AminoAcid object for residue in chain '$uniprotChain', 
 			# at position $position
 			$uniprotAminoAcidRef = $$peptideRef{$uniprotChain}->getAminoAcidObject( $residuePosition );
-			next if ( $$uniprotAminoAcidRef->isAA() == 0 );
+			next if ( $$uniprotAminoAcidRef->isHOH() == 1 );
 			$uniprotAaName = $$uniprotAminoAcidRef->name();
 			# 	Updated	170510 : use a hash with chain and regions for retrieving the offset
 			$uniprotChainOffset = getOffset( $allOffsets, $uniprotChain, $residuePosition );
@@ -339,7 +339,7 @@ sub writeProximityFile {
 				foreach $position ( sort {$a<=>$b} @tmp_array_positions ) {
 					$otherChainOffset = getOffset( $allOffsets, $chain, $position );
 					$aaObjRef = $$peptideRef{$chain}->getAminoAcidObject($position);
-					next if ( $$aaObjRef->isAA() == 0 );
+					next if ( $$aaObjRef->isHOH() == 1 );
 					if ( (defined $otherChainOffset) and ($otherChainOffset eq "N/A") ) { 
 						$correctedPosition = $position;
 					} else { 
@@ -526,7 +526,7 @@ sub checkOffsets {
 		next if ( $uniprotB !~ /^\w+$/ || $offsetA !~ /^-?\d+$/ || $offsetB !~ /^-?\d+$/ || $positionA !~ /^-?\d+$/ || $positionB !~ /^-?\d+$/ );
 		$aminoAcidA = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidA );
 		$aminoAcidB = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidB );
-		next if ( !defined $aminoAcidA || !defined $aminoAcidB );
+		next if ( !defined $aminoAcidA & !defined $aminoAcidB );
 		#next unless ( TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidA ) and TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidB )
 		if ( defined $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} && $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} ne $aminoAcidA ) {
 			print $coorfh "Inconsistent amino acids for $uniprotA position $positionA+$offsetA in $pdbId: '$pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA}' and $aminoAcidA \n";
