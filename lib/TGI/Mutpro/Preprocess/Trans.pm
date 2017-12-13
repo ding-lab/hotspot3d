@@ -138,10 +138,16 @@ sub getPeptides {
     ## get peptide file 
 	my $url = $this->makeEnsemblFastaURL();
     my $downloadFile = $peptidesFile.".gz";
-	my $decompressor = Archive::Extract->new( 'archive' => $downloadFile );
+	#print "ACSW::Archive::downloadFile= $downloadFile\n";
+	#$Archive::Extract::DEBUG = 1;
 	if ( not -e $downloadFile ) {
 		getstore( $url, $downloadFile );
-	}
+	}	
+	my $decompressor = Archive::Extract->new( archive => $downloadFile, type => 'gz' );
+	#print "ACSW::Archive::Warning\n";
+        #print "file = ".$decompressor->archive;
+        #print "\ntype = ".$decompressor->type;
+        #print "\nis_gz = ".$decompressor->is_gz."\n";
 	$decompressor->extract( to => $peptidesFile );
     #system( "gzip -d $downloadFile" );
     # load peptide seqs
