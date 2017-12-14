@@ -118,7 +118,7 @@ sub makeHugoGeneObjects {
     my %hugo_objects;
     my $page = get($HugoUrl);
 	if ( not $page ) {
-		die "HotSpot3D::HugoGeneMethods::makeHugoGeneObjects ERROR: no data from url request.\n";
+		die "HotSpot3D::HugoGeneMethods::makeHugoGeneObjects ERROR: no data from url request. Installing Mozilla::CA might fix this issue\n";
 	}
     foreach my $line (split /\n/, $page) {
 		if ($line =~ /withdrawn/i || $line =~ /HGNC ID\s+Approved\s+Symbol\s+/) { next; }
