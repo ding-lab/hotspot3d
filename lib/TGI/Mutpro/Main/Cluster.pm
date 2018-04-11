@@ -1061,6 +1061,38 @@ sub writeClustersFile {
 	#print Dumper( $results );
 	foreach my $line ( sort keys %{$results} ) {
 		$fh->print( $line."\n" );
+
+		if ( $this->{'vertex_type'} eq $SITE ) { # write other mutations too, not just the representative mutation for that site
+			my ( $clusID, $gene, $aa1, $degree, $cc, $geodesic, $chromosome, $start, $stop, $ref, $alt, $transcript ) = ( split /\t/, $line )[0,1,2,3,4,5,7,8,9,10,11,12];
+            my $mKey1 = join( ":", $gene, $chromosome, $start, $stop );
+            my $refAlt1 = join( ":", $ref, $alt );
+            my $pKey1 = join( ":", $transcript, $aa1 );
+            my $recurrence1 = $this->{"siteVertexMap"}->{$mKey1}->{$mKey1}->{$refAlt1}->{$pKey1};
+
+            foreach my $mKey2 ( keys %{$this->{"siteVertexMap"}->{$mKey1}} ) {
+                my ( $chromosome2, $start2, $stop2 ) = (split /:/, $mKey2)[1,2,3];
+                
+                foreach my $refAlt2 ( keys %{$this->{"siteVertexMap"}->{$mKey1}->{$mKey2}} ) {
+                    my ( $ref2, $alt2 ) = split /:/, $refAlt2;
+                    
+                    foreach my $pKey2 ( keys %{$this->{"siteVertexMap"}->{$mKey1}->{$mKey2}->{$refAlt2}} ) {
+                        my ( $transcript2, $aa2 ) =  split /:/, $pKey2;
+                        my $recurrence2 = $this->{"siteVertexMap"}->{$mKey1}->{$mKey2}->{$refAlt2}->{$pKey2};
+                        my $genomicAnnotation2 = join( "\t", $chromosome2, $start2, $stop2, $ref2, $alt2, $transcript2, "1" ); # included "1" in the alternateTrans field
+                        
+                        if ( $mKey2 eq $mKey1 and $refAlt1 eq $refAlt2 ) { # if two mutation keys and ref:alt's are equal, output all the other pKeys
+                            if ( $pKey2 ne $pKey1 ) {
+                                $recurrence1 = $this->{"siteVertexMap"}->{$mKey1}->{$mKey2}->{$refAlt2}->{$pKey2};
+                                $fh->print( "$clusID\t$gene\t$aa2\t$degree\t$cc\t$geodesic\t$recurrence1\t$genomicAnnotation2\n" );
+                            }
+                        }
+                        else { # other mutations which are at the same site (alternate ones)
+                        	$fh->print( "$clusID\t$gene\t$aa2\t$degree\t$cc\t$geodesic\t$recurrence2\t$genomicAnnotation2\n" );
+                        }
+                    }
+                }
+            }
+		}
 	}
 	return;
 	foreach my $structure ( %{$results} ) {

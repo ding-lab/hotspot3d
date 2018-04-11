@@ -81,6 +81,7 @@ sub process {
  	my $temp_mutations = {};
 	my $distance_matrix = {};
  	my $mutations = {};
+ 	my $siteVertexMap = {}; # a hash to store refAlt and pKey info when "SITE" specific clustering is done.
 
 	$this->readMAF( $temp_mutations );
 	#$this->readSite( $temp_mutations );
@@ -88,8 +89,9 @@ sub process {
 	$this->getMutationSitePairs( $temp_mutations , $temp_distance_matrix );
 	$this->getSiteSitePairs( $temp_mutations , $temp_distance_matrix );
 	$this->getMutationMutationPairs( $temp_distance_matrix );
-	$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix );
+	$this->vertexFilter( $temp_mutations , $temp_distance_matrix , $mutations , $distance_matrix, $siteVertexMap );
 	#$this->initializeSameSiteDistancesToZero( $distance_matrix );
+	$this->{"siteVertexMap"} = $siteVertexMap; # store the reference to siteVertexMap
 	$this->networkClustering( $mutations , $distance_matrix );
 	#print Dumper $distance_matrix;
 
