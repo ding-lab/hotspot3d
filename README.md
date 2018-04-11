@@ -38,7 +38,7 @@ Usage
 Support
 -------
 
-For user support please email adamscott@wustl.edu
+For user support please email amila@wustl.edu
 
 
 Update
