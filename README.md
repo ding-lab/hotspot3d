@@ -254,3 +254,10 @@ Clustering based on different distance measures:
 		In HotSpot3D versions v0.6.3 and later, 
 		clustering can be done using the average distance among different structures 
 		(average structure distance, ASD), and this is now default.
+
+Citation
+--------
+
+If you use HotSpot3D in your research, please cite:
+
+* Protein-structure-guided discovery of functional mutations across 19 cancer types; Niu B, Scott AD, Sengupta S, Bailey MH, Batra P, Ning J, Wyczalkowski MA, Liang WW, Zhang Q, McLellan MD, Sun SQ, Tripathi P, Lou C, Ye K, Mashl RJ, Wallis J, Wendl MC, Chen F, Ding L; Nat Genet 2016 Aug;48(8):827-37
