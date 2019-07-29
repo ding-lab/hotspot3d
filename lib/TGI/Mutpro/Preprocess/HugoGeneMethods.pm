@@ -15,7 +15,7 @@ our $VERSION = '0.3';
 use Carp;
 use LWP::Simple;
 use TGI::Mutpro::Preprocess::HugoGene;
-my $HugoUrl = "https://www.genenames.org/cgi-bin/hgnc_downloads?".
+my $HugoUrl = "https://www.genenames.org/cgi-bin/download/custom?".
     "title=HGNC+output+data&hgnc_dbtag=on&".
     "col=gd_hgnc_id&".
     "col=gd_app_sym&".
