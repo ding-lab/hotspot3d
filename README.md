@@ -38,7 +38,7 @@ Usage
 Support
 -------
 
-For user support please email amila@wustl.edu & bniu@sccas.cn
+For user support please email ruiyang.liu@wustl.edu & bniu@sccas.cn
 
 
 Update
