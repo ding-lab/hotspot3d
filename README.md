@@ -98,6 +98,10 @@ To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
 	to: #!/usr/bin/perl
 
 
+We have developed webservice for HotSpot3D, and you can submit your mutation file to do
+analysis online here: http://niulab.scgrid.cn/HotSpot3D/ , once you don't want to install
+HotSpot3D locally. 
+
 Configure Environment
 ---------------------
 
