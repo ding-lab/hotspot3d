@@ -1,7 +1,7 @@
 package TGI::Mutpro::Preprocess::Cosmic;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam D Scott
+# $Authors: Beifang Niu & Adam D Scott; Modified by Fernanda Martins Rodrigues on 2023-02-17
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision: 1 $
 # $URL: $
@@ -59,7 +59,7 @@ sub makeCOSMICAnnotations {
 
 sub getCOSMICInput {
 	my ( $this , $transMapToUniprot ) = @_;
-    my $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/cosmic_67_for_HotSpot3D_missense_only.tsv";
+    my $cosmicAnno = "$this->{_OUTPUT_DIR}\/cosmic\/v94\/cosmic_94_for_HotSpot3D_missense_only.tsv";
     my $cosmicHashRef = $this->getCosmicInfor( $transMapToUniprot , $cosmicAnno );
 	return $cosmicHashRef;
 }
