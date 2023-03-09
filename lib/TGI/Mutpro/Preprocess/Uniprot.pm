@@ -1,7 +1,7 @@
 package TGI::Mutpro::Preprocess::Uniprot;
 #
 #----------------------------------
-# $Authors: Beifang Niu 
+# $Authors: Beifang Niu; Modified by Fernanda Martins Rodrigues on 2023-03-09
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision:  $
 # $URL: $
@@ -138,25 +138,50 @@ sub domains {
     # Input: start and <optional stop> for region of interest
     # Return: ref to array of domains that overlap the given region
     # Skips the following entries: CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN
+    # UPDATE ON 07/13/2021 due to changes in Uniprot file formatting;
     my $self = shift;
     my ($start, $stop) = @_;
     (defined $start) || carp "Start not defined for $self->{ID}", return undef;
     if ( !defined $stop ) { $stop = $start; }
-    my ( @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop );
+    my ( @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop, $countEvidenceLine, $tmpvar, $addEntry );
+    $countEvidenceLine = 0;
+    $addEntry = 0;
     my @skipThese = qw (CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN);
     map{ $skipList{$_} = 1; } @skipThese;
     foreach $line (split /\n/, $self->entireRecord()) {
-	chomp $line;
-	if ($line =~ /FT\s+(\S+)\s+(\d+)\s+(\d+)\s+(.*)/ && $stop >= $2 && $start <= $3 ) { 
-	    $key = $1; $dmStart = $2; $dmStop = $3; $desc = $4;
-	    next if ( defined $skipList{$key} );
-	    push @domains, "$key\t($dmStart, $dmStop)\t$desc";
-	}elsif ($line =~ /FT\s+DISULFID\s+(\d+)\s+(\d+)/ && ( ($stop >= $1 && $start <= $1) || ($stop >= $2 && $start <= $2) )) { 
-	    push @domains, "DISULFID\t($1, $1)\tDisulfide bond $1 <-> $2.";
-	    push @domains, "DISULFID\t($2, $2)\tDisulfide bond $1 <-> $2.";
-	}elsif ( $line =~ /FT\s+SIGNAL\s+(\d+)\s+(\d+)/ && $stop >= $2 && $start <= $1 ) { 
-	    push @domains, "SIGNAL\t($1, $2)\tSignal peptide.";
-	}
+        chomp $line;
+        if ($line =~ /^FT/ ){
+            if ( $line =~ /^FT\s+(\S+)\s+(\d+)\.+(\d+)$/ && $stop >= $2 && $start <= $3 && $countEvidenceLine == 0 && $addEntry == 0){#START AND STOP ARE SEPARATED BY PERIOD INSTEAD OF SPACE
+                next if ( defined $skipList{$1} );
+                $key = $1; $dmStart = $2; $dmStop = $3; $countEvidenceLine=1;
+            }elsif ($line =~ /^FT\s+(\S+)\s+(\d+)$/ && $stop >= $2 && $start <= $2 && $countEvidenceLine == 0 && $addEntry == 0){#CASES WHERE ONLY START POS IS GIVEN
+                next if ( defined $skipList{$1} );
+                $key = $1; $dmStart = $2; $dmStop = $2; $countEvidenceLine=1;
+            }elsif ($line =~ /^FT\s+\/(\S+)\=\"(.*)\"$/ && $countEvidenceLine == 1 && $addEntry == 0){
+                $desc=$2; $addEntry=1;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)\"$/ && $line =~ /^FT\s+\/(\S+)\=\"(.*)$/ && $countEvidenceLine == 1 && $addEntry == 0){
+                $desc=$2;
+                $countEvidenceLine=2;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)$/ && $line =~ /^FT\s+(.*)\"$/ && $countEvidenceLine >= 2 && $addEntry == 0){
+                $tmpvar=$desc;
+                $desc=$tmpvar . $1;
+                $addEntry=1;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)$/ && $line =~ /^FT\s+(.*)$/ && $countEvidenceLine >= 2 && $addEntry == 0){
+                $tmpvar=$desc;
+                $desc=$tmpvar . $1;
+                $countEvidenceLine=++$countEvidenceLine;
+            }
+        }elsif ($line =~ /FT\s+DISULFID\s+(\d+)\.+(\d+)/ && ( ($stop >= $1 && $start <= $1) || ($stop >= $2 && $start <= $2) )) {
+            push @domains, "DISULFID\t($1, $1)\tDisulfide bond $1 <-> $2.";
+            push @domains, "DISULFID\t($2, $2)\tDisulfide bond $1 <-> $2.";
+        }elsif ($line =~ /FT\s+DISULFID\s+(\d+)$/ && ( ($stop >= $1 && $start <= $1) || ($stop >= $1 && $start <= $1) )) {
+            push @domains, "DISULFID\t($1, $1)\tDisulfide bond $1 <-> $1.";
+            push @domains, "SIGNAL\t($1, $1)\tSignal peptide.";
+        }
+        if ($addEntry == 1){
+            push @domains, "$key\t($dmStart, $dmStop)\t$desc";
+            $countEvidenceLine = 0; $addEntry = 0;
+        }
     }
     return \@domains;
 }
@@ -166,21 +191,44 @@ sub domainsForMultiplePositions {
     # Return: ref to array of domains that contain at least one of
     #         the positions
     # Skips the following entries: CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN
+    # UPDATE ON 07/13/2021 due to changes in Uniprot file formatting;
     my ($self, $positionRef) = @_;
-    my ( $position, $addEntry, @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop );
+    my ( $position, $addEntry, @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop, $countEvidenceLine, $tmpvar, $addEntry, $done );
     my @skipThese = qw (CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN);
     map{ $skipList{$_} = 1; } @skipThese;
+    $countEvidenceLine=0;
+    $addEntry=0;
     foreach $line ( split /\n/, $self->entireRecord() ) {
         chomp $line;
-	if ( $line =~ /FT\s+(\S+)\s+(\d+)\s+(\d+)\s+(.*)/ && !defined $skipList{$1} ) {
-            $key = $1; $dmStart = $2; $dmStop = $3; $desc = $4;
-	    $addEntry = 0;
-	    # See if any of the positions are within this domain
-	    foreach $position (keys %{$positionRef}) {
-		if ( $position >= $dmStart && $position <= $dmStop ) { $addEntry = 1; }
-	    }
-	    if ( $addEntry ) { push @domains, "$key\t($dmStart, $dmStop)\t$desc"; }
-	}
+        if ( $line =~ /^FT/ ){
+            if ( $line =~ /^FT\s+(\S+)\s+(\d+)\.+(\d+)$/ && !defined $skipList{$1} && $countEvidenceLine == 0 && $addEntry == 0) {
+                $key = $1; $dmStart = $2; $dmStop = $3; $countEvidenceLine=1;
+            }elsif ( $line =~ /^FT\s+(\S+)\s+(\d+)$/ && !defined $skipList{$1} && $countEvidenceLine == 0 && $addEntry == 0){
+                $key = $1; $dmStart = $2; $dmStop = $2; $countEvidenceLine=1;
+            }elsif ( $line =~ /^FT\s+\/(\S+)\=\"(.*)\"$/ && $countEvidenceLine == 1 && $addEntry == 0){
+                $desc=$2; $addEntry=1;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)\"$/ && $line =~ /^FT\s+\/(\S+)\=\"(.*)$/ && $countEvidenceLine == 1 && $addEntry == 0){
+                $desc=$2;
+                $countEvidenceLine=2;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)$/ && $line =~ /^FT\s+(.*)\"$/ && $countEvidenceLine >= 2 && $addEntry == 0){
+                $tmpvar=$desc;
+                $desc=$tmpvar . $1;
+                $addEntry=1;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)$/ && $line =~ /^FT\s+(.*)$/ && $countEvidenceLine >= 2 && $addEntry == 0){
+                $tmpvar=$desc;
+                $desc=$tmpvar . $1;
+                $countEvidenceLine=++$countEvidenceLine;
+            }
+        }
+        if ( $addEntry==1){
+            $done = 0;
+            # See if any of the positions are within this domain
+            foreach $position (keys %{$positionRef}) {
+                if ( $position >= $dmStart && $position <= $dmStop ) { $done = 1; }
+            }
+            if ( $done ) { push @domains, "$key\t($dmStart, $dmStop)\t$desc"; }
+            $countEvidenceLine = 0; $addEntry = 0; $done = 0;
+        }
     }
     return \@domains;
 }
@@ -191,19 +239,44 @@ sub domainsAfterPosition {
     # Input: amino acid start position
     # Return: ref to array of domains that are after the position
     # Skips the following entries: CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN
+    # UPDATE ON 07/13/2021 due to changes in Uniprot file formatting;
     my $self = shift;
     my $position = shift;
     (defined $position) || carp "\$position not defined for $self->{ID}", return undef;
-    my ( @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop );
+    my ( @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop, $countEvidenceLine, $tmpvar, $addEntry );
     my @skipThese = qw (CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN);
     map{ $skipList{$_} = 1; } @skipThese;
+    $countEvidenceLine=0;
+    $addEntry=0;
     foreach $line ( split /\n/, $self->entireRecord() ) {
 	chomp $line;
-	if ( $line =~ /FT\s+(\S+)\s+(\d+)\s+(\d+)\s+(.*)/ && $3 > $position ) { 
-	    $key = $1; $dmStart = $2; $dmStop = $3; $desc = $4;
-	    next if ( defined $skipList{$key} );
-	    push @domains, "$key\t($dmStart, $dmStop)\t$desc";
-	}
+	if ( $line =~ /^FT/ ){
+            if ( $line =~ /^FT\s+(\S+)\s+(\d+)\.+(\d+)$/ && $3 > $position && $countEvidenceLine == 0 && $addEntry == 0) {
+                next if ( defined $skipList{$1} );
+                $key = $1; $dmStart = $2; $dmStop = $3; $countEvidenceLine=1;
+            }elsif ( $line =~ /^FT\s+(\S+)\s+(\d+)$/ && $2 > $position && $countEvidenceLine == 0 && $addEntry == 0){
+                next if ( defined $skipList{$1} );
+                $key = $1; $dmStart = $2; $dmStop = $2; $countEvidenceLine=1;
+            }elsif ($line =~ /^FT\s+\/(\S+)\=\"(.*)\"$/ && $countEvidenceLine == 1 && $addEntry == 0){
+                $desc=$2; $addEntry=1;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)\"$/ && $line =~ /^FT\s+\/(\S+)\=\"(.*)$/ && $countEvidenceLine == 1 && $addEntry == 0){
+                $desc=$2;
+                $countEvidenceLine=2;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)$/ && $line =~ /^FT\s+(.*)\"/ && $countEvidenceLine >= 2 && $addEntry == 0){
+                $tmpvar=$desc;
+                $desc=$tmpvar . $1;
+                $addEntry=1;
+            }elsif ( $line !~ /^FT\s+\/(\S+)\=\"(.*)$/ && $line =~ /^FT\s+(.*)$/ && $countEvidenceLine >= 2 && $addEntry == 0){
+                $tmpvar=$desc;
+                $desc=$tmpvar . $1;
+                $countEvidenceLine=++$countEvidenceLine;
+            }
+        }
+        if ( $addEntry==1 ){
+            push @domains, "$key\t($dmStart, $dmStop)\t$desc";
+            $countEvidenceLine=0;
+            $addEntry=0;
+        }
     }
     return \@domains;
 }
