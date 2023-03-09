@@ -1,7 +1,7 @@
 package TGI::Mutpro::Preprocess::HugoGeneMethods;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam D Scott
+# $Authors: Beifang Niu & Adam D Scott; Modified by Fernanda Martins Rodrigues on 2023-03-09
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision: $
 # $URL: $
@@ -13,9 +13,12 @@ use warnings;
 our $VERSION = '0.3';
 
 use Carp;
-use LWP::Simple;
+#use LWP::Simple;
+use LWP::Protocol::https;
+use IO::Socket::SSL;
+use HTTP::Tiny;
 use TGI::Mutpro::Preprocess::HugoGene;
-my $HugoUrl = "https://www.genenames.org/cgi-bin/hgnc_downloads?".
+my $HugoUrl = "https://www.genenames.org/cgi-bin/download/custom?".
     "title=HGNC+output+data&hgnc_dbtag=on&".
     "col=gd_hgnc_id&".
     "col=gd_app_sym&".
@@ -39,12 +42,8 @@ my $HugoUrl = "https://www.genenames.org/cgi-bin/hgnc_downloads?".
     "col=gd_other_ids_list&".
     "col=gd_pubmed_ids&".
     "col=gd_pub_refseq_ids&".
-    "col=gd_record_type&".
-    "col=gd_primary_ids&".
-    "col=gd_secondary_ids&".
     "col=gd_vega_ids&".
     "col=gd_lsdb_links&".
-    "col=md_gdb_id&".
     "col=md_eg_id&".
     "col=md_mim_id&".
     "col=md_refseq_id&".
@@ -79,18 +78,14 @@ my $HugoUrl = "https://www.genenames.org/cgi-bin/hgnc_downloads?".
 # 19. Specialist Database IDs
 # 20. Pubmed IDs
 # 21. RefSeq IDs
-# 22. Record Type
-# 23. Primary IDs
-# 24. Secondary IDs
-# 25. VEGA IDs  
-# 26. Locus Specific Databases
-# 27. GDB ID (mapped data)
-# 28. Entrez Gene ID (mapped data supplied by NCBI)
-# 29. OMIM ID (mapped data supplied by NCBI)
-# 30. RefSeq (mapped data supplied by NCBI)
-# 31. UniProt ID (mapped data supplied by UniProt)
-# 32. Ensembl ID (mapped data supplied by Ensembl)
-# 33. UCSC ID (mapped data supplied by UCSC)
+# 22. VEGA IDs  
+# 23. Locus Specific Databases
+# 24. Entrez Gene ID (mapped data supplied by NCBI)
+# 25. OMIM ID (mapped data supplied by NCBI)
+# 26. RefSeq (mapped data supplied by NCBI)
+# 27. UniProt ID (mapped data supplied by UniProt)
+# 28. Ensembl ID (mapped data supplied by Ensembl)
+# 29. UCSC ID (mapped data supplied by UCSC)
 
 sub makeHugoGeneObjects {
     # Return: ref to HugoGene objects with key = Hugo name
@@ -106,22 +101,23 @@ sub makeHugoGeneObjects {
     # 8. Name Aliases
     # 9. Chromosome
     # 16. Entrez Gene ID
-    # 28. Entrez Gene ID (mapped data supplied by NCBI)
+    # 24. Entrez Gene ID (mapped data supplied by NCBI)
     # 21. RefSeq IDs
-    # 30. RefSeq (mapped data supplied by NCBI)
-    # 25. VEGA IDs 
-    # 29. OMIM ID (mapped data supplied by NCBI)
-    # 31. UniProt ID (mapped data supplied by UniProt)
-    # 32. Ensembl ID (mapped data supplied by Ensembl)
-    # 33. UCSC ID (mapped data supplied by UCSC) 
+    # 26. RefSeq (mapped data supplied by NCBI)
+    # 22. VEGA IDs 
+    # 25. OMIM ID (mapped data supplied by NCBI)
+    # 27. UniProt ID (mapped data supplied by UniProt)
+    # 28. Ensembl ID (mapped data supplied by Ensembl)
+    # 29. UCSC ID (mapped data supplied by UCSC) 
 	my $list = shift;
     my %hugo_objects;
-    my $page = get($HugoUrl);
+    my $allcontent = HTTP::Tiny->new->get($HugoUrl);
+    my $page = $allcontent->{'content'};
 	if ( not $page ) {
 		die "HotSpot3D::HugoGeneMethods::makeHugoGeneObjects ERROR: no data from url request. Installing Mozilla::CA might fix this issue\n";
 	}
     foreach my $line (split /\n/, $page) {
-		if ($line =~ /withdrawn/i || $line =~ /HGNC ID\s+Approved\s+Symbol\s+/) { next; }
+		if ($line =~ /withdrawn/i || $line =~ /HGNC ID\s+Approved symbol\s+/) { next; }
 		my @entries = split /\t/, $line;
 		my $hugo = $entries[1];
 		$hugo =~ s/\s+//g;
@@ -140,14 +136,14 @@ sub makeHugoGeneObjects {
 		if (defined $entries[2]  && $entries[2]  ne "") { $hugo_objects{$hugo}->name($entries[2]); }
 		if (defined $entries[4]  && $entries[4]  ne "") { $hugo_objects{$hugo}->type($entries[4]); }
 		if (defined $entries[9]  && $entries[9]  ne "") { $hugo_objects{$hugo}->chr($entries[9]); }
-		if (defined $entries[29] && $entries[29] ne "") { $hugo_objects{$hugo}->omim($entries[29]); }
-		if (defined $entries[31] && $entries[31] ne "") { $hugo_objects{$hugo}->uniprot($entries[31]); }
-		if (defined $entries[32] && $entries[32] ne "") { $hugo_objects{$hugo}->ensembl($entries[32]); }	
-		if (defined $entries[33] && $entries[33] ne "") { $hugo_objects{$hugo}->ucsc($entries[33]); }
+		if (defined $entries[25] && $entries[25] ne "") { $hugo_objects{$hugo}->omim($entries[25]); }
+		if (defined $entries[27] && $entries[27] ne "") { $hugo_objects{$hugo}->uniprot($entries[27]); }
+		if (defined $entries[28] && $entries[28] ne "") { $hugo_objects{$hugo}->ensembl($entries[28]); }	
+		if (defined $entries[29] && $entries[29] ne "") { $hugo_objects{$hugo}->ucsc($entries[29]); }
 		if (defined $entries[16] && $entries[16] ne "") { $hugo_objects{$hugo}->addEntrezName($entries[16]); }
-		if (defined $entries[28] && $entries[28] ne "") { $hugo_objects{$hugo}->addEntrezName($entries[28]); }
+		if (defined $entries[24] && $entries[24] ne "") { $hugo_objects{$hugo}->addEntrezName($entries[24]); }
 		if (defined $entries[21] && $entries[21] ne "") { $hugo_objects{$hugo}->addRefSeqName($entries[21]); }
-		if (defined $entries[30] && $entries[30] ne "") { $hugo_objects{$hugo}->addRefSeqName($entries[30]); }
+		if (defined $entries[26] && $entries[26] ne "") { $hugo_objects{$hugo}->addRefSeqName($entries[26]); }
 		my ($id);
 		if (defined $entries[5] && $entries[5] ne "") {
 			foreach $id (split /\,/, $entries[5]) { 
@@ -171,8 +167,8 @@ sub makeHugoGeneObjects {
 				$hugo_objects{$hugo}->addOldDescription($id);
 			} 
 		}
-		if (defined $entries[25] && $entries[25] ne "") {
-			foreach $id (split /\,/, $entries[25]) { 
+		if (defined $entries[22] && $entries[22] ne "") {
+			foreach $id (split /\,/, $entries[22]) { 
 			$id =~ s/\s+//g;
 			$hugo_objects{$hugo}->addVegaName($id); 
 			} 
@@ -187,7 +183,8 @@ sub downloadPreviousHugoSymbols {
     #  return (\%previousToHugo, \%hugoToPrevious);
     # The previous symbol(s) are in $entries[6]
     my (%previousToHugo, %hugoToPrevious, $previous,);
-    my $page = get($HugoUrl);
+    my $allcontent = HTTP::Tiny->new->get($HugoUrl);
+    my $page = $allcontent->{'content'};
     foreach my $line (split /\n/, $page) {
 	if ( $line =~ /withdrawn/i || $line =~ /HGNC ID\s+Approved\s+Symbol\s+/ ) { next; }
 	my @entries = split /\t/, $line;
@@ -229,7 +226,8 @@ sub downloadHugoAlias {
     #   return (\%aliasToHugo, \%hugoToAlias);
     # The aliases are in $entries[7], the Hugo name is in $entries[1]
     my ( %aliasToHugo, %hugoToAlias, $alias );
-    my $page = get($HugoUrl);
+    my $allcontent = HTTP::Tiny->new->get($HugoUrl);
+    my $page = $allcontent->{'content'};
     foreach my $line (split /\n/, $page) {
 	if ( $line =~ /withdrawn/i || $line =~ /HGNC ID\s+Approved\s+Symbol\s+/ ) { next; }
 	my @entries = split /\t/, $line;
