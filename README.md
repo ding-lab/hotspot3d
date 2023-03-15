@@ -1,18 +1,21 @@
-HotSpot3D
+HotSpot3D for AlphaFold DB
 ===========
+This branch is under development by members of the Ding Lab at WashU. Code is being modified to handle structures from the AlphaFold Database instead of PDB.
 
 This 3D proximity tool can be used to identify mutation hotspots from linear protein sequence and correlate the hotspots with known or potentially interacting domains, mutations, or drugs. Mutation-mutation and mutation-drug clusters can also be identified and viewed.
 
 Usage
 -----
 
-        Program:     HotSpot3D - 3D mutation proximity analysis program.
+                     Program:     HotSpot3D for AlphaFold DB - 3D mutation proximity analysis program.
 
-         Stable:     v0.6.0 
+                      Stable:     v1.8.2 
 
-           Beta:     up to v1.8.2
+                        Beta:     alphafold_implementation v0.1 (this branch)
         
-         Author:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
+            Original Authors:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
+
+AlphaFold DB version authors:	  Fernanda Martins Rodrigues
 
   Usage: hotspot3d <command> [options]
 
@@ -39,6 +42,7 @@ Support
 -------
 
 For user support please email ruiyang.liu@wustl.edu & bniu@sccas.cn
+For HotSpot3D for AlphaFold DB version please email Fernanda Martins Rodrigues (mrodrigues.fernanda@gmail.com; fernanda@wustl.edu)
 
 
 Update
@@ -90,6 +94,10 @@ For the latest beta version:
     
 	cpanm HotSpot3D-1.8.2.tar.gz
 
+For HotSpot3D for AlphaFold DB version:
+	
+	git pull origin alphaFold_implementation
+
 Final note: Installations under some organizations may use an internal perl version. 
 To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
     
@@ -100,7 +108,7 @@ To make use of the /usr/ perl, edit the first line of ~/perl5/bin/hotspot3d.
 
 We have developed webservice for HotSpot3D, and you can submit your mutation file to do
 analysis online here: http://niulab.scgrid.cn/HotSpot3D/ , once you don't want to install
-HotSpot3D locally. 
+HotSpot3D locally. This does not apply for HotSpot3D for AlphaFold DB version.
 
 Configure Environment
 ---------------------
