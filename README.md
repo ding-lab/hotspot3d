@@ -14,8 +14,8 @@ Usage
                         Beta:     alphafold_implementation v0.1 (this branch)
         
             Original Authors:     Beifang Niu, John Wallis, Adam D Scott, Sohini Sengupta, & Amila Weerasinghe
-
-AlphaFold DB version authors:	  Fernanda Martins Rodrigues
+	    
+	    AlphaFold DB version authors:	  Fernanda Martins Rodrigues
 
   Usage: hotspot3d <command> [options]
 
@@ -42,6 +42,7 @@ Support
 -------
 
 For user support please email ruiyang.liu@wustl.edu & bniu@sccas.cn
+
 For HotSpot3D for AlphaFold DB version please email Fernanda Martins Rodrigues (mrodrigues.fernanda@gmail.com; fernanda@wustl.edu)
 
 
