@@ -1,11 +1,12 @@
 package TGI::Mutpro::Preprocess::Uniprot;
 #
 #----------------------------------
-# $Authors: Beifang Niu; Modified by Fernanda Martins Rodrigues on 2023-03-09
+# $Original authors: Beifang Niu
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision:  $
+# $Revision: 2023-03-15 $
 # $URL: $
-# $Doc: $ uniprot download and processing 
+# $Doc: $ uniprot download and processing. This has been adapted on Mar 15 2023 to handle AlphaFold DB (v4) files 
 #----------------------------------
 #
 use strict;
@@ -81,20 +82,22 @@ sub generalAnnotation {
     return \@annotations;
 }
 
-sub parsePDBAnnotation {
-	my ( $self , $pdbannotation ) = @ARGV;
-	my $details = {};
-	my ( $pdbID , $type , $resolution , $chainInfo ) = split( ";" , $pdbannotation );
-	$pdbID =~ s/\s+//g;
-	$type =~ s/\s+//g;
-	$resolution =~ s/\s+//g;
-	$chainInfo =~ s/\s+\.*//g;
-	my ( $chains , $positions ) = split( "=" , $chainInfo );
+# MODIFIED ON 03-15-2023: commented this function out since it is not actually used and we are using Alpha Fold DB for this version of the tool
+# sub parsePDBAnnotation {
+# 	my ( $self , $pdbannotation ) = @ARGV;
+# 	my $details = {};
+# 	my ( $pdbID , $type , $resolution , $chainInfo ) = split( ";" , $pdbannotation );
+# 	$pdbID =~ s/\s+//g;
+# 	$type =~ s/\s+//g;
+# 	$resolution =~ s/\s+//g;
+# 	$chainInfo =~ s/\s+\.*//g;
+# 	my ( $chains , $positions ) = split( "=" , $chainInfo );
 
 
-	return $details;
-}
+# 	return $details;
+# }
 
+# MODIFIED ON 03-15-2023: added AlphaFold DB example line from uniprot file
 sub annotations {
     # Returns: ref to array of annotations of given type
     # These are in the record as 'DR $annotationName; $id; $record'
@@ -103,6 +106,7 @@ sub annotations {
     # DR   Pfam; PF00168; C2; 2
     # DR   PDB; 1V27; NMR; -; A=807-934.
     # DR   UniGene; Hs.655271; -.
+    # DR   AlphaFoldDB; Q3USB1; -.
     # DR   GO; GO:0005783; C:endoplasmic reticulum; IEA:UniProtKB-SubCell.
     #    The GO annotation is described in detail below
     #
@@ -193,7 +197,7 @@ sub domainsForMultiplePositions {
     # Skips the following entries: CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN
     # UPDATE ON 07/13/2021 due to changes in Uniprot file formatting;
     my ($self, $positionRef) = @_;
-    my ( $position, $addEntry, @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop, $countEvidenceLine, $tmpvar, $addEntry, $done );
+    my ( $position, $addEntry, @domains, $line, %skipList, $desc, $key, $dmStart, $dmStop, $countEvidenceLine, $tmpvar, $done );
     my @skipThese = qw (CONFLICT STRAND HELIX TURN VAR_SEQ INIT_MET VARIANT CHAIN);
     map{ $skipList{$_} = 1; } @skipThese;
     $countEvidenceLine=0;
@@ -319,58 +323,7 @@ sub transProteinHash{
     return \%transProtein;
 }
 
-#sub getCanonicalTranscript {
-#	my $self = shift;
-#	foreach my $line ( split /\n/ , $self->annotations( "Ensembl" ) ) {
-#		if ( $line =~ /(ENST\d+);.*\[(\w+)-(\d+)\]/ ) {
-#			if ( $3 == 1 ) {
-#				return $1;
-#			}
-#		}
-#	}
-#	return "";
-#}
-#
-#sub getGeneID {
-#	my $self = shift;
-#	foreach my $line ( split /\n/ , $self->entireRecord() ) {
-#		chomp( $line );
-#		if ( $line =~ /^ID\s+(\w+)\s+\w+;\s+\d+\sAA\./ ) {
-#			return $1;
-#		}
-#	}
-#	return "";
-#}
-#
-#sub getPhosphosites {
-#	my $this = shift;
-#	my $description = shift;
-#	return $this->getModifiedResidues( "Phospho" );
-#}
-#
-#sub getModifiedResidues {
-#	my $this = shift;
-#	my $description = shift;
-#	my $sites = {};
-#	foreach my $feature ( split /\n/ , $this->sequenceFeatures() ) {
-#		if ( $feature =~ /MOD_RES/ ) {
-#			my ( $position , $type ) = $feature =~ m/FT\s+MOD_RES\s+(\d+)\s+\d+\s+(.*)/;
-#			next unless ( $type =~ /$description/ );
-#			my $detail = "";
-#			$sites->{$position}->{type} = $type;
-#			if ( $type =~ m/(.*); (.*)\./ ) {
-#				$sites->{$position}->{type} = $1;
-#				$sites->{$position}->{detail} = $2;
-#			} elsif ( $type =~ m/(.*)\.$/ ) {
-#				$sites->{$position}->{type} = $1;
-#				$sites->{$position}->{detail} = "";
-#			} elsif ( $type =~ m/(.*)\.(.*)/ ) {
-#				$sites->{$position}->{type} = $1;
-#				$sites->{$position}->{detail} = $2;
-#			}
-#		}
-#	}
-#	return $sites;
-#}
-
 return 1;
+package TGI::Mutpro::Preprocess::Uniprot;
+#
+#----------------------------------
