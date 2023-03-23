@@ -1,9 +1,10 @@
 package TGI::Mutpro::Preprocess::Statis;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam D Scott
+# $Original authors: Beifang Niu & Adam D Scott
+# #Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 1 $
+# $Revision: 2023-03-15 $
 # $URL: $
 # $Doc: $ statics related infor 
 #----------------------------------
@@ -64,7 +65,7 @@ sub getOutputDir {
 
 sub getInputFile {
 	my $this = shift;
-    my $hugoUniprot = "$this->{_OUTPUT_DIR}/hugo.uniprot.pdb.csv";
+    my $hugoUniprot = "$this->{_OUTPUT_DIR}/hugo.uniprot.alphafolddb.csv";
     unless( -e $hugoUniprot ) { die "HotSpot3D::Statis::getInputFile error: no hugo uniprot file!\n"; }; 
     my $fh = new FileHandle;
     unless( $fh->open("<$hugoUniprot") ) { die "HotSpot3D::Statis::getInputFile error: Could not open hugo uniprot file!\n" };
@@ -85,10 +86,10 @@ sub calculatePValues {
     my $u = 0;
     foreach my $line (@entireFile) {
         chomp $line;
-		my ( $uniprotId, $pdb, );
-        (undef, $uniprotId, $pdb) = split /\t/, $line;
-        # Only use Uniprot IDs with PDB structures
-        next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
+		my ( $uniprotId, $alphafolddb, );
+        (undef, $uniprotId, $alphafolddb) = split /\t/, $line;
+        # Only use Uniprot IDs with AlphaFold DB structures
+        next if ( $alphafolddb eq "N/A" || $uniprotId !~ /\w+/ );
 		$this->calculatePValuesOfProtein( $uniprotId , $pvaluesDir , $proDir );
 	}
 	return;
@@ -149,7 +150,7 @@ sub getPvalue {
     # load p_values
 	$fho->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
 	$fho->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
-	$fho->print( "Distance\tPDB_ID\tP_Value\n" );
+	$fho->print( "Distance\tAlphafoldDB_ID\tP_Value\n" );
     while ( my $a = <$fh> ) {
         next if ($a =~ /^WARNING:/);
         next if ($a =~ /UniProt_ID1/);
