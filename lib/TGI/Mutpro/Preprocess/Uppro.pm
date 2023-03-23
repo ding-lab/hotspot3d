@@ -233,7 +233,7 @@ sub makeBSUBCalproCommandCompute1 {
 	map {
 		system("touch $inpro_dir/$_.ProximityFile.csv");
 		my $command = "";
-		$command = "bsub -oo ".$log_dir.$_.".calpro.log -R 'select[type==LINUX64 && mem>16000] rusage[mem=16000]' -M 16000000 -q general -G compute-dinglab -a 'docker(registry.gsc.wustl.edu/genome/genome_perl_environment)'";
+		$command = "bsub -oo ".$log_dir.$_.".calpro.log -R 'select[mem>16000] rusage[mem=16000]' -M 16000000 -q general -G compute-dinglab -a 'docker(registry.gsc.wustl.edu/genome/genome_perl_environment)' ";
 		$command .= "'".$this->makeCalproCommand( $_ )."'";
 		print STDOUT $command."\n"; 
 		$cmd_list_submit_file_fh->print( $command."\n" );
