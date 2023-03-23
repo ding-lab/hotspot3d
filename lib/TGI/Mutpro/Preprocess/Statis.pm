@@ -150,7 +150,7 @@ sub getPvalue {
     # load p_values
 	$fho->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
 	$fho->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
-	$fho->print( "Distance\tAlphafoldDB_ID\tP_Value\n" );
+	$fho->print( "Distance\tAlphaFoldDB_ID\tP_Value\n" );
     while ( my $a = <$fh> ) {
         next if ($a =~ /^WARNING:/);
         next if ($a =~ /UniProt_ID1/);
