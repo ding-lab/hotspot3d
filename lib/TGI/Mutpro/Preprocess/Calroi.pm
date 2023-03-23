@@ -68,7 +68,7 @@ sub getInputFile {
 	my ( $this , $annoDir ) = @_;
 
     my $fhuid = new FileHandle;
-    my $hugoUniprotFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
+    my $hugoUniprotFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.alphafolddb.csv";
     unless( $fhuid->open("<$hugoUniprotFile") ) { die "HotSpot3D::Calroi::getInputFile error: Could not open uniprot id file ".$hugoUniprotFile."!\n" };
 
 	return $fhuid;
