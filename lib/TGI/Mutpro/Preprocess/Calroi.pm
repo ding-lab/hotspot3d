@@ -1,7 +1,8 @@
 package TGI::Mutpro::Preprocess::Calroi;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam D Scott
+# $Original authors: Beifang Niu & Adam D Scott
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
 # $Revision: 1 $
 # $URL: $
