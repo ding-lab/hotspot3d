@@ -2,8 +2,9 @@ package TGI::Mutpro::Preprocess::Calpro;
 #
 #----------------------------------
 # $Authors: Beifang Niu and Amila Weerasinghe
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 1 (Fri May 12 08:00:38 CDT 2017) $
+# $Revision: 2023-03-15 $
 # $URL: $
 # $Doc: $ calculate proximity file for one uniprotid (used by first step)
 #----------------------------------
@@ -14,33 +15,7 @@ package TGI::Mutpro::Preprocess::Calpro;
 #  Output: 1) File with structure-based proximity data
 #          2) File with list of structures where coordinates 
 #             can be mapped to Uniprot coordinates
-#
-# Could get domains in Uniprot sequence and then do alignment of Uniprot 
-# domain to PDB sequence and get domain-specific offset
-#
-# That might 'rescue' some of the structures where coordinates 
-# can not be mapped to Uniprot coordinates
-
-#   can make last thing update program does is to check to see if there 
-#   are any files in the inProgress/ directory. 
-#   If not, mail that it is finished
-#
-# - dir inProgress/$uniprot
-#       inProgress/$uniprot.structures
-# - mv  inProgress/$uniprot.structures to validStructures/$uniprot.validStrustures
-#       inProgress/$uniprot to proximityFiles/$uniprot.ProximityFile.csv 
-#  Get Uniprot object
-#  Get Uniprot-defined domains
-#  Get all PDB structures
-#  Make entry for all positions in structure near a Uniprot-defined domain
-#  Make entry for all positions near a heterologous (peptide) chain
-#
-#
-#
-# Electrostatic Bonds: 	lengths of around 3.0 Angstroms. 
-# Hydrogen Bonds:   	lengths range between 2.6 and 3.5 Angstroms
-# Van der Waals:  	lengths range beteen 2.5 and 4.6 Angstroms
-# PI Aromatic bond:  	lengths 3.8 Angstroms. 
+# 
 #----------------------------------
 #
 
@@ -56,7 +31,8 @@ use LWP::Simple;
 use Getopt::Long;
 
 use TGI::Mutpro::Preprocess::Uniprot;
-use TGI::Mutpro::Preprocess::PdbStructure;
+# MODIFIED ON 03-15-2023: indicate alpha fold script instead of pdb
+use TGI::Mutpro::Preprocess::AlphaFoldDBStructure;
 use TGI::Mutpro::Preprocess::HugoGeneMethods;
 
 my $SHORTESTDISTANCE = "shortest";
@@ -72,7 +48,8 @@ sub new {
 	$this->{'restrictedaa_pairs'} = 0;
 	$this->{'uniprot_ref'} = undef;
 	$this->{'stat'} = undef;
-	$this->{'pdb_file_dir'} = undef;
+	# MODIFIED ON 03-15-2023: changed pdb to alphafold dir
+	$this->{'alphafolddb_file_dir'} = undef;
 	$this->{'distance_measure'} = $AVGDISTANCE;
 ## add drug port database file (08.04.2014)
 #$this->{'drugport_file'} = undef;
@@ -90,7 +67,8 @@ sub new {
 		'linear-cutoff=i'   => \$this->{'min_seq_dis'},
 		'output-dir=s'    => \$this->{'output_dir'},
 		'uniprot-id=s'    => \$this->{'uniprot_id'},
-		'pdb-file-dir=s'  => \$this->{'pdb_file_dir'},
+		# MODIFIED ON 03-15-2023: changed pdb to alphafold dir
+		'alphafolddb-file-dir=s'  => \$this->{'alphafolddb_file_dir'},
 		'measure=s'  => \$this->{'distance_measure'},
 		#'drugport-file=s' => \$this->{'drugport_file'},
 
@@ -100,7 +78,8 @@ sub new {
 	unless($options) { die $this->help_text(); }
 	unless(defined $this->{'uniprot_id'}) { warn 'You must provide a Uniprot ID !', "\n"; die $this->help_text(); }
 	unless( $this->{'output_dir'} and (-e $this->{'output_dir'} ) ) { warn 'You must provide a output directory ! ', "\n"; die $this->help_text(); }
-	unless( $this->{'pdb_file_dir'} and (-e $this->{'pdb_file_dir'}) ) { warn 'You must provide a PDB file directory ! ', "\n"; die $this->help_text(); }
+	# MODIFIED ON 03-15-2023: changed pdb to alphafold dir
+	unless( $this->{'alphafolddb_file_dir'} and (-e $this->{'alphafolddb_file_dir'}) ) { warn 'You must provide a AlphaFold DB file directory ! ', "\n"; die $this->help_text(); }
 	if ( $this->{'distance_measure'} ne $SHORTESTDISTANCE and $this->{'distance_measure'} ne $AVGDISTANCE ) {
 		warn "HotSpot3D::Calpro warning: measure not recognized, resetting to default = average\n";
 		$this->{'distance_measure'} = $AVGDISTANCE;
@@ -117,19 +96,20 @@ sub new {
 	$this->{'uniprot_ref'} = TGI::Mutpro::Preprocess::Uniprot->new( $this->{'uniprot_id'} );
 	my $Dir = "$this->{'output_dir'}/proximityFiles";
 	my $ProximityFile = "$Dir/inProgress/$this->{'uniprot_id'}.ProximityFile.csv";
-	# get the linkage information between PDBs if one PDB includes two or more Uniprot 
+	# MODIFIED ON 03-15-2023: changed alphafolddb information
+	# get the linkage information between AlphaFoldDB ids if one AlphaFoldDB ids includes two or more Uniprot 
 	# IDs, it should not be removed and also, sometimes, two Uniprot IDs locate in two
 	# similar molecules
-	my $hugoUniprot = "$this->{'output_dir'}/hugo.uniprot.pdb.csv";
+	my $hugoUniprot = "$this->{'output_dir'}/hugo.uniprot.alphafolddb.csv";
 	my $linkage = $this->getLinkageInfo( $hugoUniprot );
 	# Make proximity file to a temporary directory so current 
 	# file can be used until this is finished 
 	$this->writeProximityFile( $ProximityFile, $linkage );
 	#$this->writeProximityFile( $ProximityFile, $linkage, $drugport_infor_hash_ref, );
 	# Write a file that says if the amino acid sequence in Uniprot
-	# is consistent with the sequence in the PDB structure(s)
-	my $PdbCoordinateFile = "$Dir/pdbCoordinateFiles/$this->{'uniprot_id'}.coord";
-	$this->checkOffsets($ProximityFile, $PdbCoordinateFile);
+	# is consistent with the sequence in the AlphaFold DB structure(s)
+	my $AlphFoldDBCoordinateFile = "$Dir/alphafolddbCoordinateFiles/$this->{'uniprot_id'}.coord";
+	$this->checkOffsets($ProximityFile, $AlphFoldDBCoordinateFile);
 	# Now move the file from the $dir/inProgress subdirectory
 	# to the root dir
 	move($ProximityFile, "$Dir/$this->{'uniprot_id'}.ProximityFile.csv");
@@ -137,25 +117,7 @@ sub new {
 	return 1;
 }
 
-## Parse drugport database file 
-#sub get_drugport_database_info{
-#    my ( $this, $drugportf, ) = @_;
-#    my $drugportfh = new FileHandle;
-#    unless( $drugportfh->open( $drugportf ) ) { die "Could not open drugport database file !\n" };
-#    my ( %drugport_hash );
-#    foreach ( $drugportfh->getlines ) {
-#        chomp; 
-#        my ( $drug, $related_uniprot, $pdb_het_group, $pdb1, $pdb2, $pdb3 ) = split /\t/;
-#        $drugport_hash{'DRUG'} = $drug;
-#        $drugport_hash{'UNIPROT'} = $related_uniprot;
-#        $drugport_hash{'PDBHET'} = $pdb_het_group;
-#        unless( $pdb1 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb1; };
-#        unless( $pdb2 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb2; };
-#        unless( $pdb3 eq 'NULL' ) { map{  my @t = split /\|/, $_; $drugport_hash{'PDBS'}{$t[0]} = $t[1]; } split /,/, $pdb3; };
-#    }
-#    return \%drugport_hash;
-#}
-
+# MODIFIED ON 03-15-2023: changed function to parse alphafolddb instead of pdb
 ## Get proteins involved multiple uniprots ##
 sub getLinkageInfo {
 	my ( $this, $hugof, ) = @_;
@@ -163,14 +125,15 @@ sub getLinkageInfo {
 	unless( $hugofh->open( $hugof ) ) { die "Could not open hugo uniprot file !\n" };
 	my ( %multiUn, %temph, );
 	foreach ( $hugofh->getlines ) {
-		chomp; my ( undef, $uniprotId, $pdb, ) = split /\t/;
-		# Only use Uniprot IDs with PDB structures
-		next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
-		map{ if ( (defined $temph{$_}) and ($temph{$_} ne $uniprotId) ) { $multiUn{$_} = 1; } else { $temph{$_} = $uniprotId; } } split /\s+/, $pdb;
+		chomp; my ( undef, $uniprotId, $alphafolddb, ) = split /\t/;
+		# Only use Uniprot IDs with AlphaFold DB structures
+		next if ( $alphafolddb eq "N/A" || $uniprotId !~ /\w+/ );
+		map{ if ( (defined $temph{$_}) and ($temph{$_} ne $uniprotId) ) { $multiUn{$_} = 1; } else { $temph{$_} = $uniprotId; } } split /\s+/, $alphafolddb;
 	}
 	return \%multiUn;
 }
 
+# MODIFIED ON 03-15-2023: changed function to parse alphafolddb instead of pdb
 sub writeProximityFile {
 	my ( $this, $file, $ulink, ) = @_;
 	#my ( $this, $file, $ulink, $drugport_ref, ) = @_;
@@ -179,27 +142,27 @@ sub writeProximityFile {
 	unless( $fh->open( ">$file" ) ) { die "Could not open proximity file to write !\n" };
 	print STDOUT "Creating ".$file."\n";
 	my ( $uniprotDomainRef,
-		 $pdbRef, %pdbIds, 
-		 #%allOffsets,
-		 $structureRef, $peptideRef, $chainToUniprotIdRef, 
-		 $uniprotChain,
-		 $otherChainOffset, 
-		 $residuePositionsRef,
-		 $residuePosition,  
-		 $uniprotAminoAcidRef,
-		 $otherChainUniprotId,
-		 $allAaObjRef, 
-		 $skip, 
-		 $position,  
-		 $distanceBetweenResidues, 
-		 $aaObjRef,
-		 $otherDomainRef, 
-		 $uniprotChainOffset,
-		 $uniprotAaName, 
-		 $otherAaName, 
-		 $correctedPosition, 
-		 $uniprotIdToDomainsRef, 
-		 $hugoGeneRef, $hugoId, );
+		$alphafolddbRef, %alphafolddbIds, 
+		#%allOffsets,
+		$structureRef, $peptideRef, $chainToUniprotIdRef, 
+		$uniprotChain,
+		$otherChainOffset, 
+		$residuePositionsRef,
+		$residuePosition,  
+		$uniprotAminoAcidRef,
+		$otherChainUniprotId,
+		$allAaObjRef, 
+		$skip, 
+		$position,  
+		$distanceBetweenResidues, 
+		$aaObjRef,
+		$otherDomainRef, 
+		$uniprotChainOffset,
+		$uniprotAaName, 
+		$otherAaName, 
+		$correctedPosition, 
+		$uniprotIdToDomainsRef, 
+		$hugoGeneRef, $hugoId, );
 	# Get Uniprot-defined domains for $this->{'uniprot_id'}
 	### 121105  Don't make this dependent on a specific type of annotation.
 	#           Keep distances of all pairs even if the two amino acids are 
@@ -207,54 +170,49 @@ sub writeProximityFile {
 	#           Should ignore amino acids that would be found using the primary 
 	#           sequence-based proximity analysis
 	$uniprotDomainRef = uniprotDomains( $this->{'uniprot_id'} ) if ( $this->{'restrictedaa_pairs'} );
-	# Get all PDB structures
-	$pdbRef = $this->{'uniprot_ref'}->annotations("PDB");
-	%pdbIds = ();
-	if ( !defined $pdbRef || scalar(@{$pdbRef}) == 0 ) {
-		carp "Did not get pdb IDs for $this->{'uniprot_id'} \n";
+	# Get all AlphaFoldDB structures
+	$alphafolddbRef = $this->{'uniprot_ref'}->annotations("AlphaFoldDB");
+	%alphafolddbIds = ();
+	if ( !defined $alphafolddbRef || scalar(@{$alphafolddbRef}) == 0 ) {
+		carp "Did not get AlphaFoldDB IDs for $this->{'uniprot_id'} \n";
 		return;
 	}
 	# Note: new added function
-	# Filtering some pdb files here to avoid unnecessary heavy load from CPU and Memory
+	# Filtering some alphafolddb files here to avoid unnecessary heavy load from CPU and Memory
 	# Found this problem by testing all uniprot IDs initiation
-	my $pdbfilterRef = $this->filteringPdb( $pdbRef, $ulink );
+	my $alphafolddbfilterRef = $this->filteringAlphaFoldDB( $alphafolddbRef, $ulink );
 	map{
 		print STDOUT "$_\n";
-		$pdbIds{$1} = 1 if ( $_ =~ /^(\w+)\;/ );
-	} @{$pdbfilterRef};
-	# Download and parse PDB files
+		$alphafolddbIds{$1} = 1 if ( $_ =~ /^(\w+)\;/ );
+	} @{$alphafolddbfilterRef};
+	# Download and parse AlphaFoldDB files
 	$fh->print( "UniProt_ID1\tChain1\tPosition1\tOffset1\tResidue_Name1\t" );
 	$fh->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\tResidue_Name2\t" );
-	$fh->print( "Distance\tPDB_ID\n" );
-	foreach my $pdbId (keys %pdbIds) {
+	$fh->print( "Distance\tAlphaFoldDB_ID\n" );
+	foreach my $alphafolddbId (keys %alphafolddbIds) {
 		my $allOffsets = {};
-		#$structureRef = TGI::Mutpro::Preprocess::PdbStructure->new( $pdbId );
-		$structureRef = TGI::Mutpro::Preprocess::PdbStructure->new( $pdbId, $this->{'pdb_file_dir'} );
+		$structureRef = TGI::Mutpro::Preprocess::AlphaFoldDBStructure->new( $alphafolddbId, $this->{'alphafolddb_file_dir'} );
 		## don't need this part when only one model be picked up
-		# abandon the pdb files with too many NUMMDL >10 
 		# Get Peptide objects to describe crystal structure
-		#$peptideRef = $structureRef->makePeptides( $drugport_ref );
 		$peptideRef = $structureRef->makePeptides();
 		# Get chain representing given Uniprot ID.
 		# Choose the chain that is the longest.
 		$chainToUniprotIdRef = $structureRef->chainToUniprotId();
 		$uniprotChain = undef; 
 		my $chainLength = 0;
-		##TODO: Make a hash with chain info: start, stop, SEQADV-event-position, and SEQADV-event-comment
-		# my $chainInfo = {}; # TODO
 		foreach my $chain ( keys %{$chainToUniprotIdRef} ) { # choose the longest chain (to be used as the base chain)
 			#print STDERR $chain."\n";
 			next if ( $$chainToUniprotIdRef{$chain} ne $this->{'uniprot_id'} );
 			my ( $chainStart, $chainStop, ) = $structureRef->chainStartStop( $chain );
 			if ( $chainStop - $chainStart + 1 > $chainLength ) { 
 				$uniprotChain = $chain;
-				print STDOUT "$pdbId\t$uniprotChain\t";
+				print STDOUT "$alphafolddbId\t$uniprotChain\t";
 				$chainLength = $chainStop - $chainStart + 1; 
 				print STDOUT $chainLength."\n";
 			}
 		}
 		unless ( defined $uniprotChain ) {
-			print $fh "WARNING: Did not get chain for '$this->{'uniprot_id'}' in '$pdbId'.";
+			print $fh "WARNING: Did not get chain for '$this->{'uniprot_id'}' in '$alphafolddbId'.";
 			print $fh "  Skipping structure\n";
 			next; 
 		}
@@ -284,7 +242,7 @@ sub writeProximityFile {
 		# chain resolved in the structure
 		unless ( defined $$peptideRef{$uniprotChain} ) {
 			print STDERR "\$\$peptideRef{\$uniprotChain} not defined for \$uniprotChain = $uniprotChain.";
-			print STDERR "  \$UniprotId = '$this->{'uniprot_id'}' in '$pdbId'. Skipping structure\n";
+			print STDERR "  \$UniprotId = '$this->{'uniprot_id'}' in '$alphafolddbId'. Skipping structure\n";
 			next; 
 		}
 		$residuePositionsRef = $$peptideRef{$uniprotChain}->aminoAcidPositionNumbers();
@@ -315,7 +273,7 @@ sub writeProximityFile {
 					$fh->print( "$uniprotChainOffset\t$uniprotAaName\t" );
 					$fh->print( "$this->{'uniprot_id'}\t[$uniprotChain]\t$residuePosition\t" );
 					$fh->print( "$uniprotChainOffset\t$uniprotAaName\t" );
-					$fh->print( "$domain\t0\t$pdbId\n" );
+					$fh->print( "$domain\t0\t$alphafolddbId\n" );
 					}
 				}
 			}
@@ -373,7 +331,7 @@ sub writeProximityFile {
 						$fh->print( "$uniprotChainOffset\t$uniprotAaName\t" );
 						$fh->print( "$otherChainUniprotId\t[$chain]\t$position\t" );
 						$fh->print( "$otherChainOffset\t$otherAaName\t" );
-						$fh->print( "$distanceBetweenResidues\t$pdbId\n" );
+						$fh->print( "$distanceBetweenResidues\t$alphafolddbId\n" );
 					}
 					##### This is just to restrict what is written out to pairs in which 
 					##### one of the residues is in an annotated domain
@@ -397,7 +355,7 @@ sub writeProximityFile {
 								$fh->print( "$uniprotChainOffset\t$uniprotAaName\t" );
 								$fh->print( "$otherChainUniprotId\t[$chain]\t$position\t" );
 								$fh->print( "$otherChainOffset\t$otherAaName\t$_\t" );
-								$fh->print( "$distanceBetweenResidues\t$pdbId\n");
+								$fh->print( "$distanceBetweenResidues\t$alphafolddbId\n");
 							}
 							next;
 						}
@@ -415,23 +373,23 @@ sub writeProximityFile {
 							$fh->print( "$uniprotChainOffset\t$uniprotAaName\t" );
 							$fh->print( "$otherChainUniprotId\t[$chain]\t$position\t" );
 							$fh->print( "$otherChainOffset\t$otherAaName\t" );
-							$fh->print( "$domain\t$distanceBetweenResidues\t$pdbId\n" );
+							$fh->print( "$domain\t$distanceBetweenResidues\t$alphafolddbId\n" );
 						}
 					} #if restrictedaa_pairs
 				} #foreach other residue
 			} #foreach chain
 		} #foreach residue position ref
-	} #foreach pdb id
+	} #foreach alphafolddb id
 	return 1;
 }
 
 sub getOffset {
 	my ( $allOffsets, $chain ,$residuePosition ) = @_;
 	my $offset = undef;
-	foreach my $pStart ( keys %{$allOffsets->{$chain}} ) {
-		foreach my $pStop ( keys %{$allOffsets->{$chain}->{$pStart}} ) {
-			if ( $pStart <= $residuePosition and $residuePosition <= $pStop ) {
-				$offset = $allOffsets->{$chain}->{$pStart}->{$pStop};
+	foreach my $afStart ( keys %{$allOffsets->{$chain}} ) {
+		foreach my $afStop ( keys %{$allOffsets->{$chain}->{$afStart}} ) {
+			if ( $afStart <= $residuePosition and $residuePosition <= $afStop ) {
+				$offset = $allOffsets->{$chain}->{$afStart}->{$afStop};
 				last;
 			}
 		}
@@ -502,62 +460,62 @@ sub checkOffsets {
 		 $positionB, 
 		 $offsetB, 
 		 $aminoAcidB, 
-		 $pdbId,
+		 $alphafolddbId,
 		 $uniprot, 
 		 $uniprotRef, 
 		 $uniprotSequenceRef, 
 		 $position, 
-		 %pdbUniprotPosition,  );
+		 %alphafolddbUniprotPosition,  );
 	my $profh = new FileHandle;
 	unless( $profh->open( "< $proximityFile" ) ) {  die "Could not open proximity file $proximityFile to read !\n"  };
 	my @entireFile = <$profh>;
 	$profh->close();
 	my $coorfh = new FileHandle;
 	unless( $coorfh->open( "> $coordFile" ) ) {  die "Could not open coordinate file $coordFile to write !\n" };
-	$coorfh->print( "PDB_ID\tUniProt_ID\tErrors\tTotal_Position\tFraction_Errors\n" );
+	$coorfh->print( "AlphaFoldDB_ID\tUniProt_ID\tErrors\tTotal_Position\tFraction_Errors\n" );
 	print STDOUT "Creating ".$coordFile."\n";
 	foreach $line ( @entireFile ) {
 		chomp $line;
 		next if ( $line =~ /WARNING/ );
 		( $uniprotA, undef, $positionA, $offsetA, $aminoAcidA, $uniprotB, undef, $positionB, $offsetB, $aminoAcidB ) = split /\t/, $line;
-		if ( $line =~ /(\S+)\s*$/ ) { $pdbId = $1; }
+		if ( $line =~ /(\S+)\s*$/ ) { $alphafolddbId = $1; }
 			# print STDERR "Unexpected format for \$uniprotA ($uniprotA) in $line.  Skipping. \n"; }
 		next if ( $uniprotA !~ /^\w+$/ ); 
 		next if ( $uniprotB !~ /^\w+$/ || $offsetA !~ /^-?\d+$/ || $offsetB !~ /^-?\d+$/ || $positionA !~ /^-?\d+$/ || $positionB !~ /^-?\d+$/ );
 		#if not an AA, convertAA returns original value if length aminoAcid <= 3, 'Z' if length == 1, undef otherwise
-		$aminoAcidA = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidA );
-		$aminoAcidB = TGI::Mutpro::Preprocess::PdbStructure::convertAA( $aminoAcidB );
+		$aminoAcidA = TGI::Mutpro::Preprocess::AlphaFoldDBStructure::convertAA( $aminoAcidA );
+		$aminoAcidB = TGI::Mutpro::Preprocess::AlphaFoldDBStructure::convertAA( $aminoAcidB );
 		next if ( !defined $aminoAcidA & !defined $aminoAcidB );
 		#next unless ( TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidA ) and TGI::Mutpro::Preprocess::AminoAcid::checkAA( $aminoAcidB )
-		if ( defined $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} && $pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} ne $aminoAcidA ) {
-			print $coorfh "Inconsistent amino acids for $uniprotA position $positionA+$offsetA in $pdbId: '$pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA}' and $aminoAcidA \n";
+		if ( defined $alphafolddbUniprotPosition{$alphafolddbId}{$uniprotA}{$positionA+$offsetA} && $alphafolddbUniprotPosition{$alphafolddbId}{$uniprotA}{$positionA+$offsetA} ne $aminoAcidA ) {
+			print $coorfh "Inconsistent amino acids for $uniprotA position $positionA+$offsetA in $alphafolddbId: '$alphafolddbUniprotPosition{$alphafolddbId}{$uniprotA}{$positionA+$offsetA}' and $aminoAcidA \n";
 		}
-		$pdbUniprotPosition{$pdbId}{$uniprotA}{$positionA+$offsetA} = $aminoAcidA;
-		if ( defined $pdbUniprotPosition{$pdbId}{$uniprotB}{$positionB+$offsetB} && $pdbUniprotPosition{$pdbId}{$uniprotB}{$positionB+$offsetB} ne $aminoAcidB ) {
-			print $coorfh "Inconsistent amino acids for $uniprotB position $positionB+$offsetB in $pdbId: '$pdbUniprotPosition{$pdbId}{$uniprotB}{$positionB+$offsetB}' and $aminoAcidB \n";
+		$alphafolddbUniprotPosition{$alphafolddbId}{$uniprotA}{$positionA+$offsetA} = $aminoAcidA;
+		if ( defined $alphafolddbUniprotPosition{$alphafolddbId}{$uniprotB}{$positionB+$offsetB} && $alphafolddbUniprotPosition{$alphafolddbId}{$uniprotB}{$positionB+$offsetB} ne $aminoAcidB ) {
+			print $coorfh "Inconsistent amino acids for $uniprotB position $positionB+$offsetB in $alphafolddbId: '$alphafolddbUniprotPosition{$alphafolddbId}{$uniprotB}{$positionB+$offsetB}' and $aminoAcidB \n";
 		}
-		$pdbUniprotPosition{$pdbId}{$uniprotB}{$positionB+$offsetB} = $aminoAcidB;
+		$alphafolddbUniprotPosition{$alphafolddbId}{$uniprotB}{$positionB+$offsetB} = $aminoAcidB;
 	} #foreach line of entireFile
-	my %pdbUniprotErrorCount;
-	foreach $pdbId ( keys %pdbUniprotPosition ) {
-		foreach $uniprot ( keys %{$pdbUniprotPosition{$pdbId}} ) {
+	my %alphafolddbUniprotErrorCount;
+	foreach $alphafolddbId ( keys %alphafolddbUniprotPosition ) {
+		foreach $uniprot ( keys %{$alphafolddbUniprotPosition{$alphafolddbId}} ) {
 			$uniprotRef = TGI::Mutpro::Preprocess::Uniprot->new($uniprot);
 			next if ( !defined $uniprotRef );
 			$uniprotSequenceRef = $this->getUniprotSeq( $uniprot );
-			$pdbUniprotErrorCount{$pdbId}{$uniprot} = 0;
-			foreach $position ( sort {$a<=>$b} keys %{$pdbUniprotPosition{$pdbId}{$uniprot}} ) {
+			$alphafolddbUniprotErrorCount{$alphafolddbId}{$uniprot} = 0;
+			foreach $position ( sort {$a<=>$b} keys %{$alphafolddbUniprotPosition{$alphafolddbId}{$uniprot}} ) {
 				#check if position exists in sequence and it has correct amino acid
-				if ( !defined $$uniprotSequenceRef{$position} || $$uniprotSequenceRef{$position} ne $pdbUniprotPosition{$pdbId}{$uniprot}{$position} ) {
-					$pdbUniprotErrorCount{$pdbId}{$uniprot}++;
+				if ( !defined $$uniprotSequenceRef{$position} || $$uniprotSequenceRef{$position} ne $alphafolddbUniprotPosition{$alphafolddbId}{$uniprot}{$position} ) {
+					$alphafolddbUniprotErrorCount{$alphafolddbId}{$uniprot}++;
 				}
 			}
 		}
-	} #foreach pdbId
-	foreach $pdbId ( keys %pdbUniprotErrorCount ) {
-		foreach $uniprot ( keys %{$pdbUniprotErrorCount{$pdbId}} ) {
-			print $coorfh "$pdbId \t $uniprot \t errors: $pdbUniprotErrorCount{$pdbId}{$uniprot} \t total: ";
-			print $coorfh scalar(keys %{$pdbUniprotPosition{$pdbId}{$uniprot}}), "\t";
-			my $fraction = $pdbUniprotErrorCount{$pdbId}{$uniprot}/scalar(keys %{$pdbUniprotPosition{$pdbId}{$uniprot}});
+	} #foreach alphafolddbId
+	foreach $alphafolddbId ( keys %alphafolddbUniprotErrorCount ) {
+		foreach $uniprot ( keys %{$alphafolddbUniprotErrorCount{$alphafolddbId}} ) {
+			print $coorfh "$alphafolddbId \t $uniprot \t errors: $alphafolddbUniprotErrorCount{$alphafolddbId}{$uniprot} \t total: ";
+			print $coorfh scalar(keys %{$alphafolddbUniprotPosition{$alphafolddbId}{$uniprot}}), "\t";
+			my $fraction = $alphafolddbUniprotErrorCount{$alphafolddbId}{$uniprot}/scalar(keys %{$alphafolddbUniprotPosition{$alphafolddbId}{$uniprot}});
 			if ( $fraction != 0 && $fraction != 1 ) {
 				$fraction += 0.005;
 				if ( $fraction =~ /(0\.\d{2})/ ) { $fraction = $1; }
@@ -583,35 +541,34 @@ sub getUniprotSeq {
 	return \%seq;
 }
 
-# Note: throw away some pdbs  
-# Filtering some pdb files here to avoid unnecessary heavy load from CPU and Memory
+# MODIFIED ON 03-15-2023: changed function to parse alphafolddb instead of pdb
+# These types not really available in AlphaFold since that databse is based on predictions - will likely remove this function once results are curated
+# TO DO: remove function once we make sure we don't need it?
+# Note: throw away some AlphaFoldDBs  
+# Filtering some AlphaFoldDB files here to avoid unnecessary heavy load from CPU and Memory
 # Found this problem by testing all uniprot IDs initiation
-sub filteringPdb {
+sub filteringAlphaFoldDB {
 	my ( $this, $entrysRef, $ulinks, ) = @_;
 	my ( @entrysafterFiltered, $NMRs, $Xrays, $neutron, $other, %tmph, $total, );
 	$NMRs = $Xrays = $neutron = $other = $total = 0;
 	foreach my $a ( @{$entrysRef} ) {
-		my ( $pdbtype ) = $a =~ /^\w+;\s+(.*?);\s+/;
-		#print STDERR $pdbtype."\n";
+		my ( $alphafolddbtype ) = $a =~ /^\w+;\s+(.*?);\s+/;
 		SWITCH:{
-			$pdbtype eq 'X-ray'   && do { $Xrays++;   last SWITCH; };
-			$pdbtype eq 'NMR'     && do { $NMRs++;    last SWITCH; };
-			$pdbtype eq 'Neutron' && do { $neutron++; last SWITCH; };
+			$alphafolddbtype eq 'X-ray'   && do { $Xrays++;   last SWITCH; };
+			$alphafolddbtype eq 'NMR'     && do { $NMRs++;    last SWITCH; };
+			$alphafolddbtype eq 'Neutron' && do { $neutron++; last SWITCH; };
 			$other++;
 		}
 	}
-	## new added in order to retrieve more PDBs
-	# date: 01222014
+	## new added in order to retrieve more AlphaFoldDBs
 	$total = $NMRs + $Xrays + $neutron + $other;
-	# removed filtering step (10242014)
-	# for getting more pdbs
 	map{ push(@entrysafterFiltered, $_); } @{$entrysRef}; 
 	return \@entrysafterFiltered;
 	#if ( $total < 50 ) {  map{ push(@entrysafterFiltered, $_); } @{$entrysRef}; return \@entrysafterFiltered; }
 	# only Neutron and X-ray
 	if ( ($Xrays > 0) || ($neutron > 0) ) {
 		foreach my $a ( @{$entrysRef} ) {
-			my ( $pdbtype, $tresolution, $chaind, ) = $a =~ /^\w+;\s+(.*?);\s+(.*?);\s+(.*?)\./;
+			my ( $alphafolddbtype, $tresolution, $chaind, ) = $a =~ /^\w+;\s+(.*?);\s+(.*?);\s+(.*?)\./;
 			next unless ( $tresolution =~ /A$/ );
 			my ( $resolution ) = $tresolution =~ /(.*?)\s+A/;
 			$tmph{$chaind}{$resolution} = $a;
@@ -619,12 +576,12 @@ sub filteringPdb {
 		foreach my $d ( keys %tmph ) {
 			my $mark = 0;
 			foreach my $c ( sort {$a <=> $b} keys %{$tmph{$d}} ) {
-				my ( $pdb ) = $tmph{$d}{$c} =~ /^(\w+);\s+/;
-				# load filtered pdbs
+				my ( $alphafolddb ) = $tmph{$d}{$c} =~ /^(\w+);\s+/;
+				# load filtered alphafolddbs
 				if ( $mark == 0 ) {
 					push( @entrysafterFiltered, $tmph{$d}{$c} );
 					$mark++;
-				}elsif ( defined $ulinks->{$pdb} ) { push(@entrysafterFiltered, $tmph{$d}{$c}); }
+				}elsif ( defined $ulinks->{$alphafolddb} ) { push(@entrysafterFiltered, $tmph{$d}{$c}); }
 			}
 		}
 	} else { map{ push(@entrysafterFiltered, $_); } @{$entrysRef}; }
@@ -635,24 +592,18 @@ sub filteringPdb {
 sub help_text {
     my $this = shift;
         return <<HELP
-
 Usage: hotspot3d calpro [options]
-
-                             REQUIRED
---output-dir                 Output directory of proximity files
---pdb-file-dir               PDB file directory 
---uniprot-id                 Uniprot ID
-
-                             OPTIONAL
---3d-distance-cutoff         Maximum 3D distance (<= Angstroms), default: 100
---linear-cutoff              Minimum linear distance (> peptides), default: 0
---measure                    Distance measurement between residues (shortest or average), default: average
-
---help                       this message
-
+                             		REQUIRED
+--output-dir                 		Output directory of proximity files
+--alphafolddb-file-dir              AlphaFoldDB file directory 
+--uniprot-id                		Uniprot ID
+                             		OPTIONAL
+--3d-distance-cutoff         		Maximum 3D distance (<= Angstroms), default: 100
+--linear-cutoff              		Minimum linear distance (> peptides), default: 0
+--measure                    		Distance measurement between residues (shortest or average), default: average
+--help                       		this message
 HELP
 
 }
 
 1;
-
