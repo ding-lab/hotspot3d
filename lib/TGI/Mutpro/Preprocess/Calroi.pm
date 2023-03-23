@@ -88,14 +88,14 @@ sub getUniprotIds {
 	my ( $this , $fhuid ) = @_;
 	my $allUniprotIds;
 
-    my ( $line , @entireFile , $uniprotId , $pdb );
+    my ( $line , @entireFile , $uniprotId , $alphafolddb );
     @entireFile = <$fhuid>;
     $fhuid->close();
     foreach $line (@entireFile) { 
         chomp $line;
-        ( undef , $uniprotId , $pdb ) = split /\s+/ , $line;
-        # Only use Uniprot IDs with PDB structures
-        next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
+        ( undef , $uniprotId , $alphafolddb ) = split /\s+/ , $line;
+        # Only use Uniprot IDs with AlphaFoldDB structures
+        next if ( $alphafolddb eq "N/A" || $uniprotId !~ /\w+/ );
         $allUniprotIds->{$uniprotId} = 1; 
     }
 	return $allUniprotIds;
