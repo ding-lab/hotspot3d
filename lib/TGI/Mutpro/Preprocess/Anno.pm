@@ -1,9 +1,10 @@
 package TGI::Mutpro::Preprocess::Anno;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam D Scott
+# $Original authors: Beifang Niu & Adam D Scott
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 1 $
+# $Revision: 2023-03-15 $
 # $URL: $
 # $Doc: $ add annotation information for pairs  
 #----------------------------------
@@ -48,18 +49,18 @@ sub makeAnnotations {
     my $annotations = {};
     foreach my $line ( @{$entireFile} ) {
         chomp $line;
-		my ( $uniprotId , $pdb );
-        ( undef, $uniprotId, $pdb, ) = split /\t/, $line;
-        # Only use Uniprot IDs with PDB structures
-        next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
+		my ( $uniprotId , $alphafolddb );
+        ( undef, $uniprotId, $alphafolddb, ) = split /\t/, $line;
+        # Only use Uniprot IDs with AlphaFold DB structures
+        next if ( $alphafolddb eq "N/A" || $uniprotId !~ /\w+/ );
 		$this->getAnnotation( $uniprotId , $annotationFileDir , $annotations );
 	}
 	foreach my $line ( @{$entireFile} ) {
 		chomp( $line );
-		my ( $uniprotId , $pdb );
-		( undef , $uniprotId , $pdb ) = split /\t/ , $line;
+		my ( $uniprotId , $alphafolddb );
+		( undef , $uniprotId , $alphafolddb ) = split /\t/ , $line;
 		print STDOUT $uniprotId."\n";
-		next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
+		next if ( $alphafolddb eq "N/A" || $uniprotId !~ /\w+/ );
         $this->addAnnotation( $uniprotId , $pvaluesDir , $annotationDir , $annotations );
 	}
 	return;
@@ -104,7 +105,7 @@ sub getAnnotationDirs {
 sub getInputFile {
 	my $this = shift;
     my $fhuid = new FileHandle;
-    my $hugoUniprotf = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
+    my $hugoUniprotf = "$this->{_OUTPUT_DIR}\/hugo.uniprot.alphafolddb.csv";
     unless( $fhuid->open("< $hugoUniprotf") ) { die "HotSpot3D::Anno::getInputFile error: Could not open hugo uniprot id file!\n" };
     my @entireFile = $fhuid->getlines;
     $fhuid->close();
@@ -159,7 +160,7 @@ sub addAnnotation {
 	$fhout->print( "Residue_Name1\tFeature1\t" );
 	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\t" );
 	$fhout->print( "Residue_Name2\tFeature2\t" );
-	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
+	$fhout->print( "Distance\tAlphaFoldDB_ID\tP_Value\n" );
     while ( my $a = $fhin->getline ) {
         next if ($a =~ /^WARNING:/);
         next if ($a =~ /UniProt_ID1/);
