@@ -1,9 +1,10 @@
 package TGI::Mutpro::Preprocess::Trans;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam D Scott
+# $Original authors: Beifang Niu & Adam D Scott
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 3 $
+# $Revision: 2023-03-15 $
 # $URL: $
 # $Doc: $ transcripts processing and added them in table 
 #----------------------------------
@@ -23,7 +24,7 @@ use Archive::Extract;
 use TGI::Mutpro::Preprocess::Uniprot;
 
 my $LATESTGRCH = 38;
-my $LATEST38RELEASE = 87; #TODO will need to be updated as Ensembl has new releases
+my $LATEST38RELEASE = 100; # Updated to 100, which is the latest I tested this code to work; later versions must be tested
 my $EARLIEST38RELEASE = 76;
 my $LATEST37RELEASE = 75;
 my $EARLIEST37RELEASE = 55;
@@ -57,10 +58,10 @@ sub mapEnsemblTranscriptsToUniprot {
 	my $outputContent = "";
     foreach my $line ( @{$entireFile} ) {
         chomp $line;
-		my ( $uniprotId , $pdb );
-        ( undef, $uniprotId, $pdb, ) = split /\s+/, $line;
-        # Only use Uniprot IDs with PDB structures
-        next if ( $pdb eq "N/A" || $uniprotId !~ /\w+/ );
+		my ( $uniprotId , $alphafolddb );
+        ( undef, $uniprotId, $alphafolddb, ) = split /\s+/, $line;
+        # Only use Uniprot IDs with AlphaFold DB structures
+        next if ( $alphafolddb eq "N/A" || $uniprotId !~ /\w+/ );
 		my $transcriptContent = $this->mapEnsemblTranscriptsToThisUniprot( $uniprotId , $peptides );
 		$outputContent .= $line."\t".$transcriptContent."\n";
     }
@@ -156,7 +157,7 @@ sub getPeptides {
     
 sub getInputFile {
 	my $this = shift;
-	my $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.csv";
+	my $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.alphafolddb.csv";
     my $fhuid = new FileHandle;
     unless( $fhuid->open("<$UniprotIdFile") ) { die "HotSpot3D::Trans::getInputFile error: Could not open uniprot id file!\n" };
     my @entireFile = <$fhuid>;
@@ -166,7 +167,7 @@ sub getInputFile {
 
 sub getOutputFileHandle {
 	my $this = shift;
-	my $outputFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
+	my $outputFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.alphafolddb.transcript.csv";
     my $fhout = new FileHandle;
     unless( $fhout->open(">$outputFile") ) { die "HotSpot3D::Trans::getOutputFileHandle error: Could not open output file!\n" };
 	print STDOUT "Creating hupt: ".$outputFile."\n";
@@ -362,7 +363,7 @@ Usage: hotspot3d trans [options]
                              OPTIONAL
 --blat                       Installation of blat to use (defaults to your system default)
 --grch                       Genome build (37 or 38), defaults to 38 or according to --release input
---release                    Ensembl release verion (55-87), defaults to 87 or to the latest release according to --grch input
+--release                    Ensembl release verion (55-100), defaults to 87 or to the latest release according to --grch input
                                  Note that releases 55-75 correspond to GRCh37 & 76-87 correspond to GRCh38
 
 --help                       this message
