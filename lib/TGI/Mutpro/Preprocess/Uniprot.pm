@@ -4,7 +4,7 @@ package TGI::Mutpro::Preprocess::Uniprot;
 # $Original authors: Beifang Niu
 # $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 2023-03-15 $
+# $Revision: 2023-03-26 $
 # $URL: $
 # $Doc: $ uniprot download and processing. This has been adapted on Mar 15 2023 to handle AlphaFold DB (v4) files 
 #----------------------------------
@@ -305,7 +305,8 @@ sub sequence {
 # Beifang Niu 05-06-2013
 # added this function to get the Ensemble thranscript id
 # and corresponding Protein id
-#
+# Fernanda Martins Rodrigues 03-26-2030
+# fixed bug with matching line in newly formatted uniprot file
 sub transProteinHash{
     # Returns hash:
     # $hash{transcriptid} = protein id
@@ -318,7 +319,7 @@ sub transProteinHash{
     if ( !defined $record ) { return undef; }
     foreach $line ( split /\n/, $self->entireRecord()) {
 	chomp $line;
-	if ( $line =~ /^DR\s+Ensembl;\s+(\w+);\s+(\w+);\s+(\w+)/ ) { $transProtein{$1} = $2; }
+	if ( $line =~ /^DR\s+Ensembl;\s+(\w+.\d+);\s+(\w+.\d+);\s+(\w+.\d+)/ ) { $transProtein{$1} = $2; }
     }
     return \%transProtein;
 }
