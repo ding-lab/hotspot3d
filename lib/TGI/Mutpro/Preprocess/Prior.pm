@@ -1,9 +1,10 @@
 package TGI::Mutpro::Preprocess::Prior;
 #
 #----------------------------------
-# $Authors: Beifang Niu and Adam D Scott
+# $Original authors: Beifang Niu and Adam D Scott
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 2 $
+# $Revision: 2023-03-15 $
 # $URL: $
 # $Doc: $ do prioritization 
 #----------------------------------
@@ -38,7 +39,7 @@ sub process {
     while ( my $line = <$fhunipro> ) {
         chomp $line;
         my ( undef, $uniprotId, ) = split /\t/, $line;
-        # Only use Uniprot IDs with PDB structures
+        # Only use Uniprot IDs with AlphaFold DB structures
         next if ( $uniprotId !~ /\w+/ );
         # proximity file
         my $cosmicFile = "$cosmicDir\/$uniprotId\.ProximityFile\.csv";
@@ -73,7 +74,7 @@ sub setOptions {
 sub getInputs {
 	my ( $this ) = @_;
     my ( $UniprotIdFile, $proximityDir, $cosmicDir, $prioritizationDir, );
-    $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
+    $UniprotIdFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.alphafolddb.transcript.csv";
     $proximityDir = "$this->{_OUTPUT_DIR}\/proximityFiles";
     $cosmicDir = "$proximityDir\/cosmicanno";
     $prioritizationDir = "$this->{_OUTPUT_DIR}\/prioritization";
@@ -162,7 +163,7 @@ sub writeOutput {
 	$fhout->print( "Residue_Name1\tFeature1\tCOSMIC1\t" );
 	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\t" );
 	$fhout->print( "Residue_Name2\tFeature2\tCOSMIC2\t" );
-	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
+	$fhout->print( "Distance\tAlphaFoldDB_ID\tP_Value\n" );
     foreach my $mutation1 (keys %{$outputContent} ) {
         foreach my $mutation2 (keys %{$outputContent->{$mutation1}}) {
             print $fhout $mutation1."\t".$mutation2."\t";
