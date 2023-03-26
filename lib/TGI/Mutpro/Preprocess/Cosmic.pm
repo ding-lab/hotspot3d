@@ -1,9 +1,10 @@
 package TGI::Mutpro::Preprocess::Cosmic;
 #
 #----------------------------------
-# $Authors: Beifang Niu & Adam D Scott; Modified by Fernanda Martins Rodrigues on 2023-02-17
+# $Original authors: Beifang Niu & Adam D Scott 
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 1 $
+# $Revision: 2023-03-15 $
 # $URL: $
 # $Doc: $ cosmic database processing 
 #----------------------------------
@@ -46,7 +47,7 @@ sub makeCOSMICAnnotations {
     while ( my $line = <$fh> ) {
         chomp $line;
         my ( undef, $uniprotId, ) = split /\t/, $line;
-        # Only use Uniprot IDs with PDB structures
+        # Only use Uniprot IDs with AlphaFold DB structures
         next if ( $uniprotId !~ /\w+/ );
         # proximity file
         # add annotation infor
@@ -76,7 +77,7 @@ sub getInputDirs {
 
 sub getFileInputs {
 	my $this = shift;
-    my $hugoUniprotFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.pdb.transcript.csv";
+    my $hugoUniprotFile = "$this->{_OUTPUT_DIR}\/hugo.uniprot.alphafolddb.transcript.csv";
     my $transMapToUniprot = $this->getTransMaptoUniprot( $hugoUniprotFile );
     my $fh = new FileHandle;
     unless( $fh->open("<$hugoUniprotFile") ) { die "Could not open hugo uniprot file !\n" };
@@ -121,7 +122,7 @@ sub addCosmic {
 	$fhout->print( "Residue_Name1\tFeature1\tCOSMIC1\t" );
 	$fhout->print( "UniProt_ID2\tChain2\tPosition2\tOffset2\t" );
 	$fhout->print( "Residue_Name2\tFeature2\tCOSMIC2\t" );
-	$fhout->print( "Distance\tPDB_ID\tP_Value\n" );
+	$fhout->print( "Distance\tAlphaFoldDB_ID\tP_Value\n" );
     while ( my $line = <$fhin> ) {
 		if ( $line =~ /UniProt_ID1/ ) { next; }
         if ($line =~ /^WARNING:/ ) {
