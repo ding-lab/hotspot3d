@@ -186,7 +186,7 @@ sub getTransMaptoUniprot {
         my ( undef, $uniprotId, undef, undef, $transcripts, ) = split /\t/, $a;
         next if $transcripts =~ (/N\/A/);
         map{ 
-            /(\w+)\[(.*?)]/;
+            /(\w+).\d\[(.*?)]/;
             my $tmp_transcript_id = $1;
             $transHash{$tmp_transcript_id}{'UNIPROT'} = $uniprotId;
             map{  /(\d+)\|(\d+)-(\d+)\|(\d+)/; 
