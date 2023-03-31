@@ -1,9 +1,10 @@
 package TGI::Mutpro::Main::Proximity;
 #
 #----------------------------------
-# $Authors: Beifang Niu and Adam D Scott
+# $Original authors: Beifang Niu and Adam D Scott
+# $Modified by: Fernanda Martins Rodrigues @WashU (fernanda@wustl.edu; mrodrigues.fernanda@gmail.com)
 # $Date: 2014-01-14 14:34:50 -0500 (Tue Jan 14 14:34:50 CST 2014) $
-# $Revision: 0.3 $
+# $Revision: 2023-03-15 $
 # $URL: $
 # $Doc: $ proximity pairs searching (main function)
 #----------------------------------
@@ -424,7 +425,7 @@ sub setOptions {
 		}
 	}
 	if ( $this->{'drugport_file'} ) { unless( -e $this->{'maf_file'} ) { warn 'Drugport parsing results file does not exist ! ', "\n"; die $this->help_text(); } }
-	$this->{'uniprot_file'} = "$this->{'data_dir'}\/hugo.uniprot.pdb.transcript.csv";
+	$this->{'uniprot_file'} = "$this->{'data_dir'}\/hugo.uniprot.alphafolddb.transcript.csv";
 	unless( -e $this->{'uniprot_file'} ) { warn 'Uniprot parsing file does not exist ! ', "\n"; die $this->help_text(); }
 	my $prior_dir = "$this->{'data_dir'}\/prioritization";
 	unless( -d $prior_dir ) { die "the Prioritization directory $prior_dir does not exist ! \n"; };
@@ -548,7 +549,7 @@ sub getTransMaptoUniprot {
 		my (undef, $uniprotId, undef, undef, $transcripts) = split /\t/, $a;
 		next if $transcripts =~ (/N\/A/);
 		map { 
-			/(\w+)\[(.*?)]/;
+			/(\w+)\.\d+\[(.*?)]/;
 			my $tmp_transcript_id = $1;
 			$transHash{$tmp_transcript_id}{'UNIPROT'} = $uniprotId;
 			map {  /(\d+)\|(\d+)-(\d+)\|(\d+)/; 
@@ -614,20 +615,20 @@ sub getDrugportInfo {
 	if ( $fh->open( $drugport_f ) ) {
 		while ( my $a = $fh->getline ) {
 			chomp($a);
-			my ( $het, $target_pdb, $not_target_include_compound ) = (split /\t/, $a)[2,4,8];
-			unless ( $target_pdb =~ /NULL/ ) { 
+			my ( $het, $target_alphafolddb, $not_target_include_compound ) = (split /\t/, $a)[2,4,8];
+			unless ( $target_alphafolddb =~ /NULL/ ) { 
 				map{ 
-					my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
-					$pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-					unless ( $pdb and $chain and $loc ) { print STDOUT $a."\n"; }
-					$drugport_hash{'TARGET'}{uc($pdb)}{$chain}{$loc} = $het;
-				} split /,/,$target_pdb; 
+					my ($alphafolddb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
+					$alphafolddb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
+					unless ( $alphafolddb and $chain and $loc ) { print STDOUT $a."\n"; }
+					$drugport_hash{'TARGET'}{uc($alphafolddb)}{$chain}{$loc} = $het;
+				} split /,/,$target_alphafolddb; 
 			}
 			unless ( $not_target_include_compound =~ /NULL/ ) { 
 				map{ 
-					my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
-					unless ( $pdb and $chain and $loc ) { print STDOUT $a."\n"; }
-					$drugport_hash{'NONTARGET'}{uc($pdb)}{$chain}{$loc} = $het;
+					my ($alphafolddb, $chain, $loc) = $_ =~ /(\w+)\|(\w)\|(\w+)/; $alphafolddb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g;
+					unless ( $alphafolddb and $chain and $loc ) { print STDOUT $a."\n"; }
+					$drugport_hash{'NONTARGET'}{uc($alphafolddb)}{$chain}{$loc} = $het;
 				} split /,/, $not_target_include_compound; 
 			}
 		}
@@ -651,13 +652,13 @@ sub proximitySearching {
 		while ( my $b = <$fh> ) {
 			next if ( $b =~ /UniProt_ID/g );
 			chomp( $b ); my @line = split /\t/, $b;
-			my ( $uid1, $chain1, $pdbcor1, $offset1, $residue1, $domain1, $cosmic1, 
-				 $uid2, $chain2, $pdbcor2, $offset2, $residue2, $domain2, $cosmic2, 
+			my ( $uid1, $chain1, $alphafolddbcor1, $offset1, $residue1, $domain1, $cosmic1, 
+				 $uid2, $chain2, $alphafolddbcor2, $offset2, $residue2, $domain2, $cosmic2, 
 				 $proximityinfor ) = @line;
-			if ( not defined $pdbcor1 
+			if ( not defined $alphafolddbcor1 
 				 or not defined $offset1 
 				 or not defined $chain1 
-				 or not defined $pdbcor2 
+				 or not defined $alphafolddbcor2 
 				 or not defined $offset2 
 				 or not defined $chain2 
 			) {
@@ -688,8 +689,8 @@ sub proximitySearching {
 				print STDERR $b."\n";
 				next;
 			}
-			my $uniprotcor1 = $pdbcor1 + $offset1;
-			my $uniprotcor2 = $pdbcor2 + $offset2;
+			my $uniprotcor1 = $alphafolddbcor1 + $offset1;
+			my $uniprotcor2 = $alphafolddbcor2 + $offset2;
 			my $lineardis = undef;
 			if ( $uid1 eq $uid2 ) {
 				$lineardis = abs($uniprotcor1 - $uniprotcor2);
@@ -733,48 +734,48 @@ sub proximitySearching {
 				# drugport searching
 				if ( $drugportref ) {
 					#warn "bad AA pair: ".$residue1." - ".$residue2."\n";
-					my %pdbs_hash = map{ my @t0 = split / /, $_; ($t0[1], 1) } split /\|/, $proximityinfor;
+					my %alphafolddbs_hash = map{ my @t0 = split / /, $_; ($t0[1], 1) } split /\|/, $proximityinfor;
 					my ( $real_chain1 ) = $chain1 =~ /\[(\w)\]/; my ( $real_chain2 ) = $chain2 =~ /\[(\w)\]/;
-					my ( $e, $pdb ); 
+					my ( $e, $alphafolddb ); 
 					map { 
-						$pdb = $_;
-						if ( defined $drugportref->{'TARGET'}->{$pdb}->{$real_chain1}->{$pdbcor1} ) {
+						$alphafolddb = $_;
+						if ( defined $drugportref->{'TARGET'}->{$alphafolddb}->{$real_chain1}->{$alphafolddbcor1} ) {
 							if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 								map { 
 									if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
-										push( @drugport_target_results, join("\t", $pdb, $chain1, $pdbcor1, $drugportref->{'TARGET'}->{$pdb}->{$real_chain1}->{$pdbcor1}, $_, @line[8,9,11,12,13], $lineardis, $proximityinfor) );
+										push( @drugport_target_results, join("\t", $alphafolddb, $chain1, $alphafolddbcor1, $drugportref->{'TARGET'}->{$alphafolddb}->{$real_chain1}->{$alphafolddbcor1}, $_, @line[8,9,11,12,13], $lineardis, $proximityinfor) );
 									}
 								} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
 							}
 						}
-						if ( defined $drugportref->{'TARGET'}->{$pdb}->{$real_chain2}->{$pdbcor2} ) {
+						if ( defined $drugportref->{'TARGET'}->{$alphafolddb}->{$real_chain2}->{$alphafolddbcor2} ) {
 							if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 								map { 
 									if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
-										push( @drugport_target_results, join("\t", $pdb, $chain2, $pdbcor2, $drugportref->{'TARGET'}->{$pdb}->{$real_chain2}->{$pdbcor2}, $_, @line[1,2,4,5,6], $lineardis, $proximityinfor) );
+										push( @drugport_target_results, join("\t", $alphafolddb, $chain2, $alphafolddbcor2, $drugportref->{'TARGET'}->{$alphafolddb}->{$real_chain2}->{$alphafolddbcor2}, $_, @line[1,2,4,5,6], $lineardis, $proximityinfor) );
 									} 
 								} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
 							}
 						}
-						if ( defined $drugportref->{'NONTARGET'}->{$pdb}->{$real_chain1}->{$pdbcor1} ) {
+						if ( defined $drugportref->{'NONTARGET'}->{$alphafolddb}->{$real_chain1}->{$alphafolddbcor1} ) {
 							if ( defined $mafHashref->{$uid2}->{$uniprotcor2} ) {
 								map {
 									if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
-										push( @drugport_nontarget_results, join("\t", $pdb, $chain1, $pdbcor1, $drugportref->{'NONTARGET'}->{$pdb}->{$real_chain1}->{$pdbcor1}, $_, @line[8,9,11,12,13], $lineardis, $proximityinfor) ); 
+										push( @drugport_nontarget_results, join("\t", $alphafolddb, $chain1, $alphafolddbcor1, $drugportref->{'NONTARGET'}->{$alphafolddb}->{$real_chain1}->{$alphafolddbcor1}, $_, @line[8,9,11,12,13], $lineardis, $proximityinfor) ); 
 									}
 								} keys %{$mafHashref->{$uid2}->{$uniprotcor2}};
 							}
 						}
-						if ( defined $drugportref->{'NONTARGET'}->{$pdb}->{$real_chain2}->{$pdbcor2} ) {
+						if ( defined $drugportref->{'NONTARGET'}->{$alphafolddb}->{$real_chain2}->{$alphafolddbcor2} ) {
 							if ( defined $mafHashref->{$uid1}->{$uniprotcor1} ) {
 								map {
 									if ( $this->cutFiltering( $lineardis, $proximityinfor) ) {
-										push( @drugport_nontarget_results, join("\t", $pdb, $chain2, $pdbcor2, $drugportref->{'NONTARGET'}->{$pdb}->{$real_chain2}->{$pdbcor2}, $_, @line[1,2,4,5,6], $lineardis, $proximityinfor) );
+										push( @drugport_nontarget_results, join("\t", $alphafolddb, $chain2, $alphafolddbcor2, $drugportref->{'NONTARGET'}->{$alphafolddb}->{$real_chain2}->{$alphafolddbcor2}, $_, @line[1,2,4,5,6], $lineardis, $proximityinfor) );
 									}
 								} keys %{$mafHashref->{$uid1}->{$uniprotcor1}};
 							}
 						}
-					} keys %pdbs_hash;
+					} keys %alphafolddbs_hash;
 				} #if drugport
 				if ( $sites ) {
 					if ( $this->siteExists( $sites , $uid1 , $uniprotcor1 ) ) {
@@ -888,14 +889,14 @@ sub drug_proximity_postprocessing {
 	die "Could not open drug target output file\n" unless( $sub_fh_target->open( "$output_prefix.drugs.target" ) );
 	die "Could not create clean drug output file\n" unless( $sub_fh_output->open( ">$output_prefix.drugs.target.clean" ) );
 	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.target.clean\n";
-	$sub_fh_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Drug_Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Res_Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotation", "Cosmic_Annotation", "Linear_Distance_Between_Drug_and_Mutation", "3D_Distance_Information\n" ) );
+	$sub_fh_output->print( join( "\t", "Drug", "Drugport_ID", "AlphaFoldDB_ID", "Drug_Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Res_Chain", "Mutation_Location_In_AlphaFoldDB", "Res_Name", "Domain_Annotation", "Cosmic_Annotation", "Linear_Distance_Between_Drug_and_Mutation", "3D_Distance_Information\n" ) );
 	my %ss; map { 
 		chomp; my @t = split /\t/; unless( $t[4] =~ /NULL/ ) { 
 			map { 
-				my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
-				$pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g; 
-				$ss{uc($pdb)}{$chain}{$loc}{'DRUG'}{$t[0]} = 1; 
-				$ss{uc($pdb)}{$chain}{$loc}{'DRUGID'}{$t[1]} = 1; 
+				my ($alphafolddb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; 
+				$alphafolddb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g; 
+				$ss{uc($alphafolddb)}{$chain}{$loc}{'DRUG'}{$t[0]} = 1; 
+				$ss{uc($alphafolddb)}{$chain}{$loc}{'DRUGID'}{$t[1]} = 1; 
 			} split /,/,$t[4]; 
 		} 
 	} <$sub_fh_drugport_parsing>; 
@@ -916,11 +917,11 @@ sub drug_proximity_postprocessing {
 	my $sub_fh_nontarget_output = new FileHandle;
 	die "Could not create clean nontarget drug output file\n" unless( $sub_fh_nontarget_output->open( ">$output_prefix.drugs.nontarget.clean" ) );
 	print STDOUT "Creating ".$this->{'output_prefix'}.".drugs.nontarget.clean\n";
-	$sub_fh_nontarget_output->print( join( "\t", "Drug", "Drugport_ID", "PDB_ID", "Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Chain", "Mutation_Location_In_PDB", "Res_Name", "Domain_Annotaiton", "Cosmic_Annotation", "Linear_Distance_Betweeen_Drug_and_Mutation", "3D_Distance_Information\n" ) );
+	$sub_fh_nontarget_output->print( join( "\t", "Drug", "Drugport_ID", "AlphaFoldDB_ID", "Chain", "Compound_Location", "Res_Name", "Gene", "Chromosome", "Start", "Stop", "Amino_Acid_Change", "Chain", "Mutation_Location_In_AlphaFoldDB", "Res_Name", "Domain_Annotaiton", "Cosmic_Annotation", "Linear_Distance_Betweeen_Drug_and_Mutation", "3D_Distance_Information\n" ) );
 	undef %ss; map { 
 		chomp; my @t = split /\t/; unless ( $t[8] =~ /NULL/ ) {
 			map { 
-				my ($pdb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; $pdb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g; $ss{uc($pdb)}{$chain}{$loc}{'DRUG'}{$t[0]} = 1; $ss{uc($pdb)}{$chain}{$loc}{'DRUGID'}{$t[1]} = 1; 
+				my ($alphafolddb, $chain, $loc) = $_ =~ /(\w+)\|(\w+)\|(\w+)/; $alphafolddb =~ s/ //g; $chain =~ s/ //g; $loc =~ s/ //g; $ss{uc($alphafolddb)}{$chain}{$loc}{'DRUG'}{$t[0]} = 1; $ss{uc($alphafolddb)}{$chain}{$loc}{'DRUGID'}{$t[1]} = 1; 
 			} split /,/,$t[8];} 
 	} <$sub_fh_drugport_parsing>;
 	map { 
